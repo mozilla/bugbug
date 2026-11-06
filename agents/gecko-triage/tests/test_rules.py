@@ -458,7 +458,7 @@ KEY_PHRASES = (
     ("workflow.md", "an unknown requestee makes Bugzilla refuse the whole update"),
     (
         "comment.md",
-        "Never write a `:nick` and never ask a person for action without a needinfo.",
+        "Ask a person for action only with a needinfo.",
     ),
     ("workflow.md", "Who asked does not matter."),
     (

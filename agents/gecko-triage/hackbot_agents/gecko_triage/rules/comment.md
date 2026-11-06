@@ -43,10 +43,10 @@ does not reach the triage. Ask the reporter to attach the file to the bug or to 
 share URL. If the content is private, ask for a public sample that shows the same
 problem.
 
-**Never write a `:nick` and never ask a person for action without a needinfo.** Bugzilla
-sends no email for a `:nick` in a comment, so the person never sees it. To involve a
-developer, set a needinfo as the "Needs info" rules in `workflow.md` allow, and ask them
-by name in the comment. Never write that a team or a role "can decide" either: nobody
+**Ask a person for action only with a needinfo.** To involve a developer, set a needinfo
+as the "Needs info" rules in `workflow.md` allow, and ask them by name in the comment.
+Bugzilla notifies a person that a comment mentions as `@nick`. It sends nothing for a
+`:nick`, so never write one. Never write that a team or a role "can decide" either: nobody
 gets that request. A hand-off note that says who drives the bug now is not a request,
 and "Handing off" in `workflow.md` says when it needs no needinfo.
 
@@ -63,10 +63,10 @@ and clear for readers whose first language is not English.
   20 words maximum.
 - **Name the person.** Never write "you" or "your" alone. Use the person's name, for
   example "the patch by <name>". A request is polite and puts the name first: "<name>,
-  could you please …?" One request per sentence. The recorder refuses a "you" that does
-  not follow the name at the start of the sentence. When the person has no real name in
-  Bugzilla, open the request with the nick, as `:nick`, and set a needinfo on the person.
-  This is the only place for a `:nick`. The numbered steps under a request stay
+  could you please …?" One request per sentence. The recorder refuses a "you" that
+  does not follow the name at the start of the sentence. When the person has no real
+  name in Bugzilla, open the request with the nick, as `@nick` written with no
+  backticks, and set a needinfo on the person. The numbered steps under a request stay
   imperative and may say "you", and so may a message in double quotes.
 - **Descriptive sentences:** 25 words maximum. A sentence over the limit is two sentences.
 - **Paragraphs:** one topic each, 6 sentences maximum.

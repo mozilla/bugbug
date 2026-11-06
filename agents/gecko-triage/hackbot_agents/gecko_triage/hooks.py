@@ -462,11 +462,11 @@ def security_wording_hook(action: dict) -> None:
 
 _YOU = re.compile(r"(?<!\bthank )\byou(?:r|rs|rself|rselves)?\b", re.IGNORECASE)
 _QUOTED_TEXT = re.compile(r'"[^"\n]*"|“[^”\n]*”')
-_CODE_NICK = re.compile(r"`(:[\w.-]+)`")
+_CODE_NICK = re.compile(r"`(@[\w.-]+)`")
 # A sentence that opens with a name or a Bugzilla nick and a comma, as in
-# "Louis-Philippe, could you ..." or ":nick, could you ...".
+# "Louis-Philippe, could you ..." or "@nick, could you ...".
 _NAMED = re.compile(
-    r"^(?::[\w.-]+|(?P<name>[^\W\d_][\w'’.-]*(?:\s+[^\W\d_][\w'’.-]*){0,5})),\s"
+    r"^(?:@[\w.-]+|(?P<name>[^\W\d_][\w'’.-]*(?:\s+[^\W\d_][\w'’.-]*){0,5})),\s"
 )
 _GREETINGS = frozenset(["hi", "hello", "hey", "dear", "thanks"])
 _NAME_PARTICLES = frozenset(
@@ -533,7 +533,7 @@ _OPENERS = frozenset(
 
 
 def opens_with_name(sentence: str) -> bool:
-    """Whether ``sentence`` opens with a person's name or a ``:nick`` and a comma."""
+    """Whether ``sentence`` opens with a person's name or an ``@nick`` and a comma."""
     match = _NAMED.match(sentence)
     if match is None:
         return False
@@ -556,7 +556,12 @@ def addressee_hook(action: dict) -> None:
     body = _comment_body(action)
     if body is None:
         return
-    text = _QUOTED_TEXT.sub("quote", prose(_CODE_NICK.sub(r"\1", body)))
+    if found := _CODE_NICK.search(body):
+        raise ToolError(
+            f"your comment puts {found.group(1)} in backticks. Bugzilla does not "
+            "notify a mention in code, so write it without backticks"
+        )
+    text = _QUOTED_TEXT.sub("quote", prose(body))
     for sentence in prose_sentences(text):
         if _YOU.search(sentence) and not opens_with_name(sentence):
             raise ToolError(

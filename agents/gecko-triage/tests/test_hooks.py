@@ -2296,7 +2296,7 @@ def test_a_comment_names_the_person_and_not_only_you(body):
     "body",
     [
         "Louis-Philippe, could you please attach about:support?",
-        ":sonickydon, could you please do this test?",
+        "@sonickydon, could you please do this test?",
         "Louis-Philippe Manette, your WIP patch already has some of these checks.",
         "Thank you for the report.",
         "The WIP patch by Louis-Philippe Manette already has some of these checks.",
@@ -2308,7 +2308,6 @@ def test_a_comment_names_the_person_and_not_only_you(body):
         "王小明, could you please attach about:support?",
         "Sean O’Brien, could you please test Nightly?",
         "Hi Dana, could you please attach about:support?",
-        "`:sonickydon`, could you please do this test?",
         "The profile shows the stall. Dana, could\nyou please attach about:support?",
         'The page shows "Your browser does not support this video".',
         "The page shows “Your browser does not support this video”.",
@@ -2318,3 +2317,11 @@ def test_a_request_may_say_you_after_the_name(body):
     rec = _recorder()
     _comment(rec, _text(body))
     assert len(rec.actions) == 1
+
+
+def test_a_nick_in_code_is_refused_since_it_notifies_nobody():
+    rec = _recorder()
+    with pytest.raises(ToolError) as e:
+        _comment(rec, _text("`@sonickydon`, could you please do this test?"))
+    assert "without backticks" in str(e.value)
+    assert rec.actions == []
