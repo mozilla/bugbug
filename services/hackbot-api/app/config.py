@@ -72,10 +72,12 @@ class GitHubAppSettings(BaseModel):
     # that only ever talks to one org.
     installation_id: Annotated[int | None, Field(gt=0)] = None
 
-    # Who may trigger Hackbot from GitHub, and how. All defaulted, so only the
-    # App credentials are required. The webhook secret is left to the endpoint
-    # that verifies deliveries (#7053).
+    # The App's webhook secret, verifying X-Hub-Signature-256 on every delivery.
+    # Required with the App, so a missing one fails at startup rather than
+    # leaving the webhook to reject every delivery.
+    webhook_secret: HmacSecret
 
+    # Who may trigger Hackbot from GitHub, and how. All defaulted.
     # Hackbot's own GitHub account, so its comments never re-trigger a run.
     # Every ``*[bot]`` login, such as the App's, is ignored regardless.
     bot_login: str = "hackbot"
