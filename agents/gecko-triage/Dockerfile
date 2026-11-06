@@ -39,20 +39,27 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && npm install -g @firefox-devtools/profiler-cli@0.12.0 \
     && npm cache clean --force
 
-# A static webspec-index, so spec-check can read web specs by section. Release
-# 0.14.0 has a static musl build only for x86_64, so arm64 fails the build.
+# Command-line tools from their own release builds, installed by a pinned and checked
+# cargo-binstall, each at an exact version. It never falls back to cargo-quickinstall's
+# builds or to a build from source, and it sends no telemetry.
+# - webspec-index, so spec-check can read web specs by section.
 ARG TARGETARCH
-ARG WEBSPEC_INDEX_VERSION=0.14.0
-ARG WEBSPEC_INDEX_SHA256_AMD64=24a20b9d2f24151b0182001accfdf1bca09566f5822b85fc2321750e37cf0993
+ARG CARGO_BINSTALL_VERSION=1.26.2
+ARG CARGO_BINSTALL_SHA256_AMD64=9e0e064f189a9abb9f8df5fb93c3c810ef5cc19e7212d998c7a64c9e4d3527d5
+ARG CARGO_BINSTALL_SHA256_ARM64=a235250cd684af9bf1e3a1e4c216b1d36e6c553553d5d789744f27689d81c2d6
 RUN case "${TARGETARCH:-amd64}" in \
-        amd64) arch=x86_64 sha="${WEBSPEC_INDEX_SHA256_AMD64}" ;; \
-        *) echo "webspec-index ${WEBSPEC_INDEX_VERSION} has no static build for ${TARGETARCH}" >&2; exit 1 ;; \
+        amd64) arch=x86_64 sha="${CARGO_BINSTALL_SHA256_AMD64}" ;; \
+        arm64) arch=aarch64 sha="${CARGO_BINSTALL_SHA256_ARM64}" ;; \
+        *) echo "cargo-binstall has no build for ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-    && curl -fsSL -o /tmp/webspec-index.tgz \
-        "https://github.com/jnjaeschke/webspec-index/releases/download/v${WEBSPEC_INDEX_VERSION}/webspec-index-${arch}-unknown-linux-musl.tar.gz" \
-    && echo "${sha}  /tmp/webspec-index.tgz" | sha256sum -c - \
-    && tar -xzf /tmp/webspec-index.tgz -C /usr/local/bin webspec-index \
-    && rm /tmp/webspec-index.tgz
+    && curl -fsSL -o /tmp/cargo-binstall.tgz \
+        "https://github.com/cargo-bins/cargo-binstall/releases/download/v${CARGO_BINSTALL_VERSION}/cargo-binstall-${arch}-unknown-linux-musl.tgz" \
+    && echo "${sha}  /tmp/cargo-binstall.tgz" | sha256sum -c - \
+    && tar -xzf /tmp/cargo-binstall.tgz -C /tmp cargo-binstall \
+    && /tmp/cargo-binstall --no-confirm --no-track --strategies crate-meta-data \
+        --disable-telemetry \
+        --install-path /usr/local/bin webspec-index@0.14.0 \
+    && rm /tmp/cargo-binstall /tmp/cargo-binstall.tgz
 
 # ffmpeg and ffprobe, so fetch_attachment can read video attachments and screen
 # recordings. Not pinned: the Debian archive keeps only the current security release,
