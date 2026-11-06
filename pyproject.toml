@@ -75,6 +75,9 @@ perf-regression-predictor = [
     "torch==2.14.1",
     "transformers==5.20.1",
 ]
+perf-simulation = [
+    "optuna>=5.0.0",
+]
 
 [dependency-groups]
 test = [
@@ -122,6 +125,8 @@ bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
 bugbug-data-perf-alerts = "scripts.perf_alerts_retriever:main"
+bugbug-data-perf-commit-risk = "scripts.perf_commit_risk_scorer:main"
+bugbug-perf-scheduling-simulator = "scripts.perf_scheduling_simulator:main"
 bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]

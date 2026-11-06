@@ -59,6 +59,14 @@ PERF_TASK_COSTS_DB = "data/perf_task_costs.json"
 db.register(
     PERF_TASK_COSTS_DB, _index_url("data_perf_alerts", "perf_task_costs.json"), 1
 )
+# Also an archive, since scoring a year of commits takes a day: one record per
+# commit and model version, extended by every scorer run.
+PERF_COMMIT_RISK_DB = "data/perf_commit_risk.json"
+db.register(
+    PERF_COMMIT_RISK_DB,
+    _index_url("data_perf_commit_risk", "perf_commit_risk.json"),
+    1,
+)
 
 # Derived, labeled datasets.
 PERF_REGRESSIONS_DB = "data/perf_regressions.json"
@@ -83,6 +91,20 @@ db.register(
     _index_url("data_perf_regressions", "perf_push_status.json"),
     1,
 )
+# Refitted whole every run from the commit risk archive and the labels, so not
+# an archive: one record per model version with enough culprits.
+PERF_RISK_CALIBRATION_DB = "data/perf_risk_calibration.json"
+db.register(
+    PERF_RISK_CALIBRATION_DB,
+    _index_url("data_perf_risk_calibration", "perf_risk_calibration.json"),
+    1,
+)
+
+
+def ensure_dataset(path: str) -> None:
+    """Have ``path`` locally, downloading it from the Taskcluster index when absent."""
+    if not db.exists(path) and not db.download(path):
+        raise RuntimeError(f"Failed to download {path}")
 
 
 def load_previous_snapshot(path: str) -> bool:
@@ -213,3 +235,11 @@ def get_perf_push_status() -> Iterator[dict[str, Any]]:
 
 def get_perf_regression_commits() -> Iterator[dict[str, Any]]:
     yield from db.read(PERF_REGRESSION_COMMITS_DB)
+
+
+def get_perf_commit_risk() -> Iterator[dict[str, Any]]:
+    yield from db.read(PERF_COMMIT_RISK_DB)
+
+
+def get_perf_risk_calibration() -> Iterator[dict[str, Any]]:
+    yield from db.read(PERF_RISK_CALIBRATION_DB)

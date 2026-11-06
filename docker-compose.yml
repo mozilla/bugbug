@@ -33,6 +33,18 @@ services:
         volume:
           nocopy: true
 
+  bugbug-perf-commit-risk:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.perf_commit_risk
+    image: mozilla/bugbug-perf-commit-risk
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
   bugbug-http-service:
     build:
       context: .
