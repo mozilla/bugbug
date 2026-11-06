@@ -32,6 +32,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import SystemPromptFile
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.bugzilla import _COMMENT_FOOTER
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 from hackbot_runtime.searchfox import (
@@ -138,6 +139,9 @@ class FrontendTriageResult(HackbotAgentResult):
     # None when the hunt did not run; a populated object with `duplicate_of: null`
     # means it ran and found nothing, which is the answer we are measuring.
     duplicate_assessment: DuplicateAssessment | None = None
+    # What the reporter is asked, posted with a needinfo on them by
+    # `record_reporter_question` whatever the run's confidence.
+    reporter_question: str | None = None
     # This run's verdict on whether its recorded actions may reach the bug without a
     # human, computed by `may_apply_unattended`. hackbot-api reads it and still has
     # the final say.
@@ -536,6 +540,47 @@ def may_apply_unattended(plan: dict) -> bool:
     return plan.get("confidence") == "high" and plan.get("actionable") is not False
 
 
+# This text reaches the bug unattended at any confidence, so it is capped. The prompt
+# asks for a question or two; tighten the cap if real ones run well under it.
+MAX_REPORTER_QUESTION_CHARS = 1000
+
+
+def record_reporter_question(
+    recorder: ActionsRecorder, result: FrontendTriageResult, reporter: object
+) -> dict | None:
+    """Record the run's question for the reporter, with a needinfo on them.
+
+    Recorded as ``bugzilla.request_info``, which hackbot-api applies even when the
+    rest of the run is held: a medium- or low-confidence run is the one that needs
+    the answer. The requestee is the bug's ``creator``, read by the pre-flight lookup
+    rather than taken from the model, so nothing the agent read on the bug can choose
+    who gets flagged.
+
+    Records nothing without both a question and a reporter. A question too long to be
+    one is dropped rather than truncated, since a cut-off question is worse than none.
+    """
+    question = result.reporter_question
+    if not question or not isinstance(reporter, str) or not reporter.strip():
+        return None
+    if len(question) > MAX_REPORTER_QUESTION_CHARS:
+        print(
+            f"[frontend_triage] dropping a {len(question)}-character reporter "
+            f"question (limit {MAX_REPORTER_QUESTION_CHARS})",
+            file=sys.stderr,
+        )
+        return None
+
+    return recorder.record(
+        "bugzilla.request_info",
+        {
+            "bug_id": result.bug_id,
+            "text": f"{question}\n\n---\n\n{_COMMENT_FOOTER}",
+            "requestee": reporter.strip(),
+        },
+        reasoning="The triage needs information only the reporter has.",
+    )
+
+
 def parse_plan(text: str | None) -> dict:
     """Extract the structured plan from the agent's final message, if present.
 
@@ -561,7 +606,7 @@ def parse_plan(text: str | None) -> dict:
 
     def _as_str(value):
         # A non-string would fail FrontendTriageResult's validation and lose the whole
-        # run's result, and these two only route a notification.
+        # run's result over a field that is not worth it.
         return value.strip() or None if isinstance(value, str) else None
 
     actionable = data.get("actionable")
@@ -584,6 +629,7 @@ def parse_plan(text: str | None) -> dict:
         "duplicate_assessment": parse_duplicate_assessment(
             data.get("duplicate_assessment")
         ),
+        "reporter_question": _as_str(data.get("reporter_question")),
     }
 
 

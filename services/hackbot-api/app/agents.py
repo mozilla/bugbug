@@ -119,9 +119,11 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # marked `auto_apply` qualify. Everything else stays for manual apply.
         auto_apply_actions=True,
         auto_apply_requires_consent=True,
-        # Except the Slack notification: for a held run it is the only signal that
-        # an analysis is waiting, so holding it with the comment hides the run.
-        always_apply_actions=frozenset({"slack.post_message"}),
+        # Except two that matter most when the run is held. The Slack notification
+        # is the only signal that an analysis is waiting, so holding it with the
+        # comment hides the run. The question to the reporter is what a medium- or
+        # low-confidence run needs answered, so holding it would leave nobody to ask.
+        always_apply_actions=frozenset({"slack.post_message", "bugzilla.request_info"}),
     ),
     "test-repair": AgentSpec(
         name="test-repair",
