@@ -3059,6 +3059,65 @@ TRIAGE_SCOPE = (
             "so no automated test covers a specific site."
         ),
     ),
+    ScopedComponent(
+        "Firefox",
+        "Screenshots",
+        "#screenshots-triage",
+        trees=(
+            "browser/actors/ScreenshotsComponentChild.sys.mjs",
+            "browser/components/screenshots/",
+        ),
+        owns=(
+            "browser/actors/ScreenshotsComponentChild.sys.mjs",
+            "browser/components/screenshots/",
+        ),
+        notes=(
+            "Neither path registers a `SPHINX_TREES`, so there is no source doc to fall "
+            "back on and the tree is the only reference.\n\n"
+            "**The selection overlay is shared with Mini Window.** "
+            "`browser/components/screenshots/ScreenshotsSelectionModes.sys.mjs` defines "
+            "a `SCREENSHOTS` and a `MINI_WINDOW` mode, and `toggle`/`start` in "
+            "`browser/components/screenshots/ScreenshotsUtils.sys.mjs` hand a showing "
+            "overlay from one mode to the other. So a bug in selecting or drawing a "
+            "region that reproduces from the mini-window entry point is still this "
+            "component, while what happens once a mini-window region is chosen is "
+            "`browser/components/miniwindow/` (`Firefox :: Mini Window`). DevTools' "
+            "`devtools/server/actors/utils/capture-screenshot.js` imports "
+            "`clampDimensionsIfNeeded` from the same module, so a change to the size "
+            "limits also changes `:screenshot`, but DevTools screenshot bugs are "
+            "otherwise DevTools'.\n\n"
+            "**The saved image is a second render, not the overlay.** `createCanvas` "
+            "re-renders the region in the parent with `drawSnapshot`, in tiles of "
+            "`MAX_SNAPSHOT_DIMENSION` (1024px), so a saved file that differs from the "
+            "preview (bug 2020694 captures hover state the preview did not show) "
+            "localizes to the capture path rather than the overlay. Two expected states "
+            "get filed as bugs: a region past `MAX_CAPTURE_DIMENSION` or "
+            "`MAX_CAPTURE_AREA` is cropped by `cropScreenshotRectIfNeeded` with a "
+            '"too large" alert, and "Save full page" only measures the top-level '
+            "document's scroll, so a page that scrolls an inner element, like "
+            "about:preferences, captures only the visible area (bug 1643719).\n\n"
+            "**Saving is `browser/components/screenshots/fileHelpers.mjs`, and it leans "
+            "on platform pieces.** 4 of this year's 25 defects are filenames: "
+            "`getFilename` clips the name against Windows' 259-character `MAX_PATH` "
+            "relative to the download directory at save time, which stops holding once "
+            "the file is moved somewhere deeper (bugs 2072382 and 2076588 are open). A "
+            'Download button that does nothing with "Always ask you where to save '
+            'files" on is `promiseTargetFile` failing in the file picker, and bug '
+            "2077403 turned out to be the file-picker bug 2077390, so check the Browser "
+            "Console error before localizing it here. The save location comes from "
+            "`browser.screenshots.folderList`, whose default of 4 follows the downloads "
+            "setting.\n\n"
+            "**Coverage is good, so an empty `relevant_tests` is usually wrong.** 31 "
+            "`browser_*.js` tests in `browser/components/screenshots/tests/browser/`, "
+            "run twice: `browser.toml` as is and `browserSidebarRevamp.toml` with "
+            "`sidebar.revamp=true`, so cite the manifest that matches the bug. Mini "
+            "Window's region entry is tested from its own "
+            "`browser/components/miniwindow/test/browser/`. "
+            "`browser_screenshots_splitview.js` and `browser_keyboard_tests.js` have had "
+            "intermittents this year, so a failure there is not by itself evidence for "
+            "a bug."
+        ),
+    ),
     # The three buckets, which are where a filing lands when the reporter could not pick
     # a component. Grouped at the end rather than beside a related area because they are
     # not an area: they route to one channel for the people who work the unowned queue.

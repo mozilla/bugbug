@@ -985,6 +985,11 @@ def test_compute_confidence_thresholds() -> None:
 def test_confidence_thresholds_default() -> None:
     assert testselect.TestGroupSelectModel().confidence_thresholds is None
     assert set(testselect.CONFIDENCE_LEVEL_TARGETS) == {"label", "group"}
+    for targets in testselect.CONFIDENCE_LEVEL_TARGETS.values():
+        # The taskgraph uses the "very_low", "low", "medium" and "high" levels.
+        assert {"very_low", "low", "medium", "high"} <= set(targets)
+        # Lower levels select more runnables.
+        assert list(targets.values()) == sorted(targets.values(), reverse=True)
 
 
 def test_share_caught() -> None:

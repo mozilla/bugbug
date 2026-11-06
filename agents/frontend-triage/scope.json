@@ -283,6 +283,11 @@
     },
     {
       "product": "Firefox",
+      "component": "Screenshots",
+      "channel": "#screenshots-triage"
+    },
+    {
+      "product": "Firefox",
       "component": "General",
       "channel": "#fx-toolkit-general-triage-notifications"
     },

@@ -104,6 +104,7 @@ async def create_run(
     agent_name: str,
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
+    requested_via: Annotated[str | None, Depends(require_api_key)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
@@ -153,6 +154,7 @@ async def create_run(
             status=RunStatus.pending.value,
             inputs=inputs.model_dump(mode="json"),
             requested_by=on_behalf_of,
+            requested_via=requested_via,
             dedupe_key=dedupe_key,
             results_prefix=results_prefix,
             artifacts=[],

@@ -320,6 +320,26 @@ def test_select_reuses_configs_of_the_push(monkeypatch: pytest.MonkeyPatch) -> N
     assert len(first) == 1
 
 
+def test_select_reuses_used_configs(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = testconfigselect.TestConfigSelectModel()
+    probabilities = {LINUX: 0.1, WINDOWS: 0.5, MAC: 0.45}
+    monkeypatch.setattr(
+        model,
+        "_predict",
+        lambda test_jobs: np.array(
+            [probabilities[test_job["config"]] for test_job in test_jobs]
+        ),
+    )
+    history_features = {c: {"likelihood": 0.0} for c in probabilities}
+    groups = [GroupCandidates(G, [LINUX, WINDOWS, MAC], history_features, 1.0)]
+
+    # WINDOWS has the best probability for its cost, unless the setup cost of LINUX is already paid.
+    assert model._select([PushCandidates(groups)], threshold=1.0) == [[[WINDOWS]]]
+    assert model._select(
+        [PushCandidates(groups, used_configs=frozenset({LINUX}))], threshold=1.0
+    ) == [[[LINUX]]]
+
+
 def test_evaluation_runs(trained_model, capsys) -> None:
     trained_model.evaluation()
     output = capsys.readouterr().out
