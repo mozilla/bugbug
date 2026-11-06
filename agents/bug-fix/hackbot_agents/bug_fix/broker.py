@@ -57,8 +57,7 @@ def _mcp_endpoint(manager: StreamableHTTPSessionManager):
     return handler
 
 
-def build_app() -> Starlette:
-    inputs = BrokerInputs()
+def build_app(inputs: BrokerInputs) -> Starlette:
     client = bugsy.Bugsy(
         api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
     )
@@ -98,5 +97,9 @@ def build_app() -> Starlette:
     )
 
 
+def main() -> Starlette:
+    return build_app(BrokerInputs())
+
+
 if __name__ == "__main__":
-    run_broker(build_app)
+    run_broker(main)
