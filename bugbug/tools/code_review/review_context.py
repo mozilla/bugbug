@@ -17,7 +17,7 @@ import re
 import time
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import httpx
 from pydantic import BaseModel
@@ -49,6 +49,9 @@ from bugbug.tools.code_review.review_context_schema import (
     tomllib,
 )
 from bugbug.tools.core.connection import get_github_api_headers, get_http_client
+
+if TYPE_CHECKING:
+    from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
 logger = getLogger(__name__)
 
@@ -161,21 +164,12 @@ class ReviewInfo:
     blocking_reviewer_groups: frozenset[str] = frozenset()
 
 
-async def build_review_info(patch) -> ReviewInfo:
-    """Build a ReviewInfo from a patch, tolerating patches that lack the fields."""
-    try:
-        reviewer_groups = frozenset(getattr(patch, "reviewer_project_phids", []) or [])
-        blocking = frozenset(
-            getattr(patch, "blocking_reviewer_project_phids", []) or []
-        )
-        author = getattr(patch, "author_username", None)
-    except Exception:
-        logger.exception("Could not build review info for the patch")
-        return ReviewInfo()
+def build_review_info(patch: "PhabricatorPatch") -> ReviewInfo:
+    """Build a ReviewInfo from a patch's reviewer and author data."""
     return ReviewInfo(
-        author=author,
-        reviewer_groups=reviewer_groups,
-        blocking_reviewer_groups=blocking,
+        author=patch.author_username,
+        reviewer_groups=frozenset(patch.reviewer_project_phids),
+        blocking_reviewer_groups=frozenset(patch.blocking_reviewer_project_phids),
     )
 
 
@@ -611,7 +605,7 @@ async def load_external_content_for_diff(
     review: ReviewInfo | None = None
     if patch is not None:
         bug_component = await patch.bug_component()
-        review = await build_review_info(patch)
+        review = build_review_info(patch)
 
     try:
         actions = collect_actions(

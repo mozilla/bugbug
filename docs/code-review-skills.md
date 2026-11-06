@@ -88,7 +88,8 @@ matching implements `bugzilla.component` and the `review` predicate
 predicate matches when every facet it specifies matches, so a rule can target a
 reviewer group (e.g. `review = { reviewer = ["ip-protection-reviewers"] }`).
 Reviewer groups are matched by Phabricator project slug, resolved to the
-revision's requested reviewers. `bugzilla.product`, `bugzilla.keywords`,
+revision's requested reviewers. `review.author` entries are the author's
+Phabricator email (e.g. `alice@mozilla.com`). `bugzilla.product`, `bugzilla.keywords`,
 `bugzilla.severity`, and `patch.*` are parsed and validated but fail closed
 until the corresponding metadata is wired into the matcher. When the platform
 provides no reviewer information (e.g. a plain GitHub diff), `review` predicates
@@ -261,9 +262,9 @@ by the schema for forward-compatible rule files but fail closed.
 | `bugzilla` | `product`           | list of strings | Parsed and validated; currently fails closed     |
 | `bugzilla` | `keywords`          | list of strings | Parsed and validated; currently fails closed     |
 | `bugzilla` | `severity`          | list of strings | Parsed and validated; currently fails closed     |
-| `review`   | `author`            | list of strings | Parsed and validated; currently fails closed     |
-| `review`   | `reviewer`          | list of strings | Parsed and validated; currently fails closed     |
-| `review`   | `blocking_reviewer` | list of strings | Parsed and validated; currently fails closed     |
+| `review`   | `author`            | list of strings | Matches the author's email                       |
+| `review`   | `reviewer`          | list of strings | Matches a requested reviewer group (slug)        |
+| `review`   | `blocking_reviewer` | list of strings | Matches a blocking reviewer group (slug)         |
 | `patch`    | `repository`        | list of strings | Parsed and validated; currently fails closed     |
 | `patch`    | `is_backport`       | boolean         | Parsed and validated; currently fails closed     |
 

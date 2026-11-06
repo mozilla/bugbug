@@ -1318,8 +1318,7 @@ def test_rule_review_author():
     )
 
 
-@pytest.mark.asyncio
-async def test_build_review_info_from_patch():
+def test_build_review_info_from_patch():
     from types import SimpleNamespace
 
     patch = SimpleNamespace(
@@ -1327,7 +1326,7 @@ async def test_build_review_info_from_patch():
         blocking_reviewer_project_phids=["PHID-PROJ-ip"],
         author_username="alice@mozilla.com",
     )
-    info = await build_review_info(patch)
+    info = build_review_info(patch)
     assert info.author == "alice@mozilla.com"
     assert info.reviewer_groups == frozenset({"PHID-PROJ-ip", "PHID-PROJ-newtab"})
     assert info.blocking_reviewer_groups == frozenset({"PHID-PROJ-ip"})
