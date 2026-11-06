@@ -45,7 +45,8 @@ With `ANTHROPIC_API_KEY`, `BUGZILLA_API_URL`, `BUGZILLA_API_KEY`,
 repo root:
 
 ```sh
-BUG_ID=1234567 docker compose up autowebcompat-intervention-agent --build
+cd agents/autowebcompat-intervention
+BUG_ID=1234567 docker compose --env-file ../../.env up autowebcompat-intervention-agent --build
 ```
 
 A local run records the Phabricator patch but doesn't submit it; only
@@ -57,5 +58,5 @@ The Firefox checkout and its objdir are kept in a Docker volume, so later runs
 skip the full clone. To start from a clean checkout:
 
 ```sh
-docker compose -f agents/autowebcompat-intervention/compose.yml down -v
+docker compose --env-file ../../.env down -v
 ```

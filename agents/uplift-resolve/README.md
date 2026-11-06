@@ -43,9 +43,10 @@ With `ANTHROPIC_API_KEY`, `BUGZILLA_API_KEY` and `PHABRICATOR_API_KEY` in a
 repo-root `.env`, from the repo root:
 
 ```sh
+cd agents/uplift-resolve
 TARGET_BRANCH=beta \
 SOURCES='[{"kind":"git","commit":"<sha>"}]' \
-  docker compose up uplift-resolve-agent --build
+  docker compose --env-file ../../.env up uplift-resolve-agent --build
 ```
 
 Artifacts land in `~/hackbot/artifacts/<run_id>`; apply the patch with
