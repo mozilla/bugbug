@@ -63,6 +63,10 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    ```dotenv
    # .env (repo root) — never commit this file
    ANTHROPIC_API_KEY=sk-ant-...
+   # NOTE the /rest suffix. This value is passed straight to bugsy as its
+   # bugzilla_url, so without /rest every read hits Bugzilla's HTML 404 page and
+   # fails as "Expecting value: line 1 column 1 (char 0)" — which looks like a
+   # transient parse error rather than a misconfiguration.
    BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
    BUGZILLA_API_KEY=...
    ```
