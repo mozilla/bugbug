@@ -62,7 +62,7 @@ flowchart TD
         broker["Broker sidecar<br/>holds the Bugzilla key,<br/>agent-tools read tools"]
     end
 
-    ext["Searchfox, hg, crash-stats,<br/>profiler storage, spec sites"]
+    ext["Searchfox, hg, crash-stats, Treeherder,<br/>profiler storage, spec sites"]
     apply["hackbot-api: apply step"]
     ui["Hackbot UI<br/>a person applies"]
     bz[("Bugzilla")]
@@ -296,8 +296,9 @@ that need a local machine. The skills' wiki steps are switched off. The session 
 write its investigation file, and the write guard allows writes only under `/tmp`. A
 PreToolUse hook refuses Write and Edit on any other path. The job container discards the
 file. On the host, it stays in /tmp. The image also has Node 24,
-`@firefox-devtools/profiler-cli@0.12.0`, `webspec-index` 0.14.0 and `socorro-cli` 0.6.0
-from their release builds (installed by `cargo-binstall`) and Debian's `ffmpeg`.
+`@firefox-devtools/profiler-cli@0.12.0`, `webspec-index` 0.14.0, `socorro-cli` 0.6.0 and,
+on amd64, `treeherder-cli` 0.3.1, from their release builds (installed by
+`cargo-binstall`), and Debian's `ffmpeg`.
 
 `profiler-cli` refuses a profile in a newer processed format than it knows, and it has
 no option to read the parts that it knows. A new Firefox Profiler release can change the
@@ -353,9 +354,10 @@ The run writes `<ARTIFACTS_DIR>/<run_id>/summary.json` (`findings` and the recor
 `actions`) and `logs/agent.log`. Nothing posts: the apply step only runs in hackbot-api.
 
 The runtime's `prepare_repo` fetches and hard-resets whatever `SOURCE_REPO` points at.
-Point it at a spare clone, never at a working tree. `profiler-cli`, `webspec-index` and
-`socorro-cli` must be on `PATH` for profile, spec and crash reading
-at the image's versions: `cargo binstall webspec-index@0.14.0 socorro-cli@0.6.0`.
+Point it at a spare clone, never at a working tree. `profiler-cli`, `webspec-index`,
+`socorro-cli` and `treeherder-cli` must be on `PATH` for profile, spec, crash and CI
+reading, at the image's versions:
+`cargo binstall webspec-index@0.14.0 socorro-cli@0.6.0 treeherder-cli@0.3.1`.
 
 ## Inputs
 

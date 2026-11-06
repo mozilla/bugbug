@@ -2,12 +2,12 @@
 
 Four levels, from the cheapest to the closest to production.
 
-| Level           | What it proves                                                                                                                                                | Where                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Unit tests      | The hooks, the preflight, the state, the team files, the plugin check, the duplicate search, the plan parsing, the /tmp write guard and the attachment reader | any machine, no network  |
-| Local dry run   | The model triages real bugs with the real tools and the plugin skills; nothing is posted                                                                      | the host, with `uv`      |
-| Image check     | The Dockerfile builds; Node, `profiler-cli`, the plugin, `webspec-index` and `ffmpeg` are in the image; `attachments.py` unpacks files in it                  | Docker, `linux/amd64`    |
-| Dev environment | Network access from Cloud Run, and Hackbot applying the actions                                                                                               | Hackbot dev, after merge |
+| Level           | What it proves                                                                                                                                                                | Where                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Unit tests      | The hooks, the preflight, the state, the team files, the plugin check, the duplicate search, the plan parsing, the /tmp write guard and the attachment reader                 | any machine, no network  |
+| Local dry run   | The model triages real bugs with the real tools and the plugin skills; nothing is posted                                                                                      | the host, with `uv`      |
+| Image check     | The Dockerfile builds; Node, `profiler-cli`, the plugin, `webspec-index`, `socorro-cli`, `treeherder-cli` and `ffmpeg` are in the image; `attachments.py` unpacks files in it | Docker, `linux/amd64`    |
+| Dev environment | Network access from Cloud Run, and Hackbot applying the actions                                                                                                               | Hackbot dev, after merge |
 
 ## Unit tests
 
@@ -28,7 +28,8 @@ Get approval for each real bug before a run reads it. Restricted bugs are never 
 
 Cloud Run runs `linux/amd64`, so check the image for that platform. On an arm64
 machine, such as an Apple Silicon Mac, `--platform linux/amd64` builds it under
-emulation; a native arm64 build also works:
+emulation. A native arm64 build also works, but it has no `treeherder-cli`, so remove
+that check from the command below for it:
 
 ```sh
 docker build --platform linux/amd64 -f agents/gecko-triage/Dockerfile --target agent \
@@ -37,6 +38,7 @@ docker run --rm --platform linux/amd64 --entrypoint bash gecko-triage:local -c \
     'set -euo pipefail \
      && python -m hackbot_agents.gecko_triage.toolkit /opt/fx-bug-toolkit \
      && profiler-cli --version && webspec-index --version && socorro-cli --version \
+     && treeherder-cli --version \
      && ffmpeg -version | head -n 1 && ffprobe -version | head -n 1'
 ```
 
@@ -81,5 +83,5 @@ PY
 
 After merge, `agents/cloudbuild.yaml` builds the images and deploys them to dev and then
 stage. The job must first exist in `mozilla/webservices-infra`. The first dev runs check
-what the host cannot: Cloud Run reaching profile storage, crash-stats and the spec sites,
-and Hackbot posting the comment and setting the fields.
+what the host cannot: Cloud Run reaching profile storage, crash-stats, Treeherder and the
+spec sites, and Hackbot posting the comment and setting the fields.

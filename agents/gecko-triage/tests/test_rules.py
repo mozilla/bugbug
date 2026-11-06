@@ -559,6 +559,8 @@ KEY_PHRASES = (
     ("media/diagnostics.md", "The GPU variable works only on Windows and macOS."),
     ("log_analyst", "Never use curl or WebFetch to fetch a log."),
     ("diagnostics.md", "never fetch a CI log yourself."),
+    ("diagnostics.md", "Never use `--fetch-logs` or `--download-artifacts`"),
+    ("diagnostics.md", "unless you add `--include-intermittent`."),
     (
         "diagnostics.md",
         "remove the `bp-` prefix, also from an id in a crash-stats URL,",

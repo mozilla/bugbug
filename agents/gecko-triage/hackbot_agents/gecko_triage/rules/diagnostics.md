@@ -113,6 +113,15 @@ https://treeherder.mozilla.org/api/failuresbybug/?startday=YYYY-MM-DD&endday=YYY
 An empty list means that nobody classified a failure to this bug in that period. It does
 not show that the newest runs pass, so never write that they pass from an empty list.
 
+`treeherder-cli` reads the CI results of a push. Give it the revision or the Treeherder
+link, with `--repo` for the tree. It lists the failed jobs, but hides the failures
+classified as intermittent unless you add `--include-intermittent`. `--show-stack-traces`
+adds the crash stacks. Never use `--fetch-logs` or `--download-artifacts`: CI logs go
+through `log_analyst`. For an intermittent, `treeherder-cli --similar-history <job id>
+--repo <repo>` shows how often the same failure happened before.
+`treeherder-cli <revision> --repo <repo> --group-history <manifest>` shows the pass and
+fail history of the test's manifest over the pushes before the revision.
+
 ## Required information
 
 | Bug type   | Required                                                          |

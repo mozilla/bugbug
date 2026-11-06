@@ -44,13 +44,15 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # builds or to a build from source, and it sends no telemetry.
 # - webspec-index, so spec-check can read web specs by section.
 # - socorro-cli, so a run can read a crash report from crash-stats.
+# - treeherder-cli, so a run can read the CI results of a push. It has no arm64 Linux
+#   build, so an arm64 image goes without it; Cloud Run is amd64.
 ARG TARGETARCH
 ARG CARGO_BINSTALL_VERSION=1.26.2
 ARG CARGO_BINSTALL_SHA256_AMD64=9e0e064f189a9abb9f8df5fb93c3c810ef5cc19e7212d998c7a64c9e4d3527d5
 ARG CARGO_BINSTALL_SHA256_ARM64=a235250cd684af9bf1e3a1e4c216b1d36e6c553553d5d789744f27689d81c2d6
 RUN case "${TARGETARCH:-amd64}" in \
-        amd64) arch=x86_64 sha="${CARGO_BINSTALL_SHA256_AMD64}" ;; \
-        arm64) arch=aarch64 sha="${CARGO_BINSTALL_SHA256_ARM64}" ;; \
+        amd64) arch=x86_64 sha="${CARGO_BINSTALL_SHA256_AMD64}" amd64_only=treeherder-cli@0.3.1 ;; \
+        arm64) arch=aarch64 sha="${CARGO_BINSTALL_SHA256_ARM64}" amd64_only= ;; \
         *) echo "cargo-binstall has no build for ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && curl -fsSL -o /tmp/cargo-binstall.tgz \
@@ -59,7 +61,7 @@ RUN case "${TARGETARCH:-amd64}" in \
     && tar -xzf /tmp/cargo-binstall.tgz -C /tmp cargo-binstall \
     && /tmp/cargo-binstall --no-confirm --no-track --strategies crate-meta-data \
         --disable-telemetry \
-        --install-path /usr/local/bin webspec-index@0.14.0 socorro-cli@0.6.0 \
+        --install-path /usr/local/bin webspec-index@0.14.0 socorro-cli@0.6.0 $amd64_only \
     && rm /tmp/cargo-binstall /tmp/cargo-binstall.tgz
 # These tools would check crates.io for a newer version on each run.
 ENV MOZTOOLS_UPDATE_CHECK=0
