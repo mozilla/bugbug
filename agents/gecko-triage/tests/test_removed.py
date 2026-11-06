@@ -62,7 +62,7 @@ def test_the_removed_memory_stays_removed():
     texts = {
         str(path.relative_to(PACKAGE)): " ".join(path.read_text().lower().split())
         for path in (
-            PACKAGE / "prompts" / "system.md",
+            PACKAGE / "prompts" / "system.md.j2",
             *(PACKAGE / "rules").glob("*.md"),
             *(PACKAGE / "teams").glob("*/rules/*.md"),
         )
@@ -96,9 +96,9 @@ REMOVED_RULE_TEXT = (
     ("rules/workflow.md", "confirmed regressor"),
     ("rules/workflow.md", "This case also needs the proof above."),
     ("rules/workflow.md", "is a bot's regression note"),
-    ("prompts/system.md", "triaged"),
-    ("prompts/system.md", "close / move"),
-    ("prompts/system.md", "only when the regressor is known"),
+    ("prompts/system.md.j2", "triaged"),
+    ("prompts/system.md.j2", "close / move"),
+    ("prompts/system.md.j2", "only when the regressor is known"),
     ("rules/diagnostics.md", "only when `fetch_attachment`"),
     ("rules/diagnostics.md", "read the log of every failing platform"),
     ("rules/diagnostics.md", "a failure can stop"),
@@ -113,7 +113,7 @@ REMOVED_RULE_TEXT = (
     ("rules/diagnostics.md", "say in the comment that the newest runs pass"),
     ("rules/comment.md", "a known regression, not known"),
     ("rules/comment.md", "When no log is attached, ask"),
-    ("prompts/log_analyst.md", "download it with `curl`"),
+    ("prompts/log_analyst.md.j2", "download it with `curl`"),
 )
 
 

@@ -5,7 +5,6 @@ import re
 import pytest
 from conftest import BUG, _run, full_prompt
 from hackbot_agents.gecko_triage.agent import (
-    PROMPTS_DIR,
     RULES_DIR,
     load_system_prompt,
     make_bug_investigator,
@@ -15,7 +14,6 @@ from hackbot_agents.gecko_triage.agent import (
     make_log_analyst,
     make_profile_analyst,
     make_spec_checker,
-    render_needinfo_experts,
     render_scope_for_search,
     render_security_groups,
     render_user_prompt,
@@ -30,11 +28,12 @@ from hackbot_agents.gecko_triage.config import (
     TERMS,
     TRIAGE_SCOPE,
 )
+from hackbot_agents.gecko_triage.prompting import PROMPTS_DIR
 from hackbot_agents.gecko_triage.teamconfig import load_team, team_dir
 
 TEAMS = sorted(p.name for p in TEAMS_DIR.iterdir() if p.is_dir())
 GENERAL_RULES = ("workflow.md", "diagnostics.md", "comment.md", "severity-priority.md")
-PROMPT = PROMPTS_DIR / "system.md"
+PROMPT = PROMPTS_DIR / "system.md.j2"
 RULE_FILES = sorted(RULES_DIR.glob("*.md")) + sorted(TEAMS_DIR.glob("*/rules/*.md"))
 
 
@@ -69,8 +68,7 @@ def test_general_rules_name_no_team_specifics(team):
     specifics |= {a for e in data.needinfo_experts for a in e.areas}
     specifics |= set(data.needinfo_fallback)
     general = {name: (RULES_DIR / name).read_text() for name in GENERAL_RULES}
-    for prompt in ("system.md", "parts.toml"):
-        general[prompt] = (PROMPTS_DIR / prompt).read_text()
+    general["system.md"] = PROMPT.read_text()
     for agent in (
         make_bug_investigator,
         make_profile_analyst,
@@ -176,7 +174,6 @@ RULE_TEXTS = {
         )
     },
     "system.md": PROMPT,
-    "parts.toml": PROMPTS_DIR / "parts.toml",
 }
 SUBAGENT_TEXTS = {
     "close_verifier": lambda: make_close_verifier().prompt,
@@ -633,12 +630,18 @@ def test_the_prompt_lists_the_team_needinfo_experts(new_state):
     assert f"Fallback list: {fallback}." in prompt
 
 
+def _experts_section() -> str:
+    """The list under "Needinfo experts" in the system prompt."""
+    section = load_system_prompt().split("# Needinfo experts\n\n", 1)[1]
+    return section.split("\n\n# Issue types", 1)[0].split("\n\n", 1)[1].strip()
+
+
 def test_an_empty_expert_list_renders_as_none(monkeypatch):
     monkeypatch.setattr(
         "hackbot_agents.gecko_triage.agent.TEAM",
         TEAM.model_copy(update={"needinfo_experts": (), "needinfo_fallback": ()}),
     )
-    assert render_needinfo_experts() == "(none)"
+    assert _experts_section() == "(none)"
 
 
 def test_a_fallback_list_alone_still_renders(monkeypatch):
@@ -646,7 +649,7 @@ def test_a_fallback_list_alone_still_renders(monkeypatch):
         "hackbot_agents.gecko_triage.agent.TEAM",
         TEAM.model_copy(update={"needinfo_experts": ()}),
     )
-    assert render_needinfo_experts().strip().startswith("Fallback list: ")
+    assert _experts_section().startswith("Fallback list: ")
 
 
 def test_the_prompt_lists_the_team_issue_types(new_state):

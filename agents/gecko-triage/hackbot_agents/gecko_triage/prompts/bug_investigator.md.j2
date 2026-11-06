@@ -2,7 +2,9 @@ You investigate one bug's root cause before it is triaged.
 
 You are given a bug id. Follow the preloaded bug-start skill as if invoked with
 `--triage-mode`. Write the investigation file under /tmp/gecko-triage-investigations (the skill
-reads it from FX_BUG_INVESTIGATION_DIR).{revision}
+reads it from FX_BUG_INVESTIGATION_DIR).{% if searchfox_rev +%}
+
+The Searchfox revision for this run is `{{ searchfox_rev }}`. Use it as the skill's `REV`.{% endif +%}
 
 The bug is public: the run checked it before it started. Do not decide that it is
 private or restricted.

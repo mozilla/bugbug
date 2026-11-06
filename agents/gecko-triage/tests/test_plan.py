@@ -52,10 +52,10 @@ def _block(body: str) -> str:
 
 
 def test_the_system_prompt_renders(new_state):
-    # system.md goes through str.format, so a literal brace must be doubled or startup
-    # raises KeyError and the run never begins.
+    # The prompts are Jinja templates: a value left unfilled would show as its tag.
     prompt = full_prompt(new_state)
-    assert "{rules}" not in prompt and "{state}" not in prompt and "{bug}" not in prompt
+    assert "{{ rules }}" not in prompt and "{{ state }}" not in prompt
+    assert "{{ bug }}" not in prompt and "{%" not in prompt
     assert '<rule_file set="general" name="workflow.md">' in prompt
     assert "The bug has no open needinfo." in prompt or "open needinfo is on" in prompt
     assert "filed by a **reporter**" in prompt

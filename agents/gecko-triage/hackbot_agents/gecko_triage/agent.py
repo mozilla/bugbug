@@ -18,7 +18,6 @@ import json
 import os
 import re
 import sys
-import tomllib
 from functools import partial
 from pathlib import Path
 from typing import Annotated
@@ -77,6 +76,7 @@ from .hooks import (
 from .investigations import INVESTIGATOR, Investigations, spawn_counter
 from .isolation import hidden_env, make_undumpable
 from .preflight import reporter_audience
+from .prompting import description, render
 from .state import AUTOMATION_SUFFIXES, TriageState
 from .steps import Steps, call_counter, limit_hit_hook
 from .targets import (
@@ -97,12 +97,11 @@ from .withheld import BROKER_TOOLS_MATCHER, WithheldBugs, withheld_hook
 
 HERE = Path(__file__).resolve().parent
 RULES_DIR = HERE / "rules"
-PROMPTS_DIR = HERE / "prompts"
 
 
-def _prompt(name: str) -> str:
-    """The text of `prompts/<name>.md`, without the file's final newline."""
-    return (PROMPTS_DIR / f"{name}.md").read_text().removesuffix("\n")
+def _prompt(name: str, **values: object) -> str:
+    """`prompts/<name>.md.j2` with ``values`` filled in, without the file's final newline."""
+    return render(name, **values).removesuffix("\n")
 
 
 _JSON_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
@@ -270,8 +269,8 @@ class GeckoTriageResult(Plan, HackbotAgentResult):
     result: str | None = None
 
 
-SEARCHFOX_LINKS_PROMPT = _prompt("searchfox_links").format(
-    searchfox_placeholder=SEARCHFOX_PLACEHOLDER
+SEARCHFOX_LINKS_PROMPT = _prompt(
+    "searchfox_links", searchfox_placeholder=SEARCHFOX_PLACEHOLDER
 )
 
 
@@ -581,30 +580,6 @@ def render_components(scope: tuple[Component, ...]) -> str:
     )
 
 
-def render_needinfo_experts() -> str:
-    if TEAM is None or not (TEAM.needinfo_experts or TEAM.needinfo_fallback):
-        return "(none)"
-    lines = [
-        f"- `{e.email}`: {', '.join(e.areas)}."
-        + (f" Ask only when: {e.when}" if e.when else "")
-        for e in TEAM.needinfo_experts
-    ]
-    if TEAM.needinfo_fallback:
-        fallback = ", ".join(f"`{e}`" for e in TEAM.needinfo_fallback)
-        lines.append(f"\nFallback list: {fallback}.")
-    return "\n".join(lines)
-
-
-def render_issue_types() -> str:
-    if TEAM is None or not TEAM.issue_types:
-        return "(none)"
-    return "\n".join(f"- `{t.value}`: {t.meaning}." for t in TEAM.issue_types)
-
-
-def render_keywords() -> str:
-    return ", ".join(f"`{name}`" for name in TERMS.keywords.add)
-
-
 def render_docs(known_docs: tuple[DocRef, ...], scope: tuple[Component, ...]) -> str:
     refs = set()
     for entry in scope:
@@ -612,9 +587,6 @@ def render_docs(known_docs: tuple[DocRef, ...], scope: tuple[Component, ...]) ->
     if not refs:
         return "(no in-tree documentation found in the checkout)"
     return "\n".join(f"- `{d.tree}/`, published at {d.url}" for d in sorted(refs))
-
-
-_PROMPT_PARTS = tomllib.loads((PROMPTS_DIR / "parts.toml").read_text())
 
 
 # The comments' share of the user prompt, in characters: about 37k tokens. The system
@@ -729,24 +701,6 @@ def render_bug(
     return "\n\n".join(parts)
 
 
-def render_team_parts() -> dict[str, str]:
-    """The prompt parts that differ with no team: `prompts/parts.toml`, filled in."""
-    if TEAM is None:
-        parts = _PROMPT_PARTS["no_team"]
-        values = {}
-    else:
-        parts = _PROMPT_PARTS["team"]
-        values = {
-            "team_label": TEAM.label,
-            "capture_placeholder": CAPTURE_PLACEHOLDER,
-            "capture_block": TEAM.comment.capture_block,
-            "capture_marker": TEAM.comment.capture_marker,
-        }
-    if TEAM is None or not TEAM.issue_types:
-        parts = {**parts, **_PROMPT_PARTS["no_issue_types"]}
-    return {name: text.format(**values) for name, text in parts.items()}
-
-
 def rule_files(repo: Path | None = None) -> list[tuple[str, Path]]:
     """The rule files the system prompt carries, in order, each with its set.
 
@@ -798,19 +752,18 @@ def load_system_prompt(repo: Path | None = None) -> str:
     With the Firefox checkout ``repo``, it also carries the team's in-tree docs, so it
     changes when those docs change.
     """
-    tmpl = (PROMPTS_DIR / "system.md").read_text()
-    return tmpl.format(
-        **render_team_parts(),
+    return render(
+        "system",
+        team=TEAM,
+        capture_placeholder=CAPTURE_PLACEHOLDER,
         rules=render_rules(repo),
         searchfox_links=SEARCHFOX_LINKS_PROMPT,
-        link_hosts=", ".join(f"`{h}`" for h in ALLOWED_LINK_HOSTS),
-        keywords=render_keywords(),
+        link_hosts=ALLOWED_LINK_HOSTS,
+        keywords=TERMS.keywords.add,
         easy_fix_tag=TERMS.whiteboard.easy_fix,
         gfb_tag=TERMS.whiteboard.gfb_candidate,
         security_groups=render_security_groups(),
-        needinfo_experts=render_needinfo_experts(),
-        issue_types=render_issue_types(),
-        resolutions=", ".join(f"`{r}`" for r in sorted(TRIAGE_RESOLUTIONS)),
+        resolutions=TRIAGE_RESOLUTIONS,
         mozregression_placeholder=MOZREGRESSION_PLACEHOLDER,
         mozregression_block=MOZREGRESSION_BLOCK,
     )
@@ -834,24 +787,16 @@ def render_user_prompt(
         "docs": render_docs(known_docs, scope),
         "duplicate_candidates": dupes.render_candidates(duplicate_candidates or []),
     }
-    return (
-        (PROMPTS_DIR / "user.md")
-        .read_text()
-        .format(
-            **{name: _untagged(value) for name, value in parts.items()},
-            bug=render_bug(state.bug, state.comments, state.bot_aliases),
-        )
-        .removesuffix("\n")
+    return _prompt(
+        "user",
+        **{name: _untagged(value) for name, value in parts.items()},
+        bug=render_bug(state.bug, state.comments, state.bot_aliases),
     )
 
 
 def make_investigator() -> AgentDefinition:
     return AgentDefinition(
-        description=(
-            "Focused investigator for one question about the bug, an attachment, or "
-            "the source tree. The triage agent writes your complete instructions at "
-            "spawn time; follow them and return only what was asked for."
-        ),
+        description=description("investigator"),
         prompt=_prompt("investigator"),
         tools=[
             "Read",
@@ -882,38 +827,21 @@ def _skill_agent(
     )
 
 
-_PROFILE_ANALYST_PROMPT = _prompt("profile_analyst")
-
-
 def make_profile_analyst() -> AgentDefinition:
-    parts = render_team_parts()
     return _skill_agent(
         "analyze-profile",
-        (
-            "Reads a Firefox Profiler capture with the analyze-profile skill and reports "
-            "the signals found and whether the profile is enough for the Analyzed decision. "
-            f"{parts['analyst_input']}"
-        ),
-        _PROFILE_ANALYST_PROMPT.format(analyst_rule=parts["analyst_rule"]),
+        description("profile_analyst", team=TEAM),
+        _prompt("profile_analyst", team=TEAM),
         ["Bash", "Read"],
         session="profile_analyst",
     )
 
 
-_LOG_ANALYST_PROMPT = _prompt("log_analyst")
-
-
 def make_log_analyst() -> AgentDefinition:
     return _skill_agent(
         "check-log",
-        (
-            "Reads one log (MOZ_LOG, about:logging or a crash log) with the "
-            "check-log skill and reports the error signals and likely root cause. "
-            "Give it the symptom and the attachment id, the path of a log that "
-            "fetch_attachment extracted, or the task id, log URL or Treeherder link "
-            "of a CI log."
-        ),
-        _LOG_ANALYST_PROMPT,
+        description("log_analyst"),
+        _prompt("log_analyst"),
         [
             "Read",
             "Bash",
@@ -926,28 +854,12 @@ def make_log_analyst() -> AgentDefinition:
     )
 
 
-_BUG_INVESTIGATOR_PROMPT = _prompt("bug_investigator")
-
-
 def make_bug_investigator(searchfox_rev: str | None = None) -> AgentDefinition:
     """The bug-start subagent; ``searchfox_rev`` is the revision its links pin to."""
-    revision = (
-        f"\n\nThe Searchfox revision for this run is `{searchfox_rev}`. Use it as the "
-        "skill's `REV`."
-        if searchfox_rev
-        else ""
-    )
     return _skill_agent(
         "bug-start",
-        (
-            "Investigates one bug's root cause with the bug-start skill in triage "
-            "mode and reports the cause, the affected code and a fix sketch. Give "
-            "it the bug id. When an expert leads the analysis, also give it the "
-            "expert's comment number and claim. It then reports the confirmed facts "
-            "that support or contradict the claim, the regressor, the open questions "
-            "and a final `Fixable: expert-led` line."
-        ),
-        _BUG_INVESTIGATOR_PROMPT.format(revision=revision),
+        description("bug_investigator"),
+        _prompt("bug_investigator", searchfox_rev=searchfox_rev),
         [
             "Read",
             "Grep",
@@ -964,18 +876,11 @@ def make_bug_investigator(searchfox_rev: str | None = None) -> AgentDefinition:
     )
 
 
-_SPEC_CHECKER_PROMPT = _prompt("spec_checker")
-
-
 def make_spec_checker() -> AgentDefinition:
     return _skill_agent(
         "spec-check",
-        (
-            "Checks a reported behavior against the web or codec spec with the "
-            "spec-check skill and returns a SPEC verdict. Give it the API or format, "
-            "the observed and the expected behavior."
-        ),
-        _SPEC_CHECKER_PROMPT,
+        description("spec_checker"),
+        _prompt("spec_checker"),
         ["Read", "Grep", "Glob", "Bash", "WebFetch", "WebSearch", *SEARCHFOX_TOOLS],
         session="spec_checker",
     )
@@ -992,17 +897,10 @@ def render_scope_for_search(scope: tuple[Component, ...]) -> str:
     )
 
 
-_DUPLICATE_HUNTER_PROMPT = _prompt("duplicate_hunter")
-
-
 def make_duplicate_hunter(scope: tuple[Component, ...]) -> AgentDefinition:
     return AgentDefinition(
-        description=(
-            "Decides whether a bug duplicates one already filed in the components in "
-            "scope. Give it the bug id, its component and the discriminating signal. "
-            "Returns a VERDICT line."
-        ),
-        prompt=_DUPLICATE_HUNTER_PROMPT.format(scope=render_scope_for_search(scope)),
+        description=description("duplicate_hunter"),
+        prompt=_prompt("duplicate_hunter", scope=render_scope_for_search(scope)),
         tools=[
             "mcp__bugzilla__search_bugs",
             "mcp__bugzilla__get_bugs",
@@ -1011,9 +909,6 @@ def make_duplicate_hunter(scope: tuple[Component, ...]) -> AgentDefinition:
         model="inherit",
         maxTurns=LIMITS.turn_limit("duplicate_hunter"),
     )
-
-
-_CLOSE_VERIFIER_PROMPT = _prompt("close_verifier")
 
 
 # Read tools the verifier lacks: it never reads an attachment, and a long history saved
@@ -1025,14 +920,8 @@ VERIFIER_LEFT_OUT_TOOLS = frozenset(
 
 def make_close_verifier() -> AgentDefinition:
     return AgentDefinition(
-        description=(
-            "Checks a proposed close (INVALID, WONTFIX, FIXED, DUPLICATE or "
-            "INCOMPLETE) with a fresh context and tries to prove it wrong. Give it "
-            "the bug id, the resolution, dupe_of for a duplicate, your reasons, and "
-            "the draft comment inside <draft_comment> tags. Returns confirm or "
-            "refute, with corrections."
-        ),
-        prompt=_CLOSE_VERIFIER_PROMPT.format(stale_days=STALE_NEEDINFO_DAYS),
+        description=description("close_verifier"),
+        prompt=_prompt("close_verifier", stale_days=STALE_NEEDINFO_DAYS),
         # Read opens only the files its tool results were saved to; see `closing`.
         tools=[
             "Read",

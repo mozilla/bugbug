@@ -35,10 +35,10 @@ from hackbot_agents.gecko_triage.agent import (
     RULES_DIR,
     Plan,
     issue_type_refusal,
+    load_system_prompt,
     make_duplicate_hunter,
     make_profile_analyst,
     may_apply_unattended,
-    render_needinfo_experts,
 )
 from hackbot_agents.gecko_triage.config import (
     CAPTURE_PLACEHOLDER,
@@ -175,7 +175,10 @@ def test_the_capture_hook_passes_with_no_team(no_team):
 
 
 def test_there_are_no_needinfo_experts(no_team, other_state):
-    assert render_needinfo_experts() == "(none)"
+    experts = (
+        load_system_prompt().split("# Needinfo experts", 1)[1].split("# Issue", 1)[0]
+    )
+    assert experts.strip().endswith("(none)")
     expert = TEAM.needinfo_experts[0].email
     rec = _recorder(other_state)
     _comment(rec)

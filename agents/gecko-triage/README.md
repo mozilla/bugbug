@@ -29,14 +29,15 @@ vouches for unattended apply, so a person always applies its actions.
 
 ## Layout
 
-| Path                                 | Holds                                                             |
-| ------------------------------------ | ----------------------------------------------------------------- |
-| `hackbot_agents/gecko_triage/rules/` | The general rules every team follows                              |
-| `teams/<team>/team.toml`             | The team's components, capture steps and needinfo experts         |
-| `teams/<team>/rules/`                | The team's rules: bug types, diagnostics, comment, S/P, meta bugs |
-| `shared/bugzilla.toml`               | Bugzilla keywords and fields, and the agent's whiteboard tags     |
-| `shared/people.toml`                 | How to tell Mozilla staff and QA apart                            |
-| `shared/limits.toml`                 | The step limit of each session and the cost limit of a run        |
+| Path                                   | Holds                                                             |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| `hackbot_agents/gecko_triage/rules/`   | The general rules every team follows                              |
+| `hackbot_agents/gecko_triage/prompts/` | The prompts, as Jinja templates that `prompting.py` renders       |
+| `teams/<team>/team.toml`               | The team's components, capture steps and needinfo experts         |
+| `teams/<team>/rules/`                  | The team's rules: bug types, diagnostics, comment, S/P, meta bugs |
+| `shared/bugzilla.toml`                 | Bugzilla keywords and fields, and the agent's whiteboard tags     |
+| `shared/people.toml`                   | How to tell Mozilla staff and QA apart                            |
+| `shared/limits.toml`                   | The step limit of each session and the cost limit of a run        |
 
 Paths under `teams/` and `shared/` are relative to `hackbot_agents/gecko_triage/`.
 
