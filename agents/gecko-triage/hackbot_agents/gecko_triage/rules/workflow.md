@@ -500,9 +500,9 @@ to the wrong place.
 
 Every close needs an independent check. Before you record the comment of a close, spawn
 `close_verifier`. Give it the bug id, the resolution, `dupe_of` for a duplicate, your
-reasons and the draft comment. It reads the bug again and tries to prove the close wrong.
-You can spawn it once per run. After the comment, the spawn is refused and the bug stays
-open in this run.
+reasons, and the draft comment inside `<draft_comment>` tags. It reads the bug again and
+tries to prove the close wrong. You can spawn it once per run. After the comment, the
+spawn is refused and the bug stays open in this run.
 
 - After a confirm, apply its corrections to the comment. Then record the comment and the
   close.

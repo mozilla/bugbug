@@ -96,6 +96,7 @@ def _store(*verdicts):
 def test_a_close_with_no_verdict_is_refused():
     reason = close_verdict_refusal(CloseVerdicts(), "INVALID", None)
     assert "close_verifier" in reason
+    assert "the draft comment inside <draft_comment> tags" in reason
 
 
 def test_a_close_after_a_refute_is_refused():

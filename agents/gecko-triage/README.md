@@ -172,7 +172,8 @@ digits only, so it cannot change the query.
 
 A wrong close is costly, so every close gets an independent check. Before the main agent
 records the comment of a close, it spawns `close_verifier` with the bug id, the
-resolution, `dupe_of` for a duplicate, its reasons and the draft comment. The verifier
+resolution, `dupe_of` for a duplicate, its reasons, and the draft comment inside
+`<draft_comment>` tags. The verifier
 starts with a fresh context and reads the bug, every comment, the cited code and the
 duplicate target. It has the Bugzilla read tools except `get_bug_attachments` and `get_bug_history`, and the
 Searchfox and VCS tools. It has Read only for its own saved tool results, as below. It has no Grep, Glob or Bash,

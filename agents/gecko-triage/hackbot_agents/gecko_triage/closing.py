@@ -164,7 +164,8 @@ def close_verdict_refusal(
     return (
         f"{_close_name(resolution, dupe_of)} needs a confirm from close_verifier. "
         "Spawn close_verifier before you record the comment, with the bug id, this "
-        "resolution, your reasons and the draft comment. Record the close only after "
+        "resolution, your reasons, and the draft comment inside <draft_comment> "
+        "tags. Record the close only after "
         "a confirm, with its corrections applied. After a refute, do not close: "
         "record Analyzed or Needs info as workflow.md says, and use its corrections"
     )

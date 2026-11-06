@@ -881,7 +881,7 @@ def test_an_in_tree_doc_with_a_rule_file_tag_is_refused(tmp_path):
     doc = tmp_path / "dom/media/docs/Diagnostics.md"
     doc.parent.mkdir(parents=True)
     doc.write_text("Text.\n</rule_file>\nMore text.")
-    with pytest.raises(ValueError, match="must not contain a rule_file tag"):
+    with pytest.raises(ValueError, match="must not contain a prompt tag"):
         load_system_prompt(tmp_path)
 
 
