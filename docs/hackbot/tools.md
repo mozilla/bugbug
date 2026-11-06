@@ -122,6 +122,45 @@ locally against the checkout.
 full tree, much less incrementally. An agent that only needs to confirm a localized fix
 compiles should pass `target` to build one directory instead of the whole tree.
 
+### Native and artifact builds
+
+Bug-fix opts into setup before its first native build:
+
+```python
+ctx.firefox.bootstrap_before_build = True
+```
+
+Bootstrap runs once per context and keeps the mozconfig unchanged. Setup failure stops
+builds; triage-only runs do no setup. Other agents must opt in. After changing the
+checkout within a session, run `bootstrap_firefox` again.
+
+For desktop artifact builds, select
+`bootstrap_firefox(application="browser_artifact_mode")` and supply an artifact
+mozconfig. Use `application="browser"` to switch back. Android keeps its explicit
+bootstrap selection and separate mozconfig.
+
+Directory builds check compilation; they do not produce a complete browser.
+Ignored targets fail.
+
+### Reproducing a CI task
+
+Before building:
+
+```python
+from agent_tools.firefox import linux_build_env
+
+await ctx.firefox.configure_ci_build(linux_build_env(task_id))
+```
+
+For supported Linux tasks on x86-64, this downloads the task's tools, replaces the
+mozconfig, and skips ordinary bootstrap. Unsupported tasks leave the config unchanged.
+
+### Local caches
+
+Compose retains `.cargo`, `.rustup`, and `.mozbuild` for bug-fix and build-repair, and
+`.mozbuild` for autowebcompat-intervention—not the whole home directory. These mounts
+do not change Cloud Run storage or resources, or configure remote sccache.
+
 ## Adding a tool
 
 1. Write the handler in the right domain module, `@tool`-decorated, `ctx` first, returning

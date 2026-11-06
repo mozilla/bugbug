@@ -2,6 +2,7 @@
 
 import os
 
+import pytest
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox.tools import bootstrap_firefox
@@ -250,4 +251,40 @@ async def test_build_target_compiles_the_directory_after_its_prerequisites(tmp_p
     assert (tmp_path / "mach.log").read_text().splitlines() == [
         "build --quiet pre-export export",
         "build --quiet --allow-subdirectory-build build/clang-plugin image",
+    ]
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+async def test_ignored_directory_is_not_a_successful_build(tmp_path, stream):
+    src = _recording_tree(tmp_path)
+    redirect = " >&2" if stream == "stderr" else ""
+    (src / "mach").write_text(
+        "#!/bin/sh\n"
+        'if [ "$3" = --allow-subdirectory-build ]; then\n'
+        f'  echo "Build argument image is a subdirectory and was ignored."{redirect}\n'
+        "fi\n"
+        "exit 0\n"
+    )
+    config = src / ".mozconfig"
+    config.touch()
+
+    result = await run_build(src, config, src / "objdir", target="image")
+
+    assert not result["success"]
+    assert "skipped the requested target" in result["message"]
+    assert "is a subdirectory and was ignored" in result[stream]
+
+
+async def test_failed_target_prerequisites_stop_the_build(tmp_path):
+    src = _recording_tree(tmp_path)
+    with (src / "mach").open("a") as mach:
+        mach.write("exit 2\n")
+    config = src / ".mozconfig"
+    config.touch()
+
+    result = await run_build(src, config, src / "objdir", target="image")
+
+    assert not result["success"]
+    assert (tmp_path / "mach.log").read_text().splitlines() == [
+        "build --quiet pre-export export"
     ]
