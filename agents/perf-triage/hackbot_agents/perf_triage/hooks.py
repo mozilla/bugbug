@@ -9,11 +9,9 @@ needinfo to the reviewer on the triaged bug --
 and the refused action never lands. Pattern from frontend-triage's hooks.py.
 """
 
-from __future__ import annotations
-
 from agent_tools.registry import ToolError
+from hackbot_agents.perf_triage.triage.stability import emittable_keywords
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
-from performance_tools.triage.stability import emittable_keywords
 
 from .preflight import WriteMode
 
@@ -25,6 +23,23 @@ _FIELDS = frozenset({"cf_performance_impact", "keywords", "flags"})
 # Reviews every high rating and takes disagreements (Bas, 2026-10-27).
 REVIEWER = "bas@basschouten.com"
 REVIEW_FLAGS = [{"name": "needinfo", "status": "?", "requestee": REVIEWER}]
+
+
+FEEDBACK_TAGS = (
+    "If you want to categorize your feedback you can add one of the following "
+    "tags: perf-triage-{wrong-impact, wrong-component, wrong-cause, "
+    "wrong-severity, hallucination, not-perf}."
+)
+
+
+def feedback_tags_hook(action: dict) -> None:
+    """Offer the feedback tags below the runtime's reaction footer."""
+    params = action.get("params")
+    if not isinstance(params, dict):
+        return
+    text = params.get("text")
+    if isinstance(text, str):
+        params["text"] = f"{text.rstrip()}\n{FEEDBACK_TAGS}"
 
 
 def _once(recorder: ActionsRecorder, action_type: str) -> None:

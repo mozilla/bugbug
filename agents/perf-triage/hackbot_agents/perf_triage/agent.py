@@ -7,19 +7,22 @@ inputs the bug left open), and the comment text. hackbot-api applies the recorde
 actions only when ``auto_apply`` is true; otherwise they wait for a person.
 """
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable
 
 from claude_agent_sdk import McpServerConfig
+from hackbot_agents.perf_triage.triage import TriageResult
+from hackbot_agents.perf_triage.triage.stability import check_stability
 from hackbot_runtime import HackbotAgentResult
-from hackbot_runtime.actions import ActionsRecorder
-from performance_tools.triage import TriageResult
-from performance_tools.triage.stability import check_stability
+from hackbot_runtime.actions import ActionsRecorder, bugzilla
 
 from . import preflight
 from .comment import render_comment
-from .hooks import REVIEW_FLAGS, add_comment_hook, update_bug_hook
+from .hooks import (
+    REVIEW_FLAGS,
+    add_comment_hook,
+    feedback_tags_hook,
+    update_bug_hook,
+)
 from .preflight import WriteMode
 
 TriageFn = Callable[[list[str]], Awaitable[TriageResult]]
@@ -56,6 +59,7 @@ async def run_perf_triage(
     mode = preflight.write_mode(bug)
     existing = bug.get("cf_performance_impact")
     recorder.add_hook("bugzilla.add_comment", add_comment_hook(recorder, bug_id))
+    recorder.add_hook("bugzilla.add_comment", feedback_tags_hook)
     recorder.add_hook("bugzilla.update_bug", update_bug_hook(recorder, bug_id, mode))
 
     attachments = await fetch_attachments(bugzilla_mcp_server, bug_id)
@@ -90,9 +94,10 @@ async def run_perf_triage(
     text = render_comment(
         result, stability, mode, current_component=current, existing_impact=existing
     )
-    recorder.record(
-        "bugzilla.add_comment",
-        {"bug_id": bug_id, "text": text, "is_private": False},
+    await bugzilla.add_comment(
+        recorder,
+        bug_id=bug_id,
+        text=text,
         reasoning=f"Performance triage: {result.impact} ({result.score})",
     )
     if mode == "full":
@@ -101,9 +106,10 @@ async def run_perf_triage(
             changes["keywords"] = {"add": list(result.keywords)}
         if result.impact == "high":
             changes["flags"] = REVIEW_FLAGS
-        recorder.record(
-            "bugzilla.update_bug",
-            {"bug_id": bug_id, "changes": changes},
+        await bugzilla.update_bug(
+            recorder,
+            bug_id=bug_id,
+            changes=changes,
             reasoning="Set from the triage calculator's rating and keywords",
         )
     return findings(stability=stability_dict, auto_apply=stability.confident)

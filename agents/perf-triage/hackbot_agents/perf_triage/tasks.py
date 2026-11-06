@@ -5,8 +5,6 @@ the ``submit_result`` MCP machinery, and the ``Task`` base class itself. It
 knows nothing about any specific task's prompt or result schema.
 """
 
-from __future__ import annotations
-
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

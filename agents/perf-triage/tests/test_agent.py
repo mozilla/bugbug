@@ -1,11 +1,10 @@
-from __future__ import annotations
-
 import tempfile
 from pathlib import Path
 
 from hackbot_agents.perf_triage.agent import run_perf_triage
+from hackbot_agents.perf_triage.hooks import FEEDBACK_TAGS
+from hackbot_agents.perf_triage.triage import TriageResult
 from hackbot_runtime.actions import ActionsRecorder
-from performance_tools.triage import TriageResult
 
 BUG = 1839859
 SEL = {
@@ -97,6 +96,14 @@ async def test_full_mode_confident_records_both_and_auto_applies():
     }
     assert f.auto_apply
     assert f.write_mode == "full"
+
+
+async def test_comment_ends_with_reaction_footer_then_tags():
+    _, r, _ = await run(triage())
+    text = r.actions[0]["params"]["text"]
+    assert "\n\n---\n\nIf you'd like to provide feedback" in text
+    assert text.endswith(FEEDBACK_TAGS)
+    assert text.count("👍 or 👎") == 1
 
 
 async def test_no_keywords_omits_the_keywords_change():

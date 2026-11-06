@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 from pathlib import Path
 
-import performance_tools
+import hackbot_agents.perf_triage
 
-SKILL = Path(performance_tools.__file__).parent / "skills" / "profiler-analysis"
+SKILL = (
+    Path(hackbot_agents.perf_triage.__file__).parent / "skills" / "profiler-analysis"
+)
 
 
 def test_the_skill_is_vendored_with_its_references():

@@ -28,12 +28,10 @@ perf-triage-validator/reports/2026-10-26-hackbot-compare-15.md and
 harness/attribute_leverage.py.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from performance_tools.calculator import perf_triage as calc
+from hackbot_agents.perf_triage.calculator import perf_triage as calc
 
 # Selection key, its value prefix, and the calculate_impact parameter it feeds.
 _RADIO = {

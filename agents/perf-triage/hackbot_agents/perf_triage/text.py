@@ -1,7 +1,5 @@
 """Model text clean-up shared by every agent that posts what a model wrote."""
 
-from __future__ import annotations
-
 import html
 
 

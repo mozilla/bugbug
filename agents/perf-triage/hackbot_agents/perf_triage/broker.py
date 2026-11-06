@@ -6,8 +6,6 @@ in the same Cloud Run Job task) reaches us at `127.0.0.1:<port>/mcp`.
 The agent container itself binds no Bugzilla credentials.
 """
 
-from __future__ import annotations
-
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -17,6 +15,7 @@ import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
+from hackbot_agents.perf_triage.blind import BlindClient
 from mcp.server.streamable_http_manager import (
     Receive,
     Scope,
@@ -26,8 +25,6 @@ from mcp.server.streamable_http_manager import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.routing import Mount
-
-from performance_tools.blind import BlindClient
 
 log = logging.getLogger(__name__)
 

@@ -1,14 +1,12 @@
-from __future__ import annotations
-
-from hackbot_agents.perf_triage.comment import FEEDBACK_TAGS, render_comment
-from performance_tools.triage import (
+from hackbot_agents.perf_triage.comment import render_comment
+from hackbot_agents.perf_triage.triage import (
     ComponentDecision,
     MemoryReportFinding,
     ProfileFinding,
     RelatedBug,
     TriageResult,
 )
-from performance_tools.triage.stability import check_stability
+from hackbot_agents.perf_triage.triage.stability import check_stability
 
 SEL = {
     "platforms": [
@@ -166,21 +164,8 @@ def test_comment_only_shows_both_ratings():
     )
 
 
-def test_footer_reaction_then_tags_last():
-    text = render()
-    assert "👍 or 👎" in text
-    assert text.rstrip().endswith(FEEDBACK_TAGS)
-
-
 def test_disagreement_names_the_reviewer():
     assert "Disagree with this assessment? Needinfo bas@basschouten.com." in render()
-
-
-def test_footer_tags_exact():
-    assert FEEDBACK_TAGS.endswith(
-        "perf-triage-{wrong-impact, wrong-component, wrong-cause, "
-        "wrong-severity, hallucination, not-perf}."
-    )
 
 
 SEL_2061533 = {
@@ -257,7 +242,7 @@ def test_model_text_cannot_forge_sections():
     text = render(
         result(profile=_profile(summary=evil, component="Core :: Layout\n\n---"))
     )
-    body = text[: text.index("\n---\n\n" + "If you'd like")]
+    body = text
     assert body.count("\n---\n") == 0
     assert "\n#" not in body and "\n>" not in body
     assert "<b>" not in body

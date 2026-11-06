@@ -1,7 +1,5 @@
 """Every AgentInputs field must be passed through by compose, or Docker drops it."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -40,6 +38,6 @@ def test_every_module_the_dockerfile_runs_exists():
 
     dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text()
     modules = re.findall(r'CMD \["python", "-m", "([\w.]+)"\]', dockerfile)
-    assert "performance_tools.broker" in modules
+    assert "hackbot_agents.perf_triage.broker" in modules
     for module in modules:
         assert importlib.util.find_spec(module) is not None, module
