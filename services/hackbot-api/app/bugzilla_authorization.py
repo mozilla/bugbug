@@ -3,8 +3,6 @@
 import httpx
 from cachetools import TTLCache
 
-AUTHORIZED_GROUP_NAME = "editbugs"
-
 _REQUEST_TIMEOUT_SECONDS = 30
 
 

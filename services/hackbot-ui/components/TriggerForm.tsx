@@ -29,6 +29,9 @@ export function TriggerForm() {
   const [failureTasks, setFailureTasks] = useState(
     () => params.get("failure_tasks") ?? ""
   );
+  const [parentRunId, setParentRunId] = useState(
+    () => params.get("parent_run_id") ?? ""
+  );
   const [runTryPush, setRunTryPush] = useState(
     () => params.get("run_try_push") === "true"
   );
@@ -56,6 +59,7 @@ export function TriggerForm() {
   const isWebcompatAgent = agent.startsWith("autowebcompat-");
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
+  const isTestRepairFixAgent = agent === "test-repair-fix";
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
@@ -70,7 +74,13 @@ export function TriggerForm() {
     const hasBugId = parsedBugId !== null;
     const hasBugData = isWebcompatAgent && bugData.trim().length > 0;
 
-    if (needsFailureTasks) {
+    if (isTestRepairFixAgent) {
+      if (!parentRunId.trim()) {
+        setError("Enter the test-repair run to continue from.");
+        return;
+      }
+      inputs.parent_run_id = parentRunId.trim();
+    } else if (needsFailureTasks) {
       if (isBuildRepairAgent) {
         if (hasBugId) inputs.bug_id = parsedBugId;
         if (!gitCommit.trim()) {
@@ -155,7 +165,8 @@ export function TriggerForm() {
       const n = Number.parseInt(maxTurns, 10);
       if (Number.isInteger(n) && n > 0) inputs.max_turns = n;
     }
-    if (!needsFailureTasks && effort.trim()) inputs.effort = effort.trim();
+    if (!needsFailureTasks && !isTestRepairFixAgent && effort.trim())
+      inputs.effort = effort.trim();
 
     setSubmitting(true);
     try {
@@ -174,13 +185,15 @@ export function TriggerForm() {
         : isTestRepairAgent
           ? Object.keys(inputs.failure_tasks as Record<string, string>)[0] ??
             "test failure"
-          : isTestPlanAgent
-            ? featureName.trim()
-            : isUpliftAgent
-              ? `uplift to ${targetBranch.trim()}`
-              : hasBugId
-                ? `bug ${parsedBugId}`
-                : "inline report";
+          : isTestRepairFixAgent
+            ? `fix for run ${parentRunId.trim().slice(0, 8)}`
+            : isTestPlanAgent
+              ? featureName.trim()
+              : isUpliftAgent
+                ? `uplift to ${targetBranch.trim()}`
+                : hasBugId
+                  ? `bug ${parsedBugId}`
+                  : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -217,22 +230,38 @@ export function TriggerForm() {
         </select>
       </div>
 
-      {!needsFailureTasks && !isTestPlanAgent && !isUpliftAgent && (
+      {isTestRepairFixAgent && (
         <div className="field">
-          <label htmlFor="bugId">
-            {isWebcompatAgent
-              ? "Bugzilla bug ID or URL (optional if report text provided)"
-              : "Bugzilla bug ID or URL *"}
-          </label>
+          <label htmlFor="parentRunId">test-repair run ID *</label>
           <input
-            id="bugId"
-            placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
-            value={bugId}
-            onChange={(e) => setBugId(e.target.value)}
-            required={!isWebcompatAgent}
+            id="parentRunId"
+            placeholder="e.g. 3f1c2b4a-..."
+            value={parentRunId}
+            onChange={(e) => setParentRunId(e.target.value)}
+            required
           />
         </div>
       )}
+
+      {!needsFailureTasks &&
+        !isTestRepairFixAgent &&
+        !isTestPlanAgent &&
+        !isUpliftAgent && (
+          <div className="field">
+            <label htmlFor="bugId">
+              {isWebcompatAgent
+                ? "Bugzilla bug ID or URL (optional if report text provided)"
+                : "Bugzilla bug ID or URL *"}
+            </label>
+            <input
+              id="bugId"
+              placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
+              value={bugId}
+              onChange={(e) => setBugId(e.target.value)}
+              required={!isWebcompatAgent}
+            />
+          </div>
+        )}
 
       {isWebcompatAgent && (
         <div className="field">
@@ -408,7 +437,7 @@ export function TriggerForm() {
             onChange={(e) => setMaxTurns(e.target.value)}
           />
         </div>
-        {!needsFailureTasks && (
+        {!needsFailureTasks && !isTestRepairFixAgent && (
           <div className="field">
             <label htmlFor="effort">Effort (optional)</label>
             <input

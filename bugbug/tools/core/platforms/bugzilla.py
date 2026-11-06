@@ -318,7 +318,7 @@ def create_bug_timeline(comments: list[dict], history: list[dict]) -> list[str]:
     return timeline
 
 
-def bug_to_markdown(bug: "Bug") -> str:
+def bug_to_markdown(bug: Bug) -> str:
     """Convert a Bug object to markdown representation.
 
     Uses the bug's properties directly - sanitization is handled by the Bug
@@ -416,7 +416,7 @@ class Bug:
         return value
 
     @classmethod
-    def get(cls, bug_id: int, allow_private: bool = False) -> "Bug":
+    def get(cls, bug_id: int, allow_private: bool = False) -> Bug:
         bugs: list[dict] = []
         Bugzilla(
             bug_id,

@@ -100,6 +100,15 @@ async def test_the_body_is_sent_as_both_text_and_html():
     assert "<h1>Analysis</h1>" in contents[1]["value"]
 
 
+async def test_underscores_inside_words_are_not_emphasis():
+    await email_handler.SendEmailHandler().apply(
+        _params(body_markdown="test_ext_web_accessible_workers.js is _new_"),
+        _ctx(),
+    )
+    html = _FakeClient.sent.get()["content"][1]["value"]
+    assert "test_ext_web_accessible_workers.js is <em>new</em>" in html
+
+
 async def test_the_inline_diff_and_the_attachment_are_the_same_bytes():
     patch = b"--- a/x\n+++ b/x\n+#include <y>\n"
     await email_handler.SendEmailHandler().apply(

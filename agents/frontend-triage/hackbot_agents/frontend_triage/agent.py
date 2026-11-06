@@ -14,6 +14,7 @@ the Bugzilla token -- the agent process itself never sees it.
 import json
 import re
 import sys
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
+from claude_agent_sdk.types import SystemPromptFile
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
@@ -320,6 +322,19 @@ def load_system_prompt(
         component_index=render_component_index(),
         guidance=render_guidance(components, known_docs),
     )
+
+
+def write_system_prompt(prompt: str, directory: Path) -> SystemPromptFile:
+    """Write ``prompt`` into ``directory`` for the CLI to read with `--system-prompt-file`.
+
+    Passed inline, the prompt is a single argv string, and Linux refuses to exec anything
+    with one longer than 128 KiB (`MAX_ARG_STRLEN`). The prompt crosses that when it falls
+    back to every component's guidance, and the CLI then fails to start with `Argument
+    list too long`.
+    """
+    path = directory / "system.md"
+    path.write_text(prompt, encoding="utf-8")
+    return {"type": "file", "path": str(path)}
 
 
 def make_investigator() -> AgentDefinition:
@@ -669,7 +684,9 @@ async def run_frontend_triage(
     system_prompt = load_system_prompt(rules_dir, instructions, components, known_docs)
 
     options = ClaudeAgentOptions(
-        system_prompt=system_prompt,
+        system_prompt=write_system_prompt(
+            system_prompt, Path(tempfile.mkdtemp(prefix="frontend-triage-"))
+        ),
         mcp_servers={
             "bugzilla": bugzilla_mcp_server,
             "searchfox": searchfox_server,

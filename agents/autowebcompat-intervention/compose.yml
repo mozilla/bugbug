@@ -21,6 +21,8 @@ services:
       - RUN_ID
       - BUG_ID
       - BUG_DATA
+      - REVISION_ID
+      - COMMENT
       - MODEL
       - EFFORT
       - BROKER_URL=http://autowebcompat-intervention-broker:8765

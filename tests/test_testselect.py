@@ -1215,3 +1215,33 @@ def test_label_model_suite_test_dirs(tmp_path) -> None:
         "testing/gtest/",
         "xpcom/tests/gtest/",
     )
+
+
+def test_fit_calibration() -> None:
+    totals = [0] * 101
+    failures = [0] * 101
+    # 1% of the runnables with confidence 0.5 fail, 2% at 0.6 and 1.5% at 0.7 (pooled with 0.6), 30% at 0.95.
+    for confidence, n, f in (
+        (50, 1000, 10),
+        (60, 1000, 20),
+        (70, 1000, 15),
+        (95, 100, 30),
+    ):
+        totals[confidence], failures[confidence] = n, f
+    calibration = testselect.fit_calibration(totals, failures)
+    assert calibration is not None
+    model = testselect.TestGroupSelectModel()
+    model.calibration = calibration
+    probabilities = model.calibrated_probabilities(
+        {"a": 0.5, "b": 0.6, "c": 0.7, "d": 0.95, "e": 0.3, "f": 1.0, "g": 0.825}
+    )
+    assert probabilities["a"] == pytest.approx(0.01)
+    assert probabilities["b"] == probabilities["c"] == pytest.approx(0.0175)
+    assert probabilities["d"] == probabilities["f"] == pytest.approx(0.3)
+    assert probabilities["e"] == pytest.approx(0.01)
+    assert probabilities["c"] < probabilities["g"] < probabilities["d"]
+    # Without failures, or without calibration, the confidences are unchanged.
+    assert testselect.fit_calibration([10] * 101, [0] * 101) is None
+    assert testselect.TestGroupSelectModel().calibrated_probabilities({"a": 0.5}) == {
+        "a": 0.5
+    }

@@ -41,7 +41,7 @@ class Reporter:
 
     def __init__(self, verbose: bool, log_path: Path | None):
         self.verbose = verbose
-        self._log = log_path.open("w", encoding="utf-8") if log_path else None
+        self._log = log_path.open("a", encoding="utf-8") if log_path else None
         self._turn = 0
         self._started = time.monotonic()
 

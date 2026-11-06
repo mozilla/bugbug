@@ -15,7 +15,7 @@ def test_record_email_records_the_action():
         body_markdown="  # Analysis  ",
         attach_patch=True,
     )
-    assert action.pop("action_id").startswith("action-")
+    assert len(action.pop("action_id")) == 32
     assert rec.actions == [action]
     assert action == {
         "type": "email.send",
