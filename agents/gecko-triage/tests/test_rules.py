@@ -561,6 +561,10 @@ KEY_PHRASES = (
     ("diagnostics.md", "never fetch a CI log yourself."),
     (
         "diagnostics.md",
+        "remove the `bp-` prefix, also from an id in a crash-stats URL,",
+    ),
+    (
+        "diagnostics.md",
         "Never state what a spec requires without a `spec_checker` report behind it.",
     ),
     ("media/diagnostics.md", "The restart is not optional"),

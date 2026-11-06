@@ -43,6 +43,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # cargo-binstall, each at an exact version. It never falls back to cargo-quickinstall's
 # builds or to a build from source, and it sends no telemetry.
 # - webspec-index, so spec-check can read web specs by section.
+# - socorro-cli, so a run can read a crash report from crash-stats.
 ARG TARGETARCH
 ARG CARGO_BINSTALL_VERSION=1.26.2
 ARG CARGO_BINSTALL_SHA256_AMD64=9e0e064f189a9abb9f8df5fb93c3c810ef5cc19e7212d998c7a64c9e4d3527d5
@@ -58,14 +59,17 @@ RUN case "${TARGETARCH:-amd64}" in \
     && tar -xzf /tmp/cargo-binstall.tgz -C /tmp cargo-binstall \
     && /tmp/cargo-binstall --no-confirm --no-track --strategies crate-meta-data \
         --disable-telemetry \
-        --install-path /usr/local/bin webspec-index@0.14.0 \
+        --install-path /usr/local/bin webspec-index@0.14.0 socorro-cli@0.6.0 \
     && rm /tmp/cargo-binstall /tmp/cargo-binstall.tgz
+# These tools would check crates.io for a newer version on each run.
+ENV MOZTOOLS_UPDATE_CHECK=0
 
 # ffmpeg and ffprobe, so fetch_attachment can read video attachments and screen
-# recordings. Not pinned: the Debian archive keeps only the current security release,
-# so a pinned version breaks the build after the next ffmpeg update.
+# recordings, and libdbus-1-3, which socorro-cli links against. Not pinned: the Debian
+# archive keeps only the current security release, so a pinned version breaks the build
+# after the next ffmpeg update.
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 # fx-bug-toolkit, whose analyze-profile, check-log, spec-check and bug-start skills the

@@ -88,9 +88,13 @@ in two or three words.
 ## Crash ids
 
 A crash id looks like `bp-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`. Have the `investigator`
-fetch `https://crash-stats.mozilla.org/api/ProcessedCrash/?crash_id=<id>` with `curl` and
-extract the signature, the OS, the crashing module or frame, and any frames in the team's
-code. A crash id with a clear signature in the team's code is enough for "Analyzed".
+run `socorro-cli crash <uuid>` with the bare id: remove the `bp-` prefix, also from an id
+in a crash-stats URL, as `socorro-cli` refuses the prefix. It reports the signature, the
+OS, the crashing module or frame, and any frames in the team's code.
+`socorro-cli crash <uuid> --full` gives the whole report as JSON when a field is missing.
+To find the bugs filed for the same signature, use
+`socorro-cli bugs --signature "<signature>"`. A crash id with a clear signature in the
+team's code is enough for "Analyzed".
 
 ## Test and CI failures
 

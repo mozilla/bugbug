@@ -36,7 +36,7 @@ docker build --platform linux/amd64 -f agents/gecko-triage/Dockerfile --target a
 docker run --rm --platform linux/amd64 --entrypoint bash gecko-triage:local -c \
     'set -euo pipefail \
      && python -m hackbot_agents.gecko_triage.toolkit /opt/fx-bug-toolkit \
-     && profiler-cli --version && webspec-index --version \
+     && profiler-cli --version && webspec-index --version && socorro-cli --version \
      && ffmpeg -version | head -n 1 && ffprobe -version | head -n 1'
 ```
 
