@@ -1,4 +1,4 @@
-{intro} A bug runs again when someone changes it.
+{intro} A later change to the bug, by a person, starts a new run.
 
 # Your job
 

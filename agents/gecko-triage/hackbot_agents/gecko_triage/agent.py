@@ -1,9 +1,9 @@
 """gecko-triage: daily triage of Gecko bugs, state in Bugzilla.
 
-A team, such as media, adds its own rules. With no team, the run uses the shared rules
+Each team can add its own rules. With no team, the run uses the shared rules
 for the bug's component.
 
-Orchestrates a Claude agent over one bug per run. It reads the bug and its history
+Runs an agent over one bug per run. It reads the bug and its history
 through the Bugzilla broker, reads attached diagnostics (Firefox Profiler captures via
 `profiler-cli`, logs, crash reports, and archives, memory reports and videos through
 `attachments.fetch_attachment`), and records a comment plus the field
@@ -12,9 +12,6 @@ changes the rules allow: severity and priority when unset, needinfo flags, a met
 move, a resolution and the product's security group. On a duplicate it also adds the team meta bug to the `dupe_of` bug. The triage knowledge is in `rules/`
 and `teams/<team>/rules/`. A run with no team uses `rules/` alone, in the bug's own
 component, and never vouches for unattended apply.
-
-The agent process never sees the Bugzilla key: reads go through the broker sidecar and
-writes are recorded for hackbot-api's apply step.
 """
 
 import ctypes

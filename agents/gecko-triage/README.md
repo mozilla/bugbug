@@ -1,6 +1,6 @@
 # gecko-triage agent
 
-Triages one Gecko bug per run and keeps no memory of its own. A team, such as media, adds
+Triages one Gecko bug per run and keeps no memory of its own. Each team can add
 its own rules. With no team, the run uses the shared rules for the bug's component. It inventories what the report contains. It reads the diagnostics reporters attach:
 Firefox Profiler captures, logs, crash reports and specs. It records one comment plus
 the field changes it is allowed. These are severity and priority when they are unset,

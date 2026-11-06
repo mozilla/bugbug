@@ -28,9 +28,10 @@ and the debugging steps. Where the fix belongs is a fact, for example upstream f
 then vendored, so keep this fact. "An expert leads the analysis" in `workflow.md` gives
 the one exception: there, give confirmed facts in place of a cause and a fix direction.
 
-**Never link a local file or an internal document.** Cite bugs, Searchfox permalinks and
-pages on the allowed link hosts that the system prompt lists. The recorder refuses a link
-to any other host.
+**Link only to public pages that the reader can open.** Cite bugs, Searchfox permalinks
+and pages on the allowed link hosts that the system prompt lists. A local file or an
+internal document cannot be opened by the reader, and the recorder refuses a link to any
+other host.
 
 **Cite a comment only after you read it.** Before you cite a comment of another bug, read
 it with `get_bug_comments`. For a patch or a file, cite the comment that adds it: its text

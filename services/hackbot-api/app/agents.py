@@ -134,7 +134,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     "gecko-triage": AgentSpec(
         name="gecko-triage",
         description=(
-            "Triage a Gecko bug. A team, such as media, adds its own rules. With no "
+            "Triage a Gecko bug. Each team can add its own rules. With no "
             "team, the run uses the shared rules for the bug's component. Inventory "
             "what the report contains and read its "
             "profiles and logs. Ask the reporter for what is missing, or set severity "

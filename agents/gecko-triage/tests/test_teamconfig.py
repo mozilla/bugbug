@@ -465,7 +465,7 @@ def test_the_wmf_platform_code_belongs_to_playback():
 
 REPO = Path(__file__).parents[3]
 OPTIONAL_TEAM = (
-    "Triage a Gecko bug. A team, such as media, adds its own rules. With no team, the "
+    "Triage a Gecko bug. Each team can add its own rules. With no team, the "
     "run uses the shared rules for the bug's component."
 )
 
@@ -484,4 +484,4 @@ def test_every_description_reads_the_team_as_optional(path):
     flat = " ".join(text.replace('"\n', "").replace('            "', "").split())
     for phrase in ("for one team", "one team per run", "Audio/Video first"):
         assert phrase not in flat, phrase
-    assert "A team, such as media, adds its own rules." in flat
+    assert "Each team can add its own rules." in flat

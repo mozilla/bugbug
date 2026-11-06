@@ -26,8 +26,10 @@ Get approval for each real bug before a run reads it. Restricted bugs are never 
 
 ## Image check
 
-Cloud Run runs `linux/amd64`. The image needs a static `webspec-index`, and release 0.14.0
-has one only for amd64, so an arm64 build fails. Build for amd64:
+Cloud Run runs `linux/amd64`, and the image is built for that platform. The amd64 build
+works: webspec-index 0.14.0 ships a static Linux build for x86_64. It ships none for
+arm64, so on an arm64 machine, such as an Apple Silicon Mac, pass `--platform
+linux/amd64`:
 
 ```sh
 docker build --platform linux/amd64 -f agents/gecko-triage/Dockerfile --target agent \

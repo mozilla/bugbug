@@ -2,4 +2,4 @@ When you cite a source file in your comment, write it as an inline Markdown link
 
     [Document.cpp]({searchfox_placeholder}/dom/base/Document.cpp#1234)
 
-Write the placeholder literally, follow it with the repo-relative path and an optional `#line` anchor, use the file name alone as the link text, and only cite a path you confirmed exists. A path not in the checkout is unwrapped to plain text.
+Write the placeholder literally, follow it with the repo-relative path and an optional anchor: `#1234` for one line, or `#1234-1250` for a range of lines, use the file name alone as the link text, and only cite a path you confirmed exists. A path not in the checkout is unwrapped to plain text.

@@ -1,21 +1,23 @@
-"""The other bugs a run's writes name, checked after the session ends.
+"""Check the other bugs that a run's writes name, after the session ends.
 
-The hooks see one action at a time and cannot read Bugzilla, so a write may name any
-bug. After the session, one broker read gets the `dupe_of` bug, the `regressed_by`
-bugs, the `see_also` bugs, the bugs the comment names and the bugs the run's commit
-messages named. The check drops a write on any other bug. It drops the meta bug write on a
-`dupe_of` bug that is closed, a security bug or outside the team's scope. When the
-read succeeds, it drops a `regressed_by` or `see_also` change that names an unreadable
-or restricted bug, and a `see_also` change that names a meta bug. A failed read keeps
-those changes, and the run waits for a person (see `restricted_warning`). A duplicate of
-a restricted or unreadable bug fails the run, since a public bug must not point at it. A
-duplicate of a meta bug also fails the run: the hooks know only the team's meta bugs and
-the meta bugs among the duplicate candidates. A comment that names an unreadable or
-restricted bug fails the run too, since the comment cannot be dropped in part and must
-not point at that bug. So does a comment that spells the number of a restricted bug
-that a commit message names, or of a bug that a read withheld during
-the run (see `withheld`). A withheld bug also holds the run for a person. A duplicate of a
-bug that was closed with no fix waits for a person (see `dupe_target_warning`).
+A hook sees one action and cannot read Bugzilla. So after the session, one broker read
+gets every other bug that the writes name: the `dupe_of`, `regressed_by` and `see_also`
+bugs, the bugs that the comment names, and the bugs of the commit messages the run read.
+
+What each result does:
+
+- A write on a bug that is not one of these: dropped.
+- The meta bug write on a `dupe_of` bug that is closed, a security bug or out of the
+  team's scope: dropped.
+- A `regressed_by` or `see_also` change to a restricted or unreadable bug, or a
+  `see_also` change to a meta bug: dropped.
+- A duplicate of a restricted, unreadable or meta bug: the run fails.
+- A comment that names a restricted or unreadable bug, or contains the number of a
+  restricted commit message bug or of a bug that a read withheld (`withheld`): the run
+  fails. A comment cannot be dropped in part.
+- A failed read, or a withheld bug: the run waits for a person (`restricted_warning`).
+- A duplicate of a bug that was closed with no fix: the run waits for a person
+  (`dupe_target_warning`).
 """
 
 import re

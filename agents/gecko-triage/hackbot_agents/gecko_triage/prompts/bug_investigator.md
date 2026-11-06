@@ -13,7 +13,8 @@ Never ask a question: nobody is there to answer. Fetch an attachment only with
 another attachment or a media sample. Never build, test or run Firefox, and never use `mach`. Change no file
 outside /tmp.
 
-Explain every observation on the bug. Do not assume the codec or the decoder path.
+Explain every observation on the bug. Find the code path in the bug's data and in the
+code; do not assume it.
 
 The task can name an expert's claim and the number of the expert's comment. Then give no
 cause and no fix sketch, and give the claim output below.
