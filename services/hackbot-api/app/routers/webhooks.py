@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
@@ -17,6 +17,9 @@ from app.bugzilla_authorization import BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.database.connection import get_db
+from app.github import GitHubApp
+from app.github_authorization import GitHubAuthorizer
+from app.hackbot_client import get_hackbot_client
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
@@ -42,14 +45,6 @@ def get_slack_handler(request: Request) -> AsyncSlackRequestHandler:
         handler = build_request_handler()
         request.app.state.slack_handler = handler
     return handler
-
-
-def get_hackbot_client() -> HackbotClient:
-    """Dependency: a client for triggering runs over the public hackbot API."""
-    return HackbotClient(
-        base_url=settings.hackbot_api_url,
-        api_key=settings.external_api_key,
-    )
 
 
 @router.post("/slack")
@@ -88,6 +83,28 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
             settings.bugzilla_webhook.authorized_group,
         )
         request.app.state.bugzilla_authorizer = authorizer
+    return authorizer
+
+
+def get_github_authorizer(request: Request) -> GitHubAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its role cache."""
+    authorizer = getattr(request.app.state, "github_authorizer", None)
+    if authorizer is None:
+        if settings.github is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="GitHub App is not configured",
+            )
+        authorizer = GitHubAuthorizer(
+            # A check runs inside a webhook delivery, which GitHub abandons
+            # after 10 seconds. The authorizer bounds the whole lookup; without
+            # retries, a 5xx also fails closed at once instead of spending that
+            # budget on githubkit's backoff.
+            GitHubApp(settings.github, auto_retry=False),
+            settings.github.allowed_roles,
+            settings.github.bot_login,
+        )
+        request.app.state.github_authorizer = authorizer
     return authorizer
 
 

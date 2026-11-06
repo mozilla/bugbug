@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 from app import gcs, jobs
+from app.auth import require_api_key
 from app.schemas import RunStatus
 
 
@@ -47,6 +48,14 @@ def test_create_run_normalizes_requested_by_case_and_whitespace(client, db):
     # Stored lowercased/stripped so the list_runs filter can match exactly.
     _create(client, {"X-On-Behalf-Of": "  Someone@Mozilla.COM  "})
     assert db.added.requested_by == "someone@mozilla.com"
+
+
+def test_create_run_records_requested_via_from_caller(client, db):
+    client.app.dependency_overrides[require_api_key] = lambda: (
+        "listener@example.iam.gserviceaccount.com"
+    )
+    _create(client)
+    assert db.added.requested_via == "listener@example.iam.gserviceaccount.com"
 
 
 @pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])

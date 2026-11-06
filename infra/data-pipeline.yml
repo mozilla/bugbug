@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.5.2
+    taskboot_image: mozilla/taskboot:0.5.3
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -638,6 +638,145 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: perf-alerts-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - retrieve
+
+        artifacts:
+          public/perf_alerts.json.zst:
+            path: /data/perf_alerts.json.zst
+            type: file
+          public/perf_alerts.json.version:
+            path: /data/perf_alerts.json.version
+            type: file
+          public/perf_pushes.json.zst:
+            path: /data/perf_pushes.json.zst
+            type: file
+          public/perf_pushes.json.version:
+            path: /data/perf_pushes.json.version
+            type: file
+          public/perf_alert_bugs.json.zst:
+            path: /data/perf_alert_bugs.json.zst
+            type: file
+          public/perf_alert_bugs.json.version:
+            path: /data/perf_alert_bugs.json.version
+            type: file
+          public/perf_task_costs.json.zst:
+            path: /data/perf_task_costs.json.zst
+            type: file
+          public/perf_task_costs.json.version:
+            path: /data/perf_task_costs.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_alerts.${version}
+        - index.project.bugbug.data_perf_alerts.latest
+      metadata:
+        name: bugbug performance alerts retrieval
+        description: bugbug performance alerts, pushes and regression bugs retrieval
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: perf-regressions-generator
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - perf-alerts-retrieval
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - generate
+
+        artifacts:
+          public/perf_regressions.json.zst:
+            path: /data/perf_regressions.json.zst
+            type: file
+          public/perf_regressions.json.version:
+            path: /data/perf_regressions.json.version
+            type: file
+          public/perf_scheduling_pairs.json.zst:
+            path: /data/perf_scheduling_pairs.json.zst
+            type: file
+          public/perf_scheduling_pairs.json.version:
+            path: /data/perf_scheduling_pairs.json.version
+            type: file
+          public/perf_push_status.json.zst:
+            path: /data/perf_push_status.json.zst
+            type: file
+          public/perf_push_status.json.version:
+            path: /data/perf_push_status.json.version
+            type: file
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_regressions.${version}
+        - index.project.bugbug.data_perf_regressions.latest
+      metadata:
+        name: bugbug performance regressions generator
+        description: bugbug labeled performance regressions and perf push data generator
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: perf-regression-commits-export
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - perf-regressions-generator
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-data-perf-alerts
+          - export
+          - --repo-dir=/cache/mozilla-central
+          - --refresh-repo
+
+        artifacts:
+          public/perf_regression_commits.json.zst:
+            path: /data/perf_regression_commits.json.zst
+            type: file
+          public/perf_regression_commits.json.version:
+            path: /data/perf_regression_commits.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.data_perf_regression_commits.${version}
+        - index.project.bugbug.data_perf_regression_commits.latest
+      metadata:
+        name: bugbug performance regression commits export
+        description: bugbug commit messages and diffs labeled with performance regressions
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
@@ -1235,6 +1374,149 @@ tasks:
         owner: bugbug-team@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-test-config-select
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselect
+
+        artifacts:
+          public/testconfigselectmodel.tar.zst:
+            path: /testconfigselectmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselect.${version}
+        - index.project.bugbug.train_testconfigselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselect.latest
+      metadata:
+        name: bugbug train test config selection model
+        description: bugbug train test config selection model
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config-select-pooled
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectpooled
+
+        artifacts:
+          public/testconfigselectpooledmodel.tar.zst:
+            path: /testconfigselectpooledmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectpooled.${version}
+        - index.project.bugbug.train_testconfigselectpooled.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectpooled.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectpooled.latest
+      metadata:
+        name: bugbug train test config selection model (pooled statistics)
+        description: bugbug train test config selection model (pooled statistics)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config-select-value
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectvalue
+
+        artifacts:
+          public/testconfigselectvaluemodel.tar.zst:
+            path: /testconfigselectvaluemodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectvalue.${version}
+        - index.project.bugbug.train_testconfigselectvalue.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectvalue.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectvalue.latest
+      metadata:
+        name: bugbug train test config selection model (per-value)
+        description: bugbug train test config selection model (per-value)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-test-config-select-class
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "5 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testconfigselectclass
+
+        artifacts:
+          public/testconfigselectclassmodel.tar.zst:
+            path: /testconfigselectclassmodel.tar.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.bugbug-team@mozilla.com.on-failed
+        - index.project.bugbug.train_testconfigselectclass.${version}
+        - index.project.bugbug.train_testconfigselectclass.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testconfigselectclass.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testconfigselectclass.latest
+      metadata:
+        name: bugbug train test config selection model (pattern class)
+        description: bugbug train test config selection model (pattern class)
+        owner: bugbug-team@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-test-failure
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1534,6 +1816,10 @@ tasks:
         - train-stepstoreproduce
         - train-test-label-select
         - train-test-group-select
+        - train-test-config-select
+        - train-test-config-select-pooled
+        - train-test-config-select-value
+        - train-test-config-select-class
         - train-test-failure
         - train-test-config
         - train-needsdiagnosis
@@ -1577,6 +1863,10 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-test-config-select
+        - train-test-config-select-pooled
+        - train-test-config-select-value
+        - train-test-config-select-class
         - train-test-config
         - train-needsdiagnosis
         - train-accessibility

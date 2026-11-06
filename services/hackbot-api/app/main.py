@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import FastAPI
+from hackbot_client import HackbotClient
 
 from app import __version__
 from app.config import settings
@@ -30,9 +31,14 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    hackbot_client = HackbotClient(
+        base_url=settings.hackbot_api_url,
+        api_key=settings.external_api_key,
+    )
     try:
-        yield
+        yield {"hackbot_client": hackbot_client}
     finally:
+        await hackbot_client.close()
         await close_db()
 
 

@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from hackbot_client import HackbotClient
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -158,7 +159,11 @@ async def ensure_action_rows(
 
 
 async def _dispatch(
-    run: Run, action_type: str, params: dict, attachments: list[dict]
+    run: Run,
+    action_type: str,
+    params: dict,
+    attachments: list[dict],
+    hackbot_client: HackbotClient,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -178,6 +183,7 @@ async def _dispatch(
         ),
         attachments=attachments,
         agent=run.agent,
+        hackbot_client=hackbot_client,
     )
     try:
         return await handler.apply(params, ctx)
@@ -234,7 +240,10 @@ async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
 
 
 async def _apply_pending_rows(
-    db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
+    db: AsyncSession,
+    run: Run,
+    rows: list[tuple[RunAction, list[dict]]],
+    hackbot_client: HackbotClient,
 ) -> None:
     """Apply every not-yet-`applied` row in `rows`, committing per action.
 
@@ -295,12 +304,18 @@ async def _apply_pending_rows(
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run, "bugzilla.update_bug", merge_resolved(entries), []
+                run,
+                "bugzilla.update_bug",
+                merge_resolved(entries),
+                [],
+                hackbot_client,
             )
         else:
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
-            outcome = await _dispatch(run, row.type, params, attachments)
+            outcome = await _dispatch(
+                run, row.type, params, attachments, hackbot_client
+            )
 
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
@@ -319,7 +334,9 @@ async def _apply_pending_rows(
                     results_by_ref[member.ref] = outcome.result
 
 
-async def on_run_completed(db: AsyncSession, run: Run) -> None:
+async def on_run_completed(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Record a completed run's actions and auto-apply each eligible action.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
@@ -349,7 +366,7 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
             to_apply.append((action, attachments))
 
     if to_apply:
-        await _apply_pending_rows(db, run, to_apply)
+        await _apply_pending_rows(db, run, to_apply, hackbot_client)
 
     held_count = len(rows) - len(to_apply)
     if held_count:
@@ -362,7 +379,9 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
         )
 
 
-async def apply_all_pending(db: AsyncSession, run: Run) -> None:
+async def apply_all_pending(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Apply all of a run's not-yet-`applied` actions on demand (manual).
 
     Ensures the rows exist first, so this works whether or not they were
@@ -370,4 +389,4 @@ async def apply_all_pending(db: AsyncSession, run: Run) -> None:
     """
     rows = await ensure_action_rows(db, run)
     await db.commit()
-    await _apply_pending_rows(db, run, rows)
+    await _apply_pending_rows(db, run, rows, hackbot_client)

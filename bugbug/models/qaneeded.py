@@ -97,6 +97,12 @@ class QANeededModel(BugModel):
             if not found_qa:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
+                        if change["field_name"] not in (
+                            "keywords",
+                            "flagtypes.name",
+                        ):
+                            continue
+
                         if any(
                             change["removed"].startswith(label)
                             for label in ["qawanted", "qe-verify", "qaurgent"]
