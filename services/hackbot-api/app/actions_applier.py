@@ -112,12 +112,19 @@ def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
 
 
 def _should_auto_apply(
-    spec: AgentSpec | None, action_type: str, *, run_level_auto_apply: bool
+    spec: AgentSpec | None,
+    action_type: str,
+    *,
+    require_review: bool,
+    run_level_auto_apply: bool,
 ) -> bool:
     """Apply per-action overrides, falling back to the run-level decision."""
     if spec is None:
         return False
     if action_type in spec.never_apply_actions:
+        return False
+    # A review request holds every action, even `always_apply_actions`.
+    if require_review:
         return False
     if action_type in spec.always_apply_actions:
         return True
@@ -344,7 +351,10 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     to_apply: list[tuple[RunAction, list[dict]]] = []
     for action, attachments in rows:
         if _should_auto_apply(
-            spec, action.type, run_level_auto_apply=run_level_auto_apply
+            spec,
+            action.type,
+            require_review=run.inputs["require_review"],
+            run_level_auto_apply=run_level_auto_apply,
         ):
             to_apply.append((action, attachments))
 
