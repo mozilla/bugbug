@@ -60,7 +60,7 @@ in `compose.yml`, or Docker drops it and the default applies silently.
 | `MODEL`             | no       | Model override; unset uses the SDK default                                                                                             |
 | `MAX_TURNS`         | no       | Hard cap on loop iterations, a runaway guard                                                                                           |
 | `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`                                                                                        |
-| `BLIND_BUG_ID`      | no       | Evaluation only: the broker serves that bug as it stood before it was triaged (`performance_tools/blind.py`)                           |
+| `BLIND_BUG_ID`      | no       | Evaluation only: the broker serves that bug as it stood before it was triaged (`hackbot_agents/perf_triage/blind.py`)                  |
 
 ## Output
 
@@ -89,7 +89,7 @@ broker sidecar, which holds the API key.
 unattended only when `findings.auto_apply` is true. That happens when the
 calculator, re-scored over every unestablished input and every platform choice,
 lands in a single band (`check_stability` in
-`performance_tools/triage/stability.py`). Otherwise the actions wait for a person in
+`hackbot_agents/perf_triage/triage/stability.py`). Otherwise the actions wait for a person in
 the Hackbot UI, and the comment says which inputs would change the rating.
 
 What can be written depends on the bug's state when the run starts:

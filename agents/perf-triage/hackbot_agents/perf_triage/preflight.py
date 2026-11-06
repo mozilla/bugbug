@@ -7,8 +7,6 @@ a bug without one pays nothing extra: the skill's profile step is only switched 
 when this module found something to analyse.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import sys

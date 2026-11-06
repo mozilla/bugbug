@@ -5,8 +5,6 @@ copy its criteria; the last test reads the live calculator checkout so an
 upstream change that breaks the contract fails here, not on a paid run.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest
@@ -23,7 +21,7 @@ def test_the_prompt_defers_to_agent_mode_rather_than_overriding_the_skill():
     The BEHAVIOUR is still required; it is just guaranteed upstream now. See
     test_the_skill_actually_implements_agent_mode below, which reads the skill.
     """
-    from performance_tools.triage import TRIAGE_TASK_DETAILS
+    from hackbot_agents.perf_triage.triage import TRIAGE_TASK_DETAILS
 
     assert "AGENT MODE" in TRIAGE_TASK_DETAILS.upper()
     # No longer our job to say these -- the skill's agent mode does.
@@ -39,7 +37,7 @@ def test_the_envelope_mapping_is_spelled_out():
     guess -- and `selections` in particular must arrive unchanged, since that is
     what perf-triage-validator diffs against a human adjudication.
     """
-    from performance_tools.triage import TRIAGE_TASK_DETAILS
+    from hackbot_agents.perf_triage.triage import TRIAGE_TASK_DETAILS
 
     assert '"calculator"' in TRIAGE_TASK_DETAILS
     assert "calculator.selections" in TRIAGE_TASK_DETAILS
@@ -52,7 +50,7 @@ def test_the_prompt_does_not_restate_the_skills_judgement_criteria():
     Copying them here would fork the calibration: our copy drifts, and
     perf-triage-validator ends up measuring something we no longer run.
     """
-    from performance_tools.triage import TRIAGE_TASK_DETAILS
+    from hackbot_agents.perf_triage.triage import TRIAGE_TASK_DETAILS
 
     low = TRIAGE_TASK_DETAILS.lower()
     # Phrases from the skill's Step 2 that must NOT be duplicated here.
@@ -73,10 +71,10 @@ def test_the_task_sets_agent_mode_itself():
     the task sets it rather than trusting compose.yml, where a missing entry
     would be invisible.
     """
-    from performance_tools.triage.task import PERF_TRIAGE_AGENT_MODE_ENV
+    from hackbot_agents.perf_triage.triage.task import PERF_TRIAGE_AGENT_MODE_ENV
 
     src = Path(
-        __import__("performance_tools.triage.task", fromlist=["x"]).__file__
+        __import__("hackbot_agents.perf_triage.triage.task", fromlist=["x"]).__file__
     ).read_text()
     assert PERF_TRIAGE_AGENT_MODE_ENV in src
     assert "options.env" in src, "agent mode must reach the spawned subprocess"
@@ -115,7 +113,7 @@ def test_the_prompt_forbids_reverse_engineering_a_rating():
     feedback there, so this step must report what the criteria produce, not what
     it would prefer.
     """
-    from performance_tools.triage import TRIAGE_TASK_DETAILS
+    from hackbot_agents.perf_triage.triage import TRIAGE_TASK_DETAILS
 
     assert "DO NOT RE-PICK FLAGS" in TRIAGE_TASK_DETAILS
     assert "run the calculator once" in TRIAGE_TASK_DETAILS

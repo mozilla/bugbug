@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import pytest
-from performance_tools.inputs import BugIdInput
-from performance_tools.tasks import RunTracker, TaskConfig
+from hackbot_agents.perf_triage.inputs import BugIdInput
+from hackbot_agents.perf_triage.tasks import RunTracker, TaskConfig
 
 
 class _FakeResultMsg:
@@ -60,7 +58,7 @@ def test_system_prompt_template_ships_with_the_lib():
     to miss: a Task subclass with no template raises FileNotFoundError on its first
     turn, long after every construction-only test has passed. This pins it in place.
     """
-    from performance_tools import tasks
+    from hackbot_agents.perf_triage import tasks
 
     template = tasks.HERE / "prompts" / "system.md"
     assert template.exists()

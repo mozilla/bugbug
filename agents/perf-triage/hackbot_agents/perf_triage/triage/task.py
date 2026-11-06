@@ -6,20 +6,17 @@ by perf-triage-validator's corpus, so a local copy would drift out of agreement
 with the thing being validated.
 """
 
-from __future__ import annotations
-
 import os
 from collections.abc import Sequence
 from typing import Any
 
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
-
-from performance_tools.config import BUGZILLA_READ_TOOLS
-from performance_tools.inputs import BugDataInput, PerfInput
-from performance_tools.tasks import RunTracker, Task, TaskConfig
-from performance_tools.triage.prompt import SKILL_NAME, TRIAGE_TASK_DETAILS
-from performance_tools.triage.result import TriageResult
-from performance_tools.vendored import PROFILER_ANALYSIS_SKILL
+from hackbot_agents.perf_triage.config import BUGZILLA_READ_TOOLS
+from hackbot_agents.perf_triage.inputs import BugDataInput, PerfInput
+from hackbot_agents.perf_triage.tasks import RunTracker, Task, TaskConfig
+from hackbot_agents.perf_triage.triage.prompt import SKILL_NAME, TRIAGE_TASK_DETAILS
+from hackbot_agents.perf_triage.triage.result import TriageResult
+from hackbot_agents.perf_triage.vendored import PROFILER_ANALYSIS_SKILL
 
 # Where the skill expects to find the calculator. The skill resolves
 # $PERF_TRIAGE_PATH first (Patricia's 5092b9f), which is the only reason this

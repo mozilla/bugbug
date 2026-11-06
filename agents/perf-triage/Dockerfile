@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # The agent's own source enters the image through this bind mount rather than a
 # COPY, so its contents are NOT part of this layer's cache key: editing agent.py
-# or anything under libs/performance-tools does not invalidate the layer, and a plain
+# or anything under agents/perf-triage does not invalidate the layer, and a plain
 # rebuild silently ships the previously-built code. That is harmless in CI
 # (every build starts cold) but wrong for local iteration — it cost three real
 # agent runs against a stale image before it was spotted in perf-repro.
@@ -76,7 +76,7 @@ RUN set -eux; \
     searchfox-cli --version
 
 # The profiler-analysis skill, vendored at a pinned mozilla-central revision in
-# libs/performance-tools/performance_tools/skills/ (see PINNED.md there). The SDK discovers
+# agents/perf-triage/hackbot_agents/perf_triage/skills/ (see PINNED.md there). The SDK discovers
 # skills on the filesystem at <cwd>/.claude/skills/ and WORKDIR is /app, so this
 # exact path is what makes ClaudeAgentOptions.skills=["profiler-analysis"] find
 # it — proven in-container 2026-08-19.
@@ -84,13 +84,13 @@ RUN set -eux; \
 # references/ is load-bearing, not documentation: the skill Globs that directory
 # for the case study matching the scenario. Copying SKILL.md alone leaves the
 # skill RUNNING but uncalibrated, which fails silently. Copy the whole tree.
-COPY libs/performance-tools/performance_tools/skills/profiler-analysis \
+COPY agents/perf-triage/hackbot_agents/perf_triage/skills/profiler-analysis \
      /app/.claude/skills/profiler-analysis
 
 # The triage-perf-bug skill (step 1), vendored at a pinned revision of
 # performance-triage-calculator -- see PINNED.md. Same /app/.claude/skills/
 # discovery path as profiler-analysis above. One file, no references/ tree.
-COPY libs/performance-tools/performance_tools/skills/triage-perf-bug \
+COPY agents/perf-triage/hackbot_agents/perf_triage/skills/triage-perf-bug \
      /app/.claude/skills/triage-perf-bug
 
 # The calculator the skill shells out to. Vendored at the same revision, and
@@ -99,9 +99,9 @@ COPY libs/performance-tools/performance_tools/skills/triage-perf-bug \
 # PERF_TRIAGE_PATH means step 1 cannot run. Setting it here rather than in
 # compose.yml makes the image self-sufficient; compose still passes it through
 # so a local run can point at a working checkout instead.
-COPY libs/performance-tools/performance_tools/calculator/perf_triage.py /app/perf_triage.py
+COPY agents/perf-triage/hackbot_agents/perf_triage/calculator/perf_triage.py /app/perf_triage.py
 # --classify-domain reads the pages-affected tiers from beside the script.
-COPY libs/performance-tools/performance_tools/calculator/top_sites.json /app/top_sites.json
+COPY agents/perf-triage/hackbot_agents/perf_triage/calculator/top_sites.json /app/top_sites.json
 ENV PERF_TRIAGE_PATH=/app/perf_triage.py
 
 # hackbot.toml lives at the agent root; the runtime discovers it in the cwd.
@@ -128,4 +128,4 @@ EXPOSE 8765
 
 COPY --from=builder /opt/venv /opt/venv
 
-CMD ["python", "-m", "performance_tools.broker"]
+CMD ["python", "-m", "hackbot_agents.perf_triage.broker"]

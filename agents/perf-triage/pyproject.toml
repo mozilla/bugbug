@@ -6,9 +6,9 @@ requires-python = ">=3.12"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
     "agent-tools[bugzilla]",
-    "performance-tools",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
+    "pydantic>=2",
 ]
 
 [project.optional-dependencies]
@@ -17,7 +17,6 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "pyyaml>=6.0"]
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
-performance-tools = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
