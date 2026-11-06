@@ -1,9 +1,9 @@
 import logging
 
+from hackbot_agents.perf_triage.inputs import BugIdInput
+from hackbot_agents.perf_triage.tasks import RunTracker, TaskConfig
+from hackbot_agents.perf_triage.triage import PerfTriage
 from hackbot_runtime import HackbotContext, run_async
-from performance_tools.inputs import BugIdInput
-from performance_tools.tasks import RunTracker, TaskConfig
-from performance_tools.triage import PerfTriage
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import PerfTriageFindings, run_perf_triage

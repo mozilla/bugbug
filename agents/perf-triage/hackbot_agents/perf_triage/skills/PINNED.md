@@ -23,7 +23,7 @@ A full mozilla-central tree checkout costs minutes and gigabytes per run. That i
 for a full agent flow that already needs the tree for other reasons, but it is ruinous
 for a triage sweep at well under $1/bug across hundreds of bugs — the checkout
 would dwarf the actual cost of the work. Vendoring the skill directory (212K) into this
-package means every consumer gets it for free as part of the normal `performance-tools` install,
+package means every consumer gets it for free as part of the normal `hackbot-agent-perf-triage` install,
 with no extra network fetch, no extra checkout, and no dependency on mozilla-central
 being reachable or clean at run time.
 
@@ -40,12 +40,12 @@ happened to vendor first).
 1. Update your mozilla-central checkout and find the new revision to pin.
 2. Re-copy the tree verbatim:
    ```bash
-   rm -rf libs/performance-tools/performance_tools/skills/profiler-analysis
+   rm -rf agents/perf-triage/hackbot_agents/perf_triage/skills/profiler-analysis
    cp -R ~/src/firefox/.claude/skills/profiler-analysis \
-       libs/performance-tools/performance_tools/skills/
+       agents/perf-triage/hackbot_agents/perf_triage/skills/
    ```
 3. Update the revision, date, and subject recorded in this file.
-4. Run the tests: `uv run --package performance-tools pytest libs/performance-tools/tests/ -q`
+4. Run the tests: `uv run --package hackbot-agent-perf-triage pytest agents/perf-triage/tests/ -q`
 5. Commit with the new SHA in the message, e.g.:
    `Bump vendored profiler-analysis skill to <sha>`
 
@@ -77,7 +77,7 @@ reads its attribute rules from it, so the skill is broken without it. The
 Dockerfile copies the whole directory, so it ships with the skill.
 
 `perf_triage.py` is vendored alongside it (unchanged between `9bca4f4` and `478e3d3`), into
-`performance_tools/calculator/`. The skill shells out to it and cannot work without it.
+`hackbot_agents/perf_triage/calculator/`. The skill shells out to it and cannot work without it.
 Stdlib only (`json`, `sys`, `argparse`, `urllib.parse`, `typing`), so it needs no
 packaging beyond the copy.
 
@@ -103,7 +103,7 @@ instead of running. `--pages-affected` also gained an `unclear` choice, additive
 and non-breaking.
 
 Nothing in this package invokes `perf_triage.py` or passes `--reproducible`
-directly — `PerfTriage` (`performance_tools/triage/task.py`) only points the agent at the
+directly — `PerfTriage` (`hackbot_agents/perf_triage/triage/task.py`) only points the agent at the
 skill and lets it follow `SKILL.md`'s own instructions, which were re-vendored in
 the same commit as this file. So the breaking change is absorbed by the re-vendor
 itself; there was no separate call site to update.

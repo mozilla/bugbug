@@ -1,8 +1,6 @@
-from __future__ import annotations
-
-from performance_tools.inputs import BugIdInput
-from performance_tools.tasks import RunTracker, TaskConfig
-from performance_tools.triage import PerfTriage, ProfileFinding, TriageResult
+from hackbot_agents.perf_triage.inputs import BugIdInput
+from hackbot_agents.perf_triage.tasks import RunTracker, TaskConfig
+from hackbot_agents.perf_triage.triage import PerfTriage, ProfileFinding, TriageResult
 
 
 def _server():
@@ -63,7 +61,7 @@ def test_old_shape_still_parses():
 
 
 def test_prompt_maps_the_new_keys():
-    from performance_tools.triage import TRIAGE_TASK_DETAILS
+    from hackbot_agents.perf_triage.triage import TRIAGE_TASK_DETAILS
 
     assert "`unestablished`" in TRIAGE_TASK_DETAILS
     assert "`profile`" in TRIAGE_TASK_DETAILS

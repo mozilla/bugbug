@@ -4,8 +4,6 @@ The shape here is deliberately thin, and the omissions are the design. See
 ``~/projects/docs/triage-agent-mode-contract.md``.
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import BaseModel, Field

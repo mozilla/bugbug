@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import asdict
 
-from performance_tools.calculator.perf_triage import calculate_impact
-from performance_tools.triage.stability import (
+from hackbot_agents.perf_triage.calculator.perf_triage import calculate_impact
+from hackbot_agents.perf_triage.triage.stability import (
     args_from_selections,
     check_stability,
     emittable_keywords,
@@ -85,7 +83,7 @@ def test_emittable_keywords():
 
 
 def test_input_labels_come_from_the_calculator():
-    from performance_tools.triage.stability import input_label, value_label
+    from hackbot_agents.perf_triage.triage.stability import input_label, value_label
 
     assert input_label("pages-affected") == "Websites affected"
     assert input_label("reproducible") == "Reproducibility"
@@ -101,7 +99,7 @@ def test_calculator_args_defaults_match_the_calculator():
     # A drifted default would silently change what the stability gate scores.
     import inspect
 
-    from performance_tools.triage.stability import CalculatorArgs
+    from hackbot_agents.perf_triage.triage.stability import CalculatorArgs
 
     params = inspect.signature(calculate_impact).parameters
     ours = CalculatorArgs()

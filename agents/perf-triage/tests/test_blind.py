@@ -1,6 +1,9 @@
-from __future__ import annotations
-
-from performance_tools.blind import BlindClient, find_cutoff, keep_comment, roll_back
+from hackbot_agents.perf_triage.blind import (
+    BlindClient,
+    find_cutoff,
+    keep_comment,
+    roll_back,
+)
 
 CALC = "The [Performance Impact Calculator](https://mozilla.github.io/perf-triage/calculator.html?x) ..."
 

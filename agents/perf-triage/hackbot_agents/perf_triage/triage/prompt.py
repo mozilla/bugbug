@@ -16,8 +16,6 @@ instructions that used to tell the model to ignore the Markdown fences and the
 `{calculator, severity}` envelope onto our flat result fields.
 """
 
-from __future__ import annotations
-
 # The skill's frontmatter `name`, which is what ClaudeAgentOptions.skills takes.
 SKILL_NAME = "triage-perf-bug"
 

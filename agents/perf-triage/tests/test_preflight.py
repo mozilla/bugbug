@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 from hackbot_agents.perf_triage.preflight import profile_urls, write_mode
 

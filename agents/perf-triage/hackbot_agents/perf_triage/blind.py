@@ -17,8 +17,6 @@ any related bug, as of the moment triage began. Ported from perf-triage-validato
 Enabled only when the broker is given ``BLIND_BUG_ID``.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Any
 

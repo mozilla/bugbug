@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",
