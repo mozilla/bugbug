@@ -23,6 +23,10 @@ from app.enums import (
     ReviewerStatus,
     ReviewStatus,
 )
+from bugbug.tools.core.data_types import (
+    CommentCategory,
+    CommentSeverity,
+)
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -76,8 +80,7 @@ class ReviewRequest(Base):
     general_comment: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
-    comments: Mapped[list["GeneratedComment"]] = relationship(
-        "GeneratedComment",
+    comments: Mapped[list[GeneratedComment]] = relationship(
         back_populates="review_request",
         cascade="all, delete-orphan",
     )
@@ -142,6 +145,12 @@ class GeneratedComment(Base):
     line_end: Mapped[int]
     on_new: Mapped[bool]
     content: Mapped[str] = mapped_column(Text)
+    severity: Mapped[CommentSeverity | None] = mapped_column(
+        Enum(CommentSeverity, name="comment_severity_enum")
+    )
+    category: Mapped[CommentCategory | None] = mapped_column(
+        Enum(CommentCategory, name="comment_category_enum")
+    )
 
     # ID assigned by the platform after posting the comment
     platform_comment_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -150,11 +159,9 @@ class GeneratedComment(Base):
     details: Mapped[dict | None] = mapped_column(JSONB)
 
     # Relationships
-    review_request: Mapped[ReviewRequest] = relationship(
-        "ReviewRequest", back_populates="comments"
-    )
-    feedback_items: Mapped[list["Feedback"]] = relationship(
-        "Feedback", back_populates="generated_comment"
+    review_request: Mapped[ReviewRequest] = relationship(back_populates="comments")
+    feedback_items: Mapped[list[Feedback]] = relationship(
+        back_populates="generated_comment"
     )
 
     __table_args__ = (
@@ -197,7 +204,7 @@ class Feedback(Base):
 
     # Relationships
     generated_comment: Mapped[GeneratedComment | None] = relationship(
-        "GeneratedComment", back_populates="feedback_items"
+        back_populates="feedback_items"
     )
 
     __table_args__ = (

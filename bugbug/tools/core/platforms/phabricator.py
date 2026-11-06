@@ -90,6 +90,11 @@ def _base_url() -> str:
     return base_url
 
 
+def _edge_key_headers() -> dict[str, str]:
+    edge_key = os.getenv("PHABRICATOR_EDGE_KEY")
+    return {"Mozilla-Edge-Key": edge_key} if edge_key else {}
+
+
 @cache
 def get_phabricator_client(
     api_key: Optional[str] = None,
@@ -442,6 +447,7 @@ class PhabricatorPatch(Patch):
         client = get_http_client()
         r = await client.get(
             f"{_base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
+            headers=_edge_key_headers(),
         )
         r.raise_for_status()
 
@@ -492,7 +498,7 @@ class PhabricatorPatch(Patch):
     async def get_file_from_stack(
         self,
         file_path: str,
-        stack: list["PhabricatorPatch"] | None = None,
+        stack: list[PhabricatorPatch] | None = None,
         *,
         before_patch: bool = False,
     ) -> str:
@@ -840,7 +846,7 @@ class PhabricatorPatch(Patch):
         return self._revision_metadata["fields"].get("stackGraph", {})
 
     @cached_property
-    def _stack_patches(self) -> list["PhabricatorPatch"]:
+    def _stack_patches(self) -> list[PhabricatorPatch]:
         """Return patches from the bottom-most ancestor to this revision.
 
         Walks the Phabricator stackGraph from the bottom-most ancestor up to the
@@ -879,7 +885,7 @@ class PhabricatorPatch(Patch):
         return [patch.patch_set for patch in self._stack_patches]
 
     @property
-    def stack_base_patch(self) -> "PhabricatorPatch":
+    def stack_base_patch(self) -> PhabricatorPatch:
         return self._stack_patches[0]
 
     @cached_property

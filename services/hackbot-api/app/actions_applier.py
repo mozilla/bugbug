@@ -10,12 +10,14 @@ Application runs each pending row through the handler registry in
 never re-applied, so Pub/Sub retries and repeated manual applies are safe.
 """
 
+import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from hackbot_client import HackbotClient
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs
@@ -35,8 +37,12 @@ log = logging.getLogger(__name__)
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
 
 
+_CLAIMABLE_STATUSES = ("pending", "failed")
+_CLAIM_LEASE = timedelta(minutes=15)
+
+
 def resolve_placeholders(value: Any, results_by_ref: dict[str, dict]) -> Any:
-    """Substitute `{{actions.<ref>.<field>}}` in `value` using prior results.
+    """Substitute `{{actions.<action_id>.<field>}}` in `value` using prior results.
 
     Recurses through dicts/lists so a placeholder can appear anywhere in an
     action's params, not just at the top level. A placeholder referencing a
@@ -142,7 +148,8 @@ async def ensure_action_rows(
                 idx=idx,
                 type=action["type"],
                 params=action.get("params", {}),
-                ref=action.get("ref"),
+                # TODO: Drop the `ref` fallback once older summaries are gone.
+                ref=action.get("action_id", action.get("ref")),
                 status="pending",
             )
             db.add(row)
@@ -152,7 +159,11 @@ async def ensure_action_rows(
 
 
 async def _dispatch(
-    run: Run, action_type: str, params: dict, attachments: list[dict]
+    run: Run,
+    action_type: str,
+    params: dict,
+    attachments: list[dict],
+    hackbot_client: HackbotClient,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -172,6 +183,7 @@ async def _dispatch(
         ),
         attachments=attachments,
         agent=run.agent,
+        hackbot_client=hackbot_client,
     )
     try:
         return await handler.apply(params, ctx)
@@ -182,8 +194,56 @@ async def _dispatch(
         return ActionResult.failed(str(exc))
 
 
+async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
+    """Take ownership of every not-yet-`applied` row in `rows`, all or nothing.
+
+    Commits the claim before any handler runs, so no connection is held across
+    a handler's HTTP call. All or nothing because a later action can reference
+    an earlier one's result, and half a chain cannot resolve those
+    placeholders. A row stuck in `applying` past `_CLAIM_LEASE` is taken over.
+    """
+    wanted = [row.id for row in rows if row.status != "applied"]
+    if not wanted:
+        return False
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        update(RunAction)
+        .where(
+            RunAction.id.in_(wanted),
+            or_(
+                RunAction.status.in_(_CLAIMABLE_STATUSES),
+                and_(
+                    RunAction.status == "applying",
+                    RunAction.updated_at < now - _CLAIM_LEASE,
+                ),
+            ),
+        )
+        .values(status="applying", updated_at=now)
+        .returning(RunAction.id)
+    )
+    claimed = set(result.scalars())
+
+    if len(claimed) != len(wanted):
+        # Rolling back un-claims whatever this statement did take, so the caller
+        # holding the rest of the chain can claim the lot on its next pass.
+        await db.rollback()
+        log.info(
+            "Not applying: %d of %d actions are already being applied elsewhere",
+            len(wanted) - len(claimed),
+            len(wanted),
+        )
+        return False
+
+    await db.commit()
+    return True
+
+
 async def _apply_pending_rows(
-    db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
+    db: AsyncSession,
+    run: Run,
+    rows: list[tuple[RunAction, list[dict]]],
+    hackbot_client: HackbotClient,
 ) -> None:
     """Apply every not-yet-`applied` row in `rows`, committing per action.
 
@@ -192,11 +252,17 @@ async def _apply_pending_rows(
     bugmail, one history entry); any other comments on that bug still apply
     separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
 
-    Cross-action `{{actions.<ref>.<field>}}` placeholders resolve against rows
+    Cross-action `{{actions.<action_id>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
     earlier in this pass, so a later (even manual) apply can still reference an
     earlier action's result.
+
+    Claims the whole set before dispatching anything, and returns without doing
+    anything if another caller already holds part of it.
     """
+    if not await _claim_for_apply(db, [row for row, _ in rows]):
+        return
+
     results_by_ref: dict[str, dict] = {
         row.ref: row.result
         for row, _ in rows
@@ -206,15 +272,20 @@ async def _apply_pending_rows(
     pending = [(row, att) for row, att in rows if row.status != "applied"]
 
     # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
-    # Drop any group whose rows carry a `ref`: nothing should reference a
-    # coalesced member's result, and this keeps that invariant if a ref is ever
-    # added to a bug action. Everything else applies one row at a time as before.
+    # Drop any group with a member another pending action references: a group
+    # applies at its last member, possibly after the action that needs the
+    # result. Everything else applies one row at a time as before.
+    referenced = {
+        match.group(1)
+        for row, _ in pending
+        for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
+    }
     groups = [
         group
         for group in plan_coalesced_groups(
             [(row.type, row.params) for row, _ in pending]
         )
-        if all(pending[i][0].ref is None for i in group)
+        if all(pending[i][0].ref not in referenced for i in group)
     ]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
     # whole group there, once every earlier (backward) dependency is resolved.
@@ -233,12 +304,18 @@ async def _apply_pending_rows(
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run, "bugzilla.update_bug", merge_resolved(entries), []
+                run,
+                "bugzilla.update_bug",
+                merge_resolved(entries),
+                [],
+                hackbot_client,
             )
         else:
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
-            outcome = await _dispatch(run, row.type, params, attachments)
+            outcome = await _dispatch(
+                run, row.type, params, attachments, hackbot_client
+            )
 
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
@@ -257,7 +334,9 @@ async def _apply_pending_rows(
                     results_by_ref[member.ref] = outcome.result
 
 
-async def on_run_completed(db: AsyncSession, run: Run) -> None:
+async def on_run_completed(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Record a completed run's actions and auto-apply each eligible action.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
@@ -287,7 +366,7 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
             to_apply.append((action, attachments))
 
     if to_apply:
-        await _apply_pending_rows(db, run, to_apply)
+        await _apply_pending_rows(db, run, to_apply, hackbot_client)
 
     held_count = len(rows) - len(to_apply)
     if held_count:
@@ -300,7 +379,9 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
         )
 
 
-async def apply_all_pending(db: AsyncSession, run: Run) -> None:
+async def apply_all_pending(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Apply all of a run's not-yet-`applied` actions on demand (manual).
 
     Ensures the rows exist first, so this works whether or not they were
@@ -308,4 +389,4 @@ async def apply_all_pending(db: AsyncSession, run: Run) -> None:
     """
     rows = await ensure_action_rows(db, run)
     await db.commit()
-    await _apply_pending_rows(db, run, rows)
+    await _apply_pending_rows(db, run, rows, hackbot_client)

@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
+from hackbot_client import HackbotClient
 from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,7 @@ from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Run, RunAction
+from app.hackbot_client import get_hackbot_client
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
@@ -102,6 +104,7 @@ async def create_run(
     agent_name: str,
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
+    requested_via: Annotated[str | None, Depends(require_api_key)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
@@ -126,6 +129,20 @@ async def create_run(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    parent = None
+    if "parent_run_id" in inputs.model_fields_set:
+        parent = await db.get(Run, inputs.parent_run_id)
+        if parent is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown parent run {inputs.parent_run_id}",
+            )
+        if parent.status != RunStatus.succeeded.value:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Parent run {parent.run_id} has not succeeded",
+            )
+
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
 
@@ -137,6 +154,7 @@ async def create_run(
             status=RunStatus.pending.value,
             inputs=inputs.model_dump(mode="json"),
             requested_by=on_behalf_of,
+            requested_via=requested_via,
             dedupe_key=dedupe_key,
             results_prefix=results_prefix,
             artifacts=[],
@@ -181,6 +199,7 @@ async def create_run(
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
+            **(await _parent_artifacts_env(parent)),
         }
         execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
     except Exception as exc:
@@ -197,6 +216,18 @@ async def create_run(
     await db.commit()
 
     return RunRef.model_validate(run)
+
+
+async def _parent_artifacts_env(parent: Run | None) -> dict[str, str]:
+    """Signed download URLs for the parent run's artifacts, for the runtime."""
+    if parent is None:
+        return {}
+    urls = await gcs.generate_artifact_download_urls(
+        str(parent.run_id),
+        [artifact["name"] for artifact in parent.artifacts or []],
+        settings.job_execution_timeout_seconds,
+    )
+    return {"PARENT_ARTIFACTS": json.dumps(urls)}
 
 
 @router.get("/runs")
@@ -298,7 +329,9 @@ async def list_run_actions(
 
 @router.post("/runs/{run_id}/actions/apply")
 async def apply_run_actions(
-    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
+    run_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hackbot_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> list[RunActionDoc]:
     """Manually apply all of a run's pending actions (apply-all).
 
@@ -308,7 +341,7 @@ async def apply_run_actions(
     run = await db.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    await apply_all_pending(db, run)
+    await apply_all_pending(db, run, hackbot_client)
     return await _list_actions(db, run_id)
 
 

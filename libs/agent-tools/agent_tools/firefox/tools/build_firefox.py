@@ -55,22 +55,42 @@ async def build_firefox(
             [*(str(p) for p in toolchain_bins), env.get("PATH", "")]
         )
 
-        mach_args = ["./mach", "build"]
+        async def mach_build(*args: str) -> tuple[int | None, str, str]:
+            process = await asyncio.create_subprocess_exec(
+                "./mach",
+                "build",
+                # MOZ_AUTOMATION otherwise makes mach print the whole build log.
+                "--quiet",
+                *args,
+                cwd=firefox_dir,
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            return (
+                process.returncode,
+                stdout.decode("utf-8", errors="ignore") if stdout else "",
+                stderr.decode("utf-8", errors="ignore") if stderr else "",
+            )
+
         if target:
-            mach_args.append(target)
-        process = await asyncio.create_subprocess_exec(
-            *mach_args,
-            cwd=firefox_dir,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+            # mach skips directory targets unless allowed (Bug 2014764). A
+            # directory needs the generated headers, and the clang plugin when
+            # configure enabled it, since every compile then loads the plugin.
+            returncode, stdout_output, stderr_output = await mach_build(
+                "pre-export", "export"
+            )
+            if returncode == 0:
+                plugin_dir = objdir / "build" / "clang-plugin"
+                plugin = ["build/clang-plugin"] if plugin_dir.is_dir() else []
+                returncode, stdout_output, stderr_output = await mach_build(
+                    "--allow-subdirectory-build", *plugin, target
+                )
+        else:
+            returncode, stdout_output, stderr_output = await mach_build()
 
-        stdout, stderr = await process.communicate()
-        stdout_output = stdout.decode("utf-8", errors="ignore") if stdout else ""
-        stderr_output = stderr.decode("utf-8", errors="ignore") if stderr else ""
-
-        if process.returncode == 0:
+        if returncode == 0:
             return {
                 "success": True,
                 "build_dir": str(objdir),
@@ -81,7 +101,7 @@ async def build_firefox(
         else:
             return {
                 "success": False,
-                "message": f"Firefox build failed with exit code {process.returncode}",
+                "message": f"Firefox build failed with exit code {returncode}",
                 "stdout": stdout_output,
                 "stderr": stderr_output,
             }

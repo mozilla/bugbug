@@ -5,6 +5,7 @@ import stat
 import sys
 import tempfile
 import zipfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -13,6 +14,9 @@ import mozinstall
 import requests
 
 logger = logging.getLogger("autowebcompat-repro")
+
+# How many earlier days of Nightly to try if the latest build can't be fetched.
+NIGHTLY_FALLBACK_DAYS = 3
 
 
 def install_firefox(
@@ -39,12 +43,26 @@ def install_firefox(
         kwargs["version"] = version
 
     logger.info("downloading Firefox %s...", channel)
-    scraper = mozdownload.FactoryScraper(
-        scraper_type,
-        platform=mozdownload_platform,
-        destination=str(install_dir),
-        **kwargs,
-    )
+    scraper = None
+    # The newest Nightly's folder is sometimes not yet listed on the archive,
+    # in which case mozdownload raises NotFoundError; fall back to earlier days.
+    for days_back in range(NIGHTLY_FALLBACK_DAYS + 1 if channel == "nightly" else 1):
+        if days_back:
+            day = datetime.now(UTC).date() - timedelta(days=days_back)
+            kwargs["date"] = day.isoformat()
+            logger.warning("falling back to Firefox nightly from %s", day)
+        try:
+            scraper = mozdownload.FactoryScraper(
+                scraper_type,
+                platform=mozdownload_platform,
+                destination=str(install_dir),
+                **kwargs,
+            )
+            break
+        except mozdownload.errors.NotFoundError:
+            if days_back == NIGHTLY_FALLBACK_DAYS or channel != "nightly":
+                raise
+            logger.exception("could not find Firefox nightly build")
     archive = scraper.download()
 
     install_path = mozinstall.install(archive, str(install_dir))

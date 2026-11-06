@@ -1,6 +1,6 @@
 """Tests for the action applier.
 
-Covers the {{actions.<ref>.<field>}} placeholder resolver, the succeeded-run
+Covers the {{actions.<action_id>.<field>}} placeholder resolver, the succeeded-run
 gate + per-agent auto-apply opt-in and per-run consent in `on_run_completed`, and
 the manual `apply_all_pending` path — see app/actions_applier.py.
 """
@@ -8,6 +8,7 @@ the manual `apply_all_pending` path — see app/actions_applier.py.
 import logging
 import uuid
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app import actions_applier
@@ -18,6 +19,9 @@ from app.actions_applier import (
 )
 from app.agents import AGENT_REGISTRY
 from app.schemas import RunStatus
+from sqlalchemy.dialects import postgresql
+
+_CLIENT = object()
 
 
 def test_resolves_known_ref_and_field():
@@ -217,17 +221,86 @@ def test_which_agents_auto_apply_without_asking_for_consent():
     assert unbounded == {"autowebcompat-intervention", "bug-fix"}
 
 
+class _ClaimResult:
+    def __init__(self, ids):
+        self._ids = ids
+
+    def scalars(self):
+        return iter(self._ids)
+
+
 class _FakeDB:
-    def __init__(self):
+    """Session stand-in that answers the claim UPDATE and counts commits.
+
+    `grants` narrows which row ids the claim may take, letting a test play the
+    caller that loses a race. The default grants every id the claim asks for.
+    """
+
+    def __init__(self, grants=None):
         self.commits = 0
+        self.rollbacks = 0
+        self.claimed = []
+        self.statements = []
+        self._grants = grants
 
     async def commit(self):
         self.commits += 1
 
-    async def execute(self, *a, **k):
-        raise AssertionError(
-            "ensure_action_rows should be monkeypatched in these tests"
-        )
+    async def rollback(self):
+        self.rollbacks += 1
+
+    async def execute(self, stmt, *a, **k):
+        self.statements.append(stmt)
+        wanted = stmt.compile(dialect=postgresql.dialect()).params["id_1"]
+        self.claimed.append(list(wanted))
+        if self._grants is None:
+            return _ClaimResult(list(wanted))
+        return _ClaimResult([i for i in wanted if i in self._grants])
+
+
+async def test_claim_takes_every_unapplied_row_and_commits():
+    rows = [_row(0, "pending"), _row(1, "failed"), _row(2, "applied")]
+    db = _FakeDB()
+
+    assert await actions_applier._claim_for_apply(db, rows) is True
+    # The applied row is terminal, so it is never asked for.
+    assert db.claimed == [[1, 2]]
+    assert db.commits == 1
+
+
+async def test_claim_with_nothing_left_to_do_skips_the_database():
+    db = _FakeDB()
+    assert await actions_applier._claim_for_apply(db, [_row(0, "applied")]) is False
+    assert db.claimed == []
+    assert db.commits == 0
+
+
+async def test_claim_stamps_a_lease_and_takes_over_an_abandoned_row():
+    # A worker killed mid-apply leaves its rows in `applying` for good, so the
+    # claim also matches rows whose stamp has aged past the lease.
+    db = _FakeDB()
+    before = datetime.now(timezone.utc)
+
+    assert await actions_applier._claim_for_apply(db, [_row(0, "pending")]) is True
+
+    params = db.statements[0].compile(dialect=postgresql.dialect()).params
+    assert params["status"] == "applying"
+    assert params["updated_at"] >= before
+    # The cutoff trails the stamp by exactly one lease.
+    assert params["updated_at"] - params["updated_at_1"] == actions_applier._CLAIM_LEASE
+    # ... and an `applying` row is a candidate, not only pending/failed ones.
+    assert params["status_2"] == "applying"
+
+
+async def test_a_partial_claim_is_rolled_back_rather_than_half_applied():
+    rows = [_row(0, "pending"), _row(1, "pending")]
+    # Another caller already holds row id 2.
+    db = _FakeDB(grants={1})
+
+    assert await actions_applier._claim_for_apply(db, rows) is False
+    assert db.rollbacks == 1
+    assert db.commits == 0
+    assert [r.status for r in rows] == ["pending", "pending"]
 
 
 def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
@@ -241,7 +314,7 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
         calls["ensured"] = True
         return [(SimpleNamespace(type="bugzilla.add_comment"), [])]
 
-    async def fake_apply(db, run, rows):
+    async def fake_apply(db, run, rows, hackbot_client):
         calls["applied"] = True
 
     monkeypatch.setattr(actions_applier, "ensure_action_rows", fake_ensure)
@@ -254,14 +327,14 @@ def _patch_applier(monkeypatch, *, auto: bool | None, consent=False):
 async def test_non_succeeded_run_records_nothing(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True)
     for status in (RunStatus.failed.value, RunStatus.timed_out.value):
-        await on_run_completed(_FakeDB(), _FakeRun(status=status))
+        await on_run_completed(_FakeDB(), _FakeRun(status=status), _CLIENT)
     assert calls == {"ensured": False, "applied": False}
 
 
 async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True)
     db = _FakeDB()
-    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), _CLIENT)
     assert calls == {"ensured": True, "applied": True}
     assert db.commits >= 1
 
@@ -269,27 +342,29 @@ async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
 async def test_succeeded_non_opted_agent_records_but_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=False)
     db = _FakeDB()
-    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), _CLIENT)
     assert calls == {"ensured": True, "applied": False}
     assert db.commits >= 1
 
 
 async def test_succeeded_unknown_agent_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=None)
-    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), _CLIENT
+    )
     assert calls == {"ensured": True, "applied": False}
 
 
 async def test_succeeded_vouched_for_run_applies(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True, consent=True)
-    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=True))
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=True), _CLIENT)
     assert calls == {"ensured": True, "applied": True}
 
 
 async def test_succeeded_unvouched_run_records_but_does_not_apply(monkeypatch):
     calls = _patch_applier(monkeypatch, auto=True, consent=True)
     # Recorded for the UI (and manual apply), but nothing reaches Bugzilla.
-    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False))
+    await on_run_completed(_FakeDB(), _run_with_findings(auto_apply=False), _CLIENT)
     assert calls == {"ensured": True, "applied": False}
 
 
@@ -303,7 +378,7 @@ async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
     async def fake_ensure(db, run):
         return rows
 
-    async def fake_apply(db, run, selected_rows):
+    async def fake_apply(db, run, selected_rows, hackbot_client):
         applied_types.extend(row.type for row, _ in selected_rows)
 
     spec = _spec(
@@ -314,7 +389,9 @@ async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
     monkeypatch.setattr(actions_applier, "_apply_pending_rows", fake_apply)
     monkeypatch.setattr(actions_applier, "AGENT_REGISTRY", {"bug-fix": spec})
 
-    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
+    await on_run_completed(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), _CLIENT
+    )
 
     assert applied_types == ["bugzilla.update_bug"]
 
@@ -329,13 +406,16 @@ async def test_other_agents_do_not_auto_apply():
     assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
         "email.send",
         "slack.post_message",
+        "agents.start_run",
     }
 
 
 async def test_apply_all_pending_always_applies(monkeypatch):
     # Manual apply ignores the opt-in flag entirely.
     calls = _patch_applier(monkeypatch, auto=False)
-    await apply_all_pending(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value))
+    await apply_all_pending(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), _CLIENT
+    )
     assert calls == {"ensured": True, "applied": True}
 
 
@@ -364,6 +444,7 @@ def _row(
     applied_at=None,
 ):
     return SimpleNamespace(
+        id=idx + 1,
         idx=idx,
         type=action_type,
         params=params if params is not None else {},
@@ -373,6 +454,65 @@ def _row(
         error=error,
         applied_at=applied_at,
     )
+
+
+async def test_a_caller_that_loses_the_claim_dispatches_nothing(monkeypatch):
+    # Two requests race. The one that cannot take the whole chain must not
+    # post anything: the winner owns every row and will apply them in order.
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={"ok": 1}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    created = _row(0, "pending", action_type="bugzilla.create_bug", ref="created")
+    comment = _row(1, "pending", params={"text": "Created at {{actions.created.url}}"})
+    db = _FakeDB(grants=set())
+
+    await actions_applier._apply_pending_rows(
+        db,
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(created, []), (comment, [])],
+        _CLIENT,
+    )
+
+    assert handler.calls == []
+    assert db.rollbacks == 1
+
+
+async def test_the_winner_applies_the_whole_chain_so_refs_still_resolve(monkeypatch):
+    # Claiming the run up front is what keeps placeholders working: one caller
+    # holds every row, so an earlier action's result is always in hand.
+    results = iter(
+        [
+            SimpleNamespace(
+                status="applied",
+                result={"url": "https://bugzilla.example/1"},
+                error=None,
+            ),
+            SimpleNamespace(status="applied", result={"ok": 1}, error=None),
+        ]
+    )
+    calls = []
+
+    async def apply(params, ctx):
+        calls.append(params)
+        return next(results)
+
+    monkeypatch.setattr(
+        actions_applier, "get_handler", lambda t: SimpleNamespace(apply=apply)
+    )
+
+    created = _row(0, "pending", action_type="bugzilla.create_bug", ref="created")
+    comment = _row(1, "pending", params={"text": "Created at {{actions.created.url}}"})
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [(created, []), (comment, [])],
+        _CLIENT,
+    )
+
+    assert calls[1] == {"text": "Created at https://bugzilla.example/1"}
 
 
 async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
@@ -389,7 +529,7 @@ async def test_apply_pending_rows_retries_failed_and_skips_applied(monkeypatch):
     rows = [(applied, []), (failed, []), (pending, [])]
 
     await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
 
     # The already-applied row is untouched; its handler never runs.
@@ -434,6 +574,7 @@ async def test_try_result_resolves_in_phabricator_summary(monkeypatch):
         _FakeDB(),
         _FakeRun(status=RunStatus.succeeded.value),
         [(try_push, []), (patch, [])],
+        _CLIENT,
     )
 
     assert patch_handler.calls == [
@@ -471,7 +612,7 @@ async def test_coalesces_update_and_comment_into_one_put(monkeypatch):
     rows = [(update, []), (other, []), (comment, [])]
 
     await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
 
     # Two calls: the standalone comment on bug 99, then ONE combined PUT for
@@ -515,7 +656,7 @@ async def test_extra_comments_applied_separately(monkeypatch):
     rows = [(update, []), (near, []), (far, [])]
 
     await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
 
     # Field change rides with the closest comment ("near"); "far" is its own PUT.
@@ -550,7 +691,7 @@ async def test_lone_same_type_actions_on_different_bugs_not_merged(monkeypatch):
     rows = [(u5, []), (u6, [])]
 
     await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
     # Different bugs, one update each -> no coalescing, two raw PUTs.
     assert handler.calls == [
@@ -588,7 +729,7 @@ async def test_coalesced_group_failure_marks_all_then_retries(monkeypatch):
     rows = [(update, []), (comment, []), (done, [])]
     run = _FakeRun(status=RunStatus.succeeded.value)
 
-    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows, _CLIENT)
     # One combined call; both members failed; the already-applied row untouched.
     assert len(failing.calls) == 1
     assert update.status == "failed" and comment.status == "failed"
@@ -599,7 +740,7 @@ async def test_coalesced_group_failure_marks_all_then_retries(monkeypatch):
         SimpleNamespace(status="applied", result={"bug_id": 5}, error=None)
     )
     monkeypatch.setattr(actions_applier, "get_handler", lambda t: ok)
-    await actions_applier._apply_pending_rows(_FakeDB(), run, rows)
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows, _CLIENT)
     assert len(ok.calls) == 1
     assert update.status == "applied" and comment.status == "applied"
 
@@ -628,7 +769,7 @@ async def test_backward_placeholder_resolves_in_coalesced_comment(monkeypatch):
     rows = [(patch, []), (update, []), (comment, [])]
 
     await actions_applier._apply_pending_rows(
-        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
 
     # The patch applies first (its own idx), seeding results_by_ref; the
@@ -672,6 +813,7 @@ async def test_comment_and_needinfo_clear_coalesce_into_one_update(monkeypatch):
         _FakeDB(),
         _FakeRun(status=RunStatus.succeeded.value),
         [(comment, []), (clear, [])],
+        _CLIENT,
     )
 
     # One PUT carrying both the reply and the flag retraction.

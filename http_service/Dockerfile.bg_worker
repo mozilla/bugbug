@@ -2,6 +2,8 @@ ARG BUGBUG_VERSION=latest
 
 FROM mozilla/bugbug-commit-retrieval:$BUGBUG_VERSION
 
+ENV UV_PYTHON_DOWNLOADS=never
+
 # Install dependencies first
 RUN --mount=type=bind,source=pyproject.toml,target=/tmp/workspace/pyproject.toml \
 	--mount=type=bind,source=uv.lock,target=/tmp/workspace/uv.lock \
@@ -32,4 +34,5 @@ ENV BUGBUG_REPO_DIR=/code/bugbug-hg
 
 RUN bash /code/http_service/ensure_models.sh
 
-CMD bugbug-http-worker high default low
+# Refresh the data retrieved at boot in the background, as workers can run for weeks.
+CMD (bugbug-http-refresh-data &) && bugbug-http-worker high default low

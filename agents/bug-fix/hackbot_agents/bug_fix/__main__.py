@@ -35,7 +35,7 @@ class AgentInputs(BaseSettings):
         return self.broker_endpoint("/phabricator/mcp")
 
     @model_validator(mode="after")
-    def _validate_mode(self) -> "AgentInputs":
+    def _validate_mode(self) -> AgentInputs:
         """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
         if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None:

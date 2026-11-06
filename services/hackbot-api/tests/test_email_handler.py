@@ -21,7 +21,10 @@ def _ctx(artifacts=None):
     from app.action_handlers import ApplyContext
 
     return ApplyContext(
-        run_id="run-1", agent="build-repair", download_artifact=download
+        run_id="run-1",
+        agent="build-repair",
+        download_artifact=download,
+        hackbot_client=object(),
     )
 
 
@@ -100,6 +103,15 @@ async def test_the_body_is_sent_as_both_text_and_html():
     assert "<h1>Analysis</h1>" in contents[1]["value"]
 
 
+async def test_underscores_inside_words_are_not_emphasis():
+    await email_handler.SendEmailHandler().apply(
+        _params(body_markdown="test_ext_web_accessible_workers.js is _new_"),
+        _ctx(),
+    )
+    html = _FakeClient.sent.get()["content"][1]["value"]
+    assert "test_ext_web_accessible_workers.js is <em>new</em>" in html
+
+
 async def test_the_inline_diff_and_the_attachment_are_the_same_bytes():
     patch = b"--- a/x\n+++ b/x\n+#include <y>\n"
     await email_handler.SendEmailHandler().apply(
@@ -127,7 +139,9 @@ async def test_the_patch_is_read_once_for_both_uses():
 
     from app.action_handlers import ApplyContext
 
-    ctx = ApplyContext(run_id="r", agent="a", download_artifact=download)
+    ctx = ApplyContext(
+        run_id="r", agent="a", download_artifact=download, hackbot_client=object()
+    )
     await email_handler.SendEmailHandler().apply(
         _params(
             attach_patch=True,

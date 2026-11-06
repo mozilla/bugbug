@@ -56,7 +56,12 @@ def _ctx(submission=None, missing=False):
             raise FileNotFoundError(key)
         return json.dumps(submission or _SUBMISSION).encode()
 
-    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    return ApplyContext(
+        run_id="run-1",
+        agent="test-agent",
+        download_artifact=download,
+        hackbot_client=object(),
+    )
 
 
 @pytest.fixture
@@ -240,7 +245,7 @@ async def test_apply_returns_treeherder_and_lando_urls(submitted):
 
     assert result.result["job_id"] == 4321
     assert result.result["tasks"] == ["build-linux64/opt"]
-    # `url` is what a `{{actions.<ref>.url}}` placeholder resolves to, so it has
+    # `url` is what a `{{actions.<action_id>.url}}` placeholder resolves to, so it has
     # to be the one a human wants: the Treeherder view of the push.
     assert result.result["url"] == (
         "https://treeherder.mozilla.org/jobs?repo=try"

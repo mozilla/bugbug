@@ -55,7 +55,12 @@ def _ctx(diff=_DIFF_PAYLOAD, local_commits=None):
         assert key == "changes/phabricator_diff.json"
         return json.dumps(submission).encode()
 
-    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    return ApplyContext(
+        run_id="run-1",
+        agent="test-agent",
+        download_artifact=download,
+        hackbot_client=object(),
+    )
 
 
 def _fake_conduit(responses):
@@ -345,6 +350,50 @@ async def test_update_patch_local_commits_use_the_revisions_own_fields(monkeypat
     )
 
 
+async def test_update_patch_edits_the_given_fields_with_the_diff(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 3},
+            "differential.revision.edit": {"object": {"id": 42}},
+            "differential.revision.search": {
+                "data": [
+                    {
+                        "fields": {
+                            "title": "Old title",
+                            "summary": "old sum",
+                            "testPlan": "existing test plan",
+                            "bugzilla.bug-id": "9",
+                        }
+                    }
+                ]
+            },
+            "differential.setdiffproperty": {},
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.UpdatePatchHandler().apply(
+        {"revision_id": 42, "title": "WIP: New title", "summary": "new sum"},
+        _ctx(local_commits={"n": {"author": "A"}}),
+    )
+    assert result.status == "applied"
+    payloads = dict(calls)
+
+    assert payloads["differential.revision.edit"]["transactions"] == [
+        {"type": "update", "value": "PHID-DIFF-1"},
+        {"type": "title", "value": "New title"},
+        {"type": "summary", "value": "new sum"},
+    ]
+
+    stored = json.loads(payloads["differential.setdiffproperty"]["data"])["n"]
+    assert stored["summary"] == "New title"
+    assert stored["message"].startswith("New title\n\nSummary:\nnew sum")
+    assert "Test Plan:\nexisting test plan" in stored["message"]
+
+
 async def test_update_patch_preserves_previous_diff_commit_author(monkeypatch):
     fake, calls = _fake_conduit(
         {
@@ -426,7 +475,12 @@ async def test_missing_artifact_fails(handler, params):
     async def download(key):
         raise KeyError(key)
 
-    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    ctx = ApplyContext(
+        run_id="run-1",
+        agent="test-agent",
+        download_artifact=download,
+        hackbot_client=object(),
+    )
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
     assert result.status == "failed"
     assert "Could not load the Phabricator submission artifact" in result.error
@@ -446,12 +500,30 @@ async def test_oversized_artifact_is_not_submitted(monkeypatch, handler, params)
     conduit = AsyncMock()
     monkeypatch.setattr(phabricator_handler, "_conduit_request", conduit)
 
-    ctx = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    ctx = ApplyContext(
+        run_id="run-1",
+        agent="test-agent",
+        download_artifact=download,
+        hackbot_client=object(),
+    )
     result = await getattr(phabricator_handler, handler)().apply(params, ctx)
 
     assert result.status == "failed"
     assert "over the 50.0 MiB limit" in result.error
     conduit.assert_not_called()
+
+
+async def test_submit_patch_unresolved_bug_id_reference_fails(monkeypatch):
+    fake, calls = _fake_conduit({})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {"bug_id": "{{actions.bug.bug_id}}", "title": "Fix"}, _ctx()
+    )
+
+    assert result.status == "failed"
+    assert "not a bug number" in result.error
+    assert calls == []
 
 
 async def test_submit_patch_conduit_error_fails(monkeypatch):
@@ -476,7 +548,12 @@ async def test_add_comment_posts_comment_transaction(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "Answering your question."},
-        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
+        ApplyContext(
+            run_id="run-1",
+            agent="test-agent",
+            download_artifact=None,
+            hackbot_client=object(),
+        ),
     )
 
     assert result.status == "applied"
@@ -499,7 +576,12 @@ async def test_add_comment_conduit_error_fails(monkeypatch):
 
     result = await phabricator_handler.AddCommentHandler().apply(
         {"revision_id": 42, "text": "x"},
-        ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None),
+        ApplyContext(
+            run_id="run-1",
+            agent="test-agent",
+            download_artifact=None,
+            hackbot_client=object(),
+        ),
     )
     assert result.status == "failed"
     assert "ERR-CONDUIT-CORE" in result.error

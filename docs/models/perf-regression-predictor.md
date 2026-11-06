@@ -18,14 +18,16 @@ dozen characters per token can reach that window, the model drops the tail of
 a large diff (beyond `max_input_chars`) before structuring and tokenizing it,
 and the service exports one patch at a time.
 
-Some commits in a push are not meaningful to score and are skipped: backouts,
-merges, automated `wptsync` imports and commits marked `ignore-this-changeset`.
-They are still listed in the result with an `ignored_reason` and `null` scores.
-The rules live in `PERF_REGRESSION_IGNORED_COMMIT_RULES` in
-`http_service/bugbug_http/models.py`; to ignore another kind of commit, add an
-entry mapping the reason to a predicate over the hg.mozilla.org
-`automationrelevance` changeset. Rules are evaluated in order and the first
-match wins.
+Some commits in a push are not meaningful to score and are skipped: merges,
+automated `wptsync` imports and commits marked `ignore-this-changeset`. They
+are still listed in the result with an `ignored_reason` and `null` scores.
+Backouts are scored like any other commit, since a revert is a real code
+change that can regress a benchmark, and the training set treats them the same
+way. The rules live in `IGNORED_COMMIT_RULES` in `bugbug/perf/commit_risk.py`,
+shared with the training set export so the model is never trained on a kind of
+commit it does not score; to ignore another kind of commit, add an entry
+mapping the reason to a predicate over the hg.mozilla.org `automationrelevance`
+changeset. Rules are evaluated in order and the first match wins.
 
 Each scored commit gets its own `risk_score`; the push-level `risk_score` is
 the maximum across the scored commits, or `null` when every commit in the push
@@ -114,7 +116,7 @@ Example result:
       "prob": null,
       "class": null,
       "risk_score": null,
-      "ignored_reason": "backout"
+      "ignored_reason": "merge"
     }
   ],
   "extra_data": {

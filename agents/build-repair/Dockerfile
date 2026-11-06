@@ -3,6 +3,7 @@ FROM python:3.14 AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
@@ -57,6 +58,9 @@ RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
     && chown agent:agent /workspace
 
+RUN mkdir /builds \
+    && for f in gls-gapi.data sb-gapi.data mozilla-desktop-geoloc-api.key; do echo no-secret > /builds/$f; done
+
 # Not ~/.cargo/bin, where `mach bootstrap` installs the Rust toolchain at runtime:
 # that directory is rustup-managed and inside the agent's HOME, so a root-owned copy
 # made at build time does not belong in it. /usr/local/bin is on PATH for every user
@@ -87,6 +91,8 @@ CMD ["python", "-m", "hackbot_agents.build_repair.broker"]
 # prod `agent` target never pulls these deps, since this stage builds only when
 # targeted.
 FROM agent AS eval
+
+ENV UV_PYTHON_DOWNLOADS=never
 
 USER root
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

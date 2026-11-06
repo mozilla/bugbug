@@ -3,24 +3,27 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from hackbot_client import HackbotClient
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     require_bugzilla_webhook_secret,
     require_phabricator_signature,
 )
-from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
+from app.bugzilla_authorization import BugzillaAuthorizer
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
-from app.phabricator_authorization import (
-    AUTHORIZED_GROUP_PHID,
-    PhabricatorAuthorizer,
-)
+from app.database.connection import get_db
+from app.github import GitHubApp
+from app.github_authorization import GitHubAuthorizer
+from app.hackbot_client import get_hackbot_client
+from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
     detect_mention_and_revision,
+    follow_up_agent,
     triggering_transaction_phids,
 )
 from app.slack.app import build_request_handler
@@ -44,14 +47,6 @@ def get_slack_handler(request: Request) -> AsyncSlackRequestHandler:
     return handler
 
 
-def get_hackbot_client() -> HackbotClient:
-    """Dependency: a client for triggering runs over the public hackbot API."""
-    return HackbotClient(
-        base_url=settings.hackbot_api_url,
-        api_key=settings.external_api_key,
-    )
-
-
 @router.post("/slack")
 async def slack_webhook(
     request: Request,
@@ -71,7 +66,9 @@ def get_phabricator_authorizer(
     """Dependency: lazily create the app-scoped authorizer and its member cache."""
     authorizer = getattr(request.app.state, "phabricator_authorizer", None)
     if authorizer is None:
-        authorizer = PhabricatorAuthorizer(phab_client, AUTHORIZED_GROUP_PHID)
+        authorizer = PhabricatorAuthorizer(
+            phab_client, settings.webhook.authorized_group
+        )
         request.app.state.phabricator_authorizer = authorizer
     return authorizer
 
@@ -83,9 +80,31 @@ def get_bugzilla_authorizer(request: Request) -> BugzillaAuthorizer:
         authorizer = BugzillaAuthorizer(
             settings.bugzilla_api_url,
             settings.bugzilla_api_key,
-            AUTHORIZED_GROUP_NAME,
+            settings.bugzilla_webhook.authorized_group,
         )
         request.app.state.bugzilla_authorizer = authorizer
+    return authorizer
+
+
+def get_github_authorizer(request: Request) -> GitHubAuthorizer:
+    """Dependency: lazily create the app-scoped authorizer and its role cache."""
+    authorizer = getattr(request.app.state, "github_authorizer", None)
+    if authorizer is None:
+        if settings.github is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="GitHub App is not configured",
+            )
+        authorizer = GitHubAuthorizer(
+            # A check runs inside a webhook delivery, which GitHub abandons
+            # after 10 seconds. The authorizer bounds the whole lookup; without
+            # retries, a 5xx also fails closed at once instead of spending that
+            # budget on githubkit's backoff.
+            GitHubApp(settings.github, auto_retry=False),
+            settings.github.allowed_roles,
+            settings.github.bot_login,
+        )
+        request.app.state.github_authorizer = authorizer
     return authorizer
 
 
@@ -99,6 +118,7 @@ async def phabricator_webhook(
     phab_client: Annotated[PhabricatorClient, Depends(get_phabricator_client)],
     authorizer: Annotated[PhabricatorAuthorizer, Depends(get_phabricator_authorizer)],
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     payload = await request.json()
 
@@ -130,10 +150,12 @@ async def phabricator_webhook(
         log.info("Phabricator webhook ignored: no actionable @hackbot mention")
         return
 
+    agent = await follow_up_agent(db, detected.revision_id)
+
     # The anchor transaction identifies the submission, so a retried delivery
     # is answered with the run the first delivery created, on any instance.
     run = await api_client.trigger_run(
-        "bug-fix",
+        agent,
         {
             "bug_id": detected.bug_id,
             "revision_id": detected.revision_id,
@@ -150,7 +172,8 @@ async def phabricator_webhook(
         )
         return
     log.info(
-        "Triggered bug-fix run %s for D%s (bug %s) from @hackbot mention (%s)",
+        "Triggered %s run %s for D%s (bug %s) from @hackbot mention (%s)",
+        agent,
         run.run_id,
         detected.revision_id,
         detected.bug_id,
