@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
 
 APP_ID = 123
+WEBHOOK_SECRET = "test-github-webhook-secret"
 INSTALLATION_ID = 456
 OTHER_INSTALLATION_ID = 789
 ALLOWED_ROLES = GitHubAppSettings.model_fields["allowed_roles"].default
@@ -108,7 +109,9 @@ def _authorizer(
     pem: str, fake: _FakeGitHub, **kwargs
 ) -> tuple[GitHubAuthorizer, GitHubApp]:
     github_app = GitHubApp(
-        GitHubAppSettings(app_id=APP_ID, private_key=pem),
+        GitHubAppSettings(
+            app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+        ),
         async_transport=httpx.MockTransport(fake),
         http_cache=False,
         auto_retry=False,
@@ -140,7 +143,9 @@ async def test_configured_roles_replace_the_defaults(pem):
     # can tell a maintainer from a writer.
     fake = _FakeGitHub({"maintainer": "maintain", "writer": "write"})
     github_app = GitHubApp(
-        GitHubAppSettings(app_id=APP_ID, private_key=pem),
+        GitHubAppSettings(
+            app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+        ),
         async_transport=httpx.MockTransport(fake),
         http_cache=False,
         auto_retry=False,
@@ -185,7 +190,9 @@ async def test_network_error_is_denied(pem):
         raise httpx.ConnectError("boom", request=request)
 
     github_app = GitHubApp(
-        GitHubAppSettings(app_id=APP_ID, private_key=pem),
+        GitHubAppSettings(
+            app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+        ),
         async_transport=httpx.MockTransport(handler),
         http_cache=False,
         auto_retry=False,
@@ -201,7 +208,9 @@ async def test_token_mint_failure_is_denied(pem):
         return httpx.Response(422, json={"message": "no access"})
 
     github_app = GitHubApp(
-        GitHubAppSettings(app_id=APP_ID, private_key=pem),
+        GitHubAppSettings(
+            app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+        ),
         async_transport=httpx.MockTransport(handler),
         http_cache=False,
         auto_retry=False,
@@ -279,7 +288,10 @@ async def test_ignores_the_default_installation(pem):
     fake = _FakeGitHub({"dev": "write"})
     github_app = GitHubApp(
         GitHubAppSettings(
-            app_id=APP_ID, private_key=pem, installation_id=INSTALLATION_ID
+            app_id=APP_ID,
+            private_key=pem,
+            webhook_secret=WEBHOOK_SECRET,
+            installation_id=INSTALLATION_ID,
         ),
         async_transport=httpx.MockTransport(fake),
         http_cache=False,
@@ -375,7 +387,9 @@ def test_is_bot_sender_accepts_users(sender):
 
 
 def test_trigger_settings_defaults(pem):
-    github = GitHubAppSettings(app_id=APP_ID, private_key=pem)
+    github = GitHubAppSettings(
+        app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+    )
     assert github.bot_login == "hackbot"
     assert github.mention_token == "@hackbot"
     assert github.allowed_roles == {"admin", "maintain", "write"}
@@ -383,7 +397,10 @@ def test_trigger_settings_defaults(pem):
 
 def test_trigger_settings_strip_roles(pem):
     github = GitHubAppSettings(
-        app_id=APP_ID, private_key=pem, allowed_roles=[" admin ", "write"]
+        app_id=APP_ID,
+        private_key=pem,
+        webhook_secret=WEBHOOK_SECRET,
+        allowed_roles=[" admin ", "write"],
     )
     assert github.allowed_roles == {"admin", "write"}
 
@@ -398,7 +415,12 @@ def test_trigger_settings_strip_roles(pem):
 )
 def test_trigger_settings_reject_empty_roles(pem, roles, error):
     with pytest.raises(ValidationError, match=error):
-        GitHubAppSettings(app_id=APP_ID, private_key=pem, allowed_roles=roles)
+        GitHubAppSettings(
+            app_id=APP_ID,
+            private_key=pem,
+            webhook_secret=WEBHOOK_SECRET,
+            allowed_roles=roles,
+        )
 
 
 def _clear_github_env(monkeypatch):
@@ -423,6 +445,7 @@ def test_settings_read_trigger_env(monkeypatch, pem):
     _clear_github_env(monkeypatch)
     monkeypatch.setenv("GITHUB_APP_ID", str(APP_ID))
     monkeypatch.setenv("GITHUB_PRIVATE_KEY", pem)
+    monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", WEBHOOK_SECRET)
     monkeypatch.setenv("GITHUB_BOT_LOGIN", "other[bot]")
     monkeypatch.setenv("GITHUB_MENTION_TOKEN", "@other")
     monkeypatch.setenv("GITHUB_ALLOWED_ROLES", '["admin"]')
@@ -459,7 +482,9 @@ def test_dependency_is_app_scoped(monkeypatch, pem):
     monkeypatch.setattr(
         webhooks.settings,
         "github",
-        GitHubAppSettings(app_id=APP_ID, private_key=pem),
+        GitHubAppSettings(
+            app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+        ),
     )
     request = _Request()
 

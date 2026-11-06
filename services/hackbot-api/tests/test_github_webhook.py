@@ -97,9 +97,6 @@ def test_signature_unconfigured_secret():
         "(@hackbot)",
         "**@hackbot** fix",
         "- @hackbot fix",
-        # A lazy paragraph continuation, not an indented code block.
-        "Please\n    @hackbot fix",
-        "`code` then @hackbot",
     ],
 )
 def test_mentions_matches(body):
@@ -118,31 +115,19 @@ def test_mentions_matches(body):
         "hackbot without the at",
         "> @hackbot fix this\n\nI agree",
         "   > nested @hackbot quote",
-        "use `@hackbot fix` to ask",
-        "```\n@hackbot fix\n```",
-        "~~~text\n@hackbot fix\n~~~",
-        "- > @hackbot in a quoted list item",
-        "a ``@hackbot`` code span",
-        "a ``code with ` and @hackbot`` span",
-        "a `code span\n@hackbot over two lines` here",
-        "    @hackbot indented code",
-        "````\n```\n@hackbot inside a longer fence\n````",
-        "[@hackbot](https://example.com)",
-        # Removing the code must not join the halves into a handle.
-        "@hack`x`bot",
-        "@hack*bot*",
+        "Thanks!\n> @hackbot fix this\nSounds good",
     ],
 )
 def test_mentions_ignores(body):
     assert mentions(body, TOKEN) is False
 
 
-def test_mentions_after_closed_fence():
-    assert mentions("```\ncode\n```\n@hackbot fix", TOKEN) is True
-
-
-def test_mentions_fence_closes_only_on_same_marker():
-    assert mentions("```\n~~~\n@hackbot\n```", TOKEN) is False
+@pytest.mark.parametrize(
+    "body", ["use `@hackbot fix` to ask", "```\n@hackbot fix\n```"]
+)
+def test_mentions_in_code_still_count(body):
+    # Deliberately not filtered: rare, and the sender must still be authorized.
+    assert mentions(body, TOKEN) is True
 
 
 def test_mentions_empty_token():
@@ -369,7 +354,7 @@ def _pull_request_response(state: str) -> dict:
 
 def _github_app(pem: str, fake: _FakeGitHub) -> GitHubApp:
     return GitHubApp(
-        GitHubAppSettings(app_id=123, private_key=pem),
+        GitHubAppSettings(app_id=123, private_key=pem, webhook_secret=SECRET),
         async_transport=httpx.MockTransport(fake),
         http_cache=False,
         auto_retry=False,
@@ -539,13 +524,6 @@ def test_route_rejects_signed_delivery_missing_header(client, api, header):
     del headers[header]
     resp = client.post("/webhooks/github", content=body, headers=headers)
     assert resp.status_code == 422
-    assert api.calls == []
-
-
-def test_route_unavailable_without_secret(client, monkeypatch, pem, api):
-    monkeypatch.setattr(settings, "github", _app_settings(pem, webhook_secret=None))
-    resp = _post(client, "issue_comment", _issue_comment())
-    assert resp.status_code == 503
     assert api.calls == []
 
 
@@ -786,7 +764,7 @@ def test_app_and_authorizer_share_one_github_app(monkeypatch, pem):
     monkeypatch.setattr(
         webhooks.settings,
         "github",
-        GitHubAppSettings(app_id=123, private_key=pem),
+        GitHubAppSettings(app_id=123, private_key=pem, webhook_secret=SECRET),
     )
     request = _Request()
 
@@ -812,8 +790,19 @@ def test_settings_read_webhook_secret_env(monkeypatch, pem):
     assert loaded.github.webhook_secret == SECRET
 
 
-def test_webhook_secret_defaults_to_unset(pem):
-    assert GitHubAppSettings(app_id=123, private_key=pem).webhook_secret is None
+def test_webhook_secret_is_required(pem):
+    with pytest.raises(ValidationError, match="webhook_secret"):
+        GitHubAppSettings(app_id=123, private_key=pem)
+
+
+def test_settings_fail_at_startup_without_webhook_secret(monkeypatch, pem):
+    # The App's credentials alone are not enough: fail early, not per delivery.
+    monkeypatch.delenv("GITHUB_INSTALLATION_ID", raising=False)
+    monkeypatch.delenv("GITHUB_WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("GITHUB_APP_ID", "123")
+    monkeypatch.setenv("GITHUB_PRIVATE_KEY", pem)
+    with pytest.raises(ValidationError, match="webhook_secret"):
+        Settings(_env_file=None)
 
 
 @pytest.mark.parametrize("secret", ["", "   "])

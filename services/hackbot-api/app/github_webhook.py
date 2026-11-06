@@ -14,8 +14,6 @@ from types import MappingProxyType
 from typing import Any
 from xml.sax.saxutils import escape, quoteattr
 
-from markdown_it import MarkdownIt
-
 from app.github import GitHubApp
 
 # The one action per event that carries a new comment. Edits and deletions are
@@ -42,10 +40,6 @@ DELIVERY_DEADLINE_SECONDS = 8.0
 # Within it, the authorizer's lookup is bounded at 5 seconds and this one at 3,
 # so neither alone can use up the time meant for triggering the run.
 HEAD_LOOKUP_TIMEOUT_SECONDS = 3.0
-
-# GitHub's Markdown is a CommonMark superset, and its extensions (tables,
-# strikethrough, autolinked URLs) don't change what is code or a quote.
-_MARKDOWN = MarkdownIt("commonmark")
 
 
 @dataclass(frozen=True)
@@ -77,35 +71,17 @@ class GitHubMention:
         return (self.sender or {}).get("login")
 
 
-def _visible_text(body: str) -> str:
-    """The plain text of ``body``, as Markdown, outside code, quotes and links.
+def _strip_quoted_lines(text: str) -> str:
+    """Return ``text`` without its quoted (``>``) lines.
 
-    GitHub doesn't notify a mention in code or a quote, so neither does Hackbot:
-    a mention copied from an earlier comment, or ``@hackbot`` written as an
-    example, must not start a run. Code blocks and raw HTML never reach here;
-    every other non-text token (inline code, a link, emphasis, a line break)
-    becomes a space, so text either side of it can't join into a handle.
+    As for Phabricator, so a mention copied from an earlier comment doesn't
+    start a new run. Leading spaces are allowed, as GitHub's Markdown does.
+    Mentions in code still count: they're rare, and only an authorized user
+    can trigger a run anyway.
     """
-    parts = []
-    quote_depth = 0
-    for token in _MARKDOWN.parse(body):
-        if token.type == "blockquote_open":
-            quote_depth += 1
-        elif token.type == "blockquote_close":
-            quote_depth -= 1
-        elif token.type == "inline" and not quote_depth:
-            link_depth = 0
-            for child in token.children or ():
-                if child.type == "link_open":
-                    link_depth += 1
-                elif child.type == "link_close":
-                    link_depth -= 1
-                if child.type == "text" and not link_depth:
-                    parts.append(child.content)
-                else:
-                    parts.append(" ")
-            parts.append("\n")
-    return "".join(parts)
+    return "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith(">")
+    )
 
 
 def mentions(body: str | None, token: str) -> bool:
@@ -116,7 +92,7 @@ def mentions(body: str | None, token: str) -> bool:
     if not body or not token:
         return False
     pattern = rf"(?<![\w-]){re.escape(token)}(?![\w-])"
-    return re.search(pattern, _visible_text(body), re.IGNORECASE) is not None
+    return re.search(pattern, _strip_quoted_lines(body), re.IGNORECASE) is not None
 
 
 def _format_comment(body: str, attributes: Mapping[str, object]) -> str:

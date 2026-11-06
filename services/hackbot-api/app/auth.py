@@ -70,17 +70,19 @@ async def require_github_signature(
 ) -> None:
     """Reject the request unless GitHub's webhook signature is valid.
 
-    The App and its secret are optional until deployed, so a missing one
-    answers 503 (not configured) rather than 401 (bad signature).
+    The App is optional until deployed, so without it the webhook answers 503
+    (not configured) rather than 401 (bad signature). With it, the secret is
+    required at startup.
     """
-    secret = settings.github and settings.github.webhook_secret
-    if not secret:
+    if settings.github is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GitHub webhook is not configured",
         )
     raw = await request.body()
-    if not verify_github_signature(raw, x_hub_signature_256, secret):
+    if not verify_github_signature(
+        raw, x_hub_signature_256, settings.github.webhook_secret
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing webhook signature",
