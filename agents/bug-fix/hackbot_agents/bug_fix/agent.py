@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
+from hackbot_runtime.actions.bugzilla import update_bug
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
@@ -75,20 +76,18 @@ def select_workflow(
     )
 
 
-def _record_needinfo_clear(
+async def _record_needinfo_clear(
     recorder: ActionsRecorder, *, bug_id: int, flag_id: int | None
 ) -> None:
     """Record the clear after responding to a Bugzilla needinfo webhook."""
     if flag_id is None or not recorder.actions:
         return
 
-    recorder.record(
-        "bugzilla.update_bug",
-        {
-            "bug_id": bug_id,
-            "changes": {"flags": [{"id": flag_id, "status": "X"}]},
-        },
-        reasoning="Clear the needinfo flag that triggered this response.",
+    await update_bug(
+        recorder,
+        bug_id=bug_id,
+        changes={"flags": [{"id": flag_id, "status": "X"}]},
+        reasoning="Clear the needinfo flag that triggered this response."
     )
 
 
@@ -239,7 +238,7 @@ async def run_bug_fix(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
         )
 
-    _record_needinfo_clear(
+    await _record_needinfo_clear(
         actions_recorder,
         bug_id=bug,
         flag_id=bugzilla_needinfo_flag_id,

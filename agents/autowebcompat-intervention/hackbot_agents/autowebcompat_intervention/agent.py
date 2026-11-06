@@ -30,6 +30,7 @@ from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import ActionsRecorder
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.phabricator import add_comment
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BaseModel
@@ -563,12 +564,10 @@ async def run_autowebcompat_intervention(
             }
 
             if revision_id is not None and patch_dropped:
-                actions_recorder.record(
-                    "phabricator.add_comment",
-                    {
-                        "revision_id": revision_id,
-                        "text": dropped_updates_explanation[failure_reason],
-                    },
+                await add_comment(
+                    actions_recorder,
+                    revision_id=revision_id,
+                    text=dropped_updates_explanation[failure_reason],
                     reasoning=f"The update was dropped: {failure_reason}.",
                 )
 
