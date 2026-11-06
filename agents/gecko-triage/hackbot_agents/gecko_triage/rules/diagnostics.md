@@ -136,8 +136,9 @@ decision rule between "Needs info" and "Analyzed".
 
 When the bug turns on what a web API, codec or container must do (a reporter says
 Firefox is wrong, or the behavior may be as intended), spawn the `spec_checker` subagent
-with the API or format, the observed behavior and the expected behavior. It follows
-fx-bug-toolkit's `spec-check` skill and ends with a `SPEC:` line:
+with the API or format, the observed behavior and the expected behavior. When the team's
+in-tree docs name the spec of that area, give `spec_checker` that spec too.
+`spec_checker` follows fx-bug-toolkit's `spec-check` skill and ends with a `SPEC:` line:
 
 | Verdict                      | Next                                                 |
 | ---------------------------- | ---------------------------------------------------- |

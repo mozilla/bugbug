@@ -61,6 +61,12 @@ The model reads the general rules, the team rules and the team's in-tree docs
 general rule, it wins. Where an in-tree doc differs from the rules, the rules win. A
 `tree_docs` file that is not in the Firefox checkout fails the run.
 
+Every team splits its knowledge the same way. The facts of the team's area live in the
+Firefox tree, in docs that the team owns, and `tree_docs` lists them: how to read a
+report, the diagnostics, the specs. The team's rule files keep only the triage
+decisions, and they point to the in-tree docs in place of repeating their facts. The
+media team lists `dom/media/docs/Diagnostics.md` and `dom/media/docs/Specs.md`.
+
 | General, in `rules/`   | Team, in `teams/<team>/rules/`                                                       |
 | ---------------------- | ------------------------------------------------------------------------------------ |
 | `workflow.md`          | `classify.md`: the team's bug types and their components                             |

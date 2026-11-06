@@ -8,9 +8,10 @@ label = "Firefox Audio/Video"
 # expert's area matches, and the code's history names nobody.
 needinfo_fallback = ["alwu@mozilla.com", "padenot@mozilla.com", "jmathies@mozilla.com"]
 
-# The in-tree media diagnostics page: what in a media report shows the cause. The tree
-# owns it (bug 2086288), so the team's rules keep only the triage decisions.
-tree_docs = ["dom/media/docs/Diagnostics.md"]
+# The in-tree media pages: what in a media report shows the cause, and the
+# spec of each media area. The tree owns these facts, so the team's rules keep only the
+# triage decisions.
+tree_docs = ["dom/media/docs/Diagnostics.md", "dom/media/docs/Specs.md"]
 
 [comment]
 # A request that names this word must carry `capture_block` verbatim. The agent writes a

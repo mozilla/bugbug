@@ -868,19 +868,21 @@ def test_the_first_run_rule_names_the_agent_comment_tag():
     assert f"`tags` field holds `{AGENT_TAG}`" in _read("workflow.md")
 
 
-def test_the_media_team_reads_the_in_tree_diagnostics_page():
-    assert (
-        "dom/media/docs/Diagnostics.md"
-        in load_team(team_dir(TEAMS_DIR, "media") / "team.toml").tree_docs
+def test_the_media_team_reads_its_in_tree_docs():
+    assert load_team(team_dir(TEAMS_DIR, "media") / "team.toml").tree_docs == (
+        "dom/media/docs/Diagnostics.md",
+        "dom/media/docs/Specs.md",
     )
 
 
 def test_an_in_tree_doc_is_a_rule_file_from_the_checkout(tmp_path):
+    from conftest import write_tree_docs
     from hackbot_agents.gecko_triage import agent
 
     doc = tmp_path / "dom/media/docs/Diagnostics.md"
     doc.parent.mkdir(parents=True)
     doc.write_text("# Diagnosing media bug reports\n\nIn-tree text.")
+    write_tree_docs(tmp_path)
     files = agent.rule_files(tmp_path)
     assert ("tree", doc) in files
     prompt = load_system_prompt(tmp_path)
