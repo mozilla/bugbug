@@ -30,9 +30,8 @@ from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import ActionsRecorder
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
-from hackbot_runtime.actions.phabricator import add_comment
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
+from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES, add_comment
 from pydantic import BaseModel
 
 from .browser import FirefoxBrowsers

@@ -20,9 +20,9 @@ from claude_agent_sdk import (
     McpServerConfig,
     ResultMessage,
 )
-from hackbot_runtime.actions.bugzilla import update_bug
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.bugzilla import update_bug
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 
@@ -87,7 +87,7 @@ async def _record_needinfo_clear(
         recorder,
         bug_id=bug_id,
         changes={"flags": [{"id": flag_id, "status": "X"}]},
-        reasoning="Clear the needinfo flag that triggered this response."
+        reasoning="Clear the needinfo flag that triggered this response.",
     )
 
 
