@@ -98,6 +98,13 @@ trees = ["dom/media/webcodecs/"]
 doc_trees = ["dom/media/"]
 notes = "The WebCodecs API."
 
+[[components]]
+product = "Core"
+component = "Web Speech"
+trees = ["dom/media/webspeech/"]
+doc_trees = ["dom/media/"]
+notes = "The Web Speech API: speech synthesis and speech recognition."
+
 # The developers the agent may needinfo without moving the bug, one entry per person. The
 # agent asks one only when the bug is in one of the areas and the `when` condition holds.
 [[needinfo_experts]]
@@ -182,4 +189,4 @@ meaning = "getUserMedia, MediaRecorder, camera, microphone"
 
 [[issue_types]]
 value = "web-api"
-meaning = "Web Audio, Web Codecs, media element spec behavior"
+meaning = "Web Audio, Web Codecs, Web Speech, media element spec behavior"

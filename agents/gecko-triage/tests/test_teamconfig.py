@@ -268,7 +268,7 @@ MEDIA_ISSUE_TYPES = [
     ),
     ("drm", "EME, Widevine, PlayReady, GMP"),
     ("capture", "getUserMedia, MediaRecorder, camera, microphone"),
-    ("web-api", "Web Audio, Web Codecs, media element spec behavior"),
+    ("web-api", "Web Audio, Web Codecs, Web Speech, media element spec behavior"),
 ]
 
 
@@ -381,7 +381,7 @@ def test_terms_need_the_meta_keyword():
 
 
 def test_the_shipped_files_load():
-    assert len(TEAM.components) == 8
+    assert len(TEAM.components) == 9
     assert "about:logging" in TEAM.comment.capture_block
     assert TERMS.keywords.meta == "meta"
     assert len(PEOPLE.qa_accounts) == 1
