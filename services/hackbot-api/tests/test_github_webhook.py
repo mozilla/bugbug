@@ -527,6 +527,21 @@ def test_route_rejects_missing_signature(client):
     assert resp.status_code == 401
 
 
+@pytest.mark.parametrize("header", ["X-GitHub-Event", "X-GitHub-Delivery"])
+def test_route_rejects_signed_delivery_missing_header(client, api, header):
+    # GitHub sends both on every delivery, so a request without one is malformed.
+    body = json.dumps(_issue_comment()).encode()
+    headers = {
+        "X-GitHub-Event": "issue_comment",
+        "X-GitHub-Delivery": "72d3162e-cc78-11e3-81ab-4c9367dc0958",
+        "X-Hub-Signature-256": _sign(body),
+    }
+    del headers[header]
+    resp = client.post("/webhooks/github", content=body, headers=headers)
+    assert resp.status_code == 422
+    assert api.calls == []
+
+
 def test_route_unavailable_without_secret(client, monkeypatch, pem, api):
     monkeypatch.setattr(settings, "github", _app_settings(pem, webhook_secret=None))
     resp = _post(client, "issue_comment", _issue_comment())

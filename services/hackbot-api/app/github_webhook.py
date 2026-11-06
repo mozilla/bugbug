@@ -138,7 +138,7 @@ def _format_comment(body: str, attributes: Mapping[str, object]) -> str:
 
 
 def detect_mention(
-    event: str | None,
+    event: str,
     payload: Mapping[str, Any],
     *,
     mention_token: str,

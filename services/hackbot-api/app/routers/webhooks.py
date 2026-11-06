@@ -276,8 +276,8 @@ async def github_webhook(
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
     github_app: Annotated[GitHubApp, Depends(get_github_app)],
     authorizer: Annotated[GitHubAuthorizer, Depends(get_github_authorizer)],
-    x_github_event: Annotated[str | None, Header()] = None,
-    x_github_delivery: Annotated[str | None, Header()] = None,
+    x_github_event: Annotated[str, Header()],
+    x_github_delivery: Annotated[str, Header()],
 ) -> dict:
     """Trigger a bug-fix run for an ``@hackbot`` mention on a pull request."""
     if x_github_event == "ping":
@@ -322,7 +322,7 @@ async def _trigger_github_mention(
     api_client: HackbotClient,
     github_app: GitHubApp,
     authorizer: GitHubAuthorizer,
-    x_github_delivery: str | None,
+    x_github_delivery: str,
 ) -> dict:
     """Authorize ``mention``, resolve its PR's head and trigger the run."""
     if not await authorizer.is_authorized(
