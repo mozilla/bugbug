@@ -211,6 +211,9 @@ def get_fields(
     if not ids:
         return bugs
 
+    if isinstance(include_fields, str):
+        include_fields = [include_fields]
+
     def bughandler(bug: BugDict) -> None:
         bugs[int(bug["id"])] = bug
 
