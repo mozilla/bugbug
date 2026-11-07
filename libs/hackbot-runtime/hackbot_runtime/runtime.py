@@ -5,6 +5,7 @@ import os
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
+from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
@@ -57,6 +58,14 @@ def _configure_sentry(entrypoint: Callable) -> None:
         return
     sentry_sdk.init(dsn=dsn)
     sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
+
+
+def _agent_version(entrypoint: Callable) -> str | None:
+    """The version in the agent's pyproject.toml, or None when it isn't installed."""
+    try:
+        return metadata.version(f"hackbot-agent-{resolve_agent_name(entrypoint)}")
+    except metadata.PackageNotFoundError:
+        return None
 
 
 def _configure_logging() -> None:
@@ -147,7 +156,9 @@ def _publish_log(ctx: HackbotContext) -> None:
         ctx.publish_file(_AGENT_LOG_KEY, ctx.log_path, "text/plain; charset=utf-8")
 
 
-def _finish(ctx: HackbotContext, outcome: object) -> int:
+def _finish(
+    ctx: HackbotContext, outcome: object, agent_version: str | None = None
+) -> int:
     """Write summary.json from the agent's outcome and return the exit code.
 
     ``outcome`` is the agent's :class:`HackbotAgentResult` on success, or the
@@ -169,6 +180,7 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
+    payload["agent_version"] = agent_version
 
     try:
         _publish_log(ctx)
@@ -215,7 +227,8 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
         log.exception("Agent raised an exception")
         outcome = exc
 
-    raise SystemExit(_finish(ctx, outcome))
+    agent_version = _agent_version(entrypoint)
+    raise SystemExit(_finish(ctx, outcome, agent_version))
 
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
@@ -236,4 +249,5 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
         log.exception("Agent raised an exception")
         outcome = exc
 
-    raise SystemExit(_finish(ctx, outcome))
+    agent_version = _agent_version(entrypoint)
+    raise SystemExit(_finish(ctx, outcome, agent_version))
