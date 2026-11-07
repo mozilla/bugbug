@@ -99,12 +99,12 @@ use a key that cannot read private bugs or private comments.
    fails the run. A history read that does not end in 2 minutes gives no history, and the
    agent runs. The user prompt gives the model the bug's fields and its comments from this
    read, so the model does not read them again. `render_bug` in `agent.py` gives them as
-   escaped JSON, so no comment text can pose as another comment, another author or a rule
-   file. It filters no comment by its privacy mark: the Bugzilla proxy controls which
-   comments a key can read. Over `COMMENTS_CAP` characters it leaves
-   out the oldest automation comments, then the oldest other ones, keeps comment 0 and the
-   newest, and names the left-out comments so the model can read them with
-   `get_bug_comments`.
+   escaped JSON through `agent_tools.bugzilla_prompt`, so no comment text can pose as
+   another comment, another author or a rule file. It filters no comment by its privacy
+   mark: the Bugzilla proxy controls which comments a key can read. Over `COMMENTS_CAP`
+   characters it leaves out the oldest automation comments, then the oldest other ones,
+   keeps comment 0 and the newest, and names the left-out comments so the model can read
+   them with `get_bug_comments`.
 3. `preflight.py` ends the run, at zero cost, on the skips `docs/bugzilla.md` lists. A
    skipped run is `status: "ok"` with `num_turns: 0`, `decision: "skipped"` and the
    reason in `result`.

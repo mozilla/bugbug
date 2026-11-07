@@ -21,6 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 
+from agent_tools.bugzilla_prompt import is_automation
 from claude_agent_sdk import McpServerConfig
 
 from .broker_client import Call, broker_session
@@ -45,9 +46,6 @@ BUG_FIELDS = (
 )
 # Bugzilla's assignee for a bug that nobody owns.
 UNASSIGNED = "nobody@mozilla.org"
-# BMO automation logins: `*.tld` (release-mgmt-account-bot@mozilla.tld) and `*.bugs`
-# (Treeherder's intermittent-bug-filer@mozilla.bugs).
-AUTOMATION_SUFFIXES = (".tld", ".bugs")
 # A hung broker must not hold the job until the job timeout. The bug read fails the
 # lookup at STATE_TIMEOUT; the history read only gives up at HISTORY_TIMEOUT.
 STATE_TIMEOUT = 180
@@ -165,7 +163,7 @@ class TriageState:
             if n.requestee in self.bot_logins
             and n.setter
             and n.setter not in self.bot_logins
-            and not n.setter.endswith(AUTOMATION_SUFFIXES)
+            and not is_automation(n.setter)
         )
 
     @cached_property
@@ -269,7 +267,7 @@ class TriageState:
         """An alias of the bot, or a BMO automation account other than `BOT_ACCOUNT`."""
         who = _lower(who)
         return who in self.bot_aliases_lower or (
-            who.endswith(AUTOMATION_SUFFIXES) and who != _lower(BOT_ACCOUNT)
+            is_automation(who) and who != _lower(BOT_ACCOUNT)
         )
 
     @cached_property
