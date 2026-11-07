@@ -50,6 +50,22 @@ export function TriggerForm() {
   const [upliftSources, setUpliftSources] = useState(
     () => params.get("sources") ?? ""
   );
+  const [dataset, setDataset] = useState(() => params.get("dataset") ?? "");
+  const [harness, setHarness] = useState(
+    () => params.get("harness") ?? "claude_code"
+  );
+  const [reps, setReps] = useState(() => params.get("reps") ?? "");
+  const [evalTasks, setEvalTasks] = useState(() => params.get("tasks") ?? "");
+  const [exampleTimeout, setExampleTimeout] = useState(
+    () => params.get("example_timeout_min") ?? ""
+  );
+  const [weaveProject, setWeaveProject] = useState(
+    () => params.get("weave_project") ?? ""
+  );
+  const [evalLabel, setEvalLabel] = useState(() => params.get("label") ?? "");
+  const [judgeRubric, setJudgeRubric] = useState(
+    () => params.get("judge_rubric") ?? ""
+  );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
@@ -62,6 +78,7 @@ export function TriggerForm() {
   const isTestRepairFixAgent = agent === "test-repair-fix";
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
+  const isEvaluatorAgent = agent === "evaluator";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -143,6 +160,28 @@ export function TriggerForm() {
       inputs.target_branch = targetBranch.trim();
       inputs.sources = parsed.sources;
       if (hasBugId) inputs.bug_id = parsedBugId;
+    } else if (isEvaluatorAgent) {
+      if (!dataset.trim() || !judgeRubric.trim()) {
+        setError("Enter a Weave dataset ref and a judge rubric ref.");
+        return;
+      }
+      inputs.dataset = dataset.trim();
+      inputs.harness = harness;
+      const tasks = evalTasks
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (tasks.length) inputs.tasks = tasks;
+      for (const [key, value] of [
+        ["reps", reps],
+        ["example_timeout_min", exampleTimeout],
+      ] as const) {
+        const n = Number.parseInt(value, 10);
+        if (Number.isInteger(n) && n > 0) inputs[key] = n;
+      }
+      if (weaveProject.trim()) inputs.weave_project = weaveProject.trim();
+      inputs.judge_rubric = judgeRubric.trim();
+      if (evalLabel.trim()) inputs.label = evalLabel.trim();
     } else if (!isWebcompatAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID or bug URL.");
@@ -191,9 +230,11 @@ export function TriggerForm() {
               ? featureName.trim()
               : isUpliftAgent
                 ? `uplift to ${targetBranch.trim()}`
-                : hasBugId
-                  ? `bug ${parsedBugId}`
-                  : "inline report";
+                : isEvaluatorAgent
+                  ? `eval ${dataset.trim()} (${harness})`
+                  : hasBugId
+                    ? `bug ${parsedBugId}`
+                    : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -246,7 +287,8 @@ export function TriggerForm() {
       {!needsFailureTasks &&
         !isTestRepairFixAgent &&
         !isTestPlanAgent &&
-        !isUpliftAgent && (
+        !isUpliftAgent &&
+        !isEvaluatorAgent && (
           <div className="field">
             <label htmlFor="bugId">
               {isWebcompatAgent
@@ -373,6 +415,100 @@ export function TriggerForm() {
               placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
               value={bugId}
               onChange={(e) => setBugId(e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      {isEvaluatorAgent && (
+        <>
+          <div className="field">
+            <label htmlFor="dataset">Weave dataset *</label>
+            <input
+              id="dataset"
+              placeholder="e.g. my-dataset:v1"
+              value={dataset}
+              onChange={(e) => setDataset(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="row">
+            <div className="field">
+              <label htmlFor="harness">Harness</label>
+              <select
+                id="harness"
+                value={harness}
+                onChange={(e) => setHarness(e.target.value)}
+              >
+                <option value="claude_code">claude_code</option>
+                <option value="codex">codex</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="reps">Reps (optional)</label>
+              <input
+                id="reps"
+                inputMode="numeric"
+                placeholder="1"
+                value={reps}
+                onChange={(e) => setReps(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="exampleTimeout">
+                Minutes per example (optional)
+              </label>
+              <input
+                id="exampleTimeout"
+                inputMode="numeric"
+                placeholder="30"
+                value={exampleTimeout}
+                onChange={(e) => setExampleTimeout(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="evalTasks">
+              Task ids (optional, comma-separated)
+            </label>
+            <input
+              id="evalTasks"
+              placeholder="all"
+              value={evalTasks}
+              onChange={(e) => setEvalTasks(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="evalLabel">Label (optional)</label>
+            <input
+              id="evalLabel"
+              placeholder="e.g. full-task-prompt"
+              maxLength={64}
+              value={evalLabel}
+              onChange={(e) => setEvalLabel(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="judgeRubric">Judge rubric ref</label>
+            <input
+              id="judgeRubric"
+              placeholder="e.g. judge-rubric:v1"
+              value={judgeRubric}
+              onChange={(e) => setJudgeRubric(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="weaveProject">Weave project (optional)</label>
+            <input
+              id="weaveProject"
+              placeholder="moz-bugbug/hackbot-evals"
+              value={weaveProject}
+              onChange={(e) => setWeaveProject(e.target.value)}
             />
           </div>
         </>

@@ -61,6 +61,7 @@ on:
           - agents/autowebcompat-repro
           - agents/bug-fix
           - agents/build-repair
+          - agents/evaluator
           - agents/frontend-triage
           - agents/test-plan-generator
           - agents/test-repair
