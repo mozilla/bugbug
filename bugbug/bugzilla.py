@@ -210,6 +210,9 @@ def get_fields(
     ids = sorted({int(bug_id) for bug_id in bug_ids})
     if not ids:
         return bugs
+        
+    if isinstance(include_fields, str):
+        include_fields = [include_fields]
 
     def bughandler(bug: BugDict) -> None:
         bugs[int(bug["id"])] = bug
