@@ -3,14 +3,14 @@
 # file in place of this one, for example a local file with every limit at 0.
 
 [turns]
-main = 60
+main = 40
 investigator = 30
-bug_investigator = 50
-profile_analyst = 30
-log_analyst = 30
+bug_investigator = 160
+profile_analyst = 60
+log_analyst = 40
 spec_checker = 30
-duplicate_hunter = 16
-close_verifier = 25
+duplicate_hunter = 24
+close_verifier = 45
 
 [budget]
-max_usd = 5.0
+max_usd = 12.0

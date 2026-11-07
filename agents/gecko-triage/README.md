@@ -310,8 +310,8 @@ and of each subagent, and the cost limit of a run. A limit stops a session that 
 0 means no limit. `TURN_LIMITS_FILE` names another file in place of this one, for
 example a local file with every limit at 0. Each run records the tool calls of each
 session in `findings.steps`, and each subagent that stopped at its limit in
-`findings.limit_hits`. A tool call count is an estimate of the turns: parallel tool calls
-in one reply are one turn, and the last reply has no tool call. `limit_hits` is the true
+`findings.limit_hits`. The turn count is about the tool call count: each tool result
+starts a new turn, also when one reply makes parallel tool calls. `limit_hits` is the true
 record of a session that stopped at its limit. Together they show what limits a deploy
 needs.
 
