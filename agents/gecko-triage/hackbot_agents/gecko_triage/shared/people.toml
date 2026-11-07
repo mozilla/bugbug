@@ -1,0 +1,8 @@
+# How the agent tells Mozilla staff and QA apart. The same for every team.
+
+# A bug filed from this domain by someone who is not QA is written for a developer.
+employee_domain = "@mozilla.com"
+# A real name with one of these marks a QA account.
+qa_name_markers = ["QA", "Quality", "Test Engineering", "Testing"]
+# QA accounts the name markers miss.
+qa_accounts = ["ctanase@mozilla.com"]

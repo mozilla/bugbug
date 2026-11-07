@@ -68,7 +68,8 @@ it wants in its `config.py`, by their MCP name (`mcp__<server>__<tool>`, e.g.
 | ------------- | ----------------------- | --------------------------------------------------------------- |
 | `bugzilla`    | `search_bugs`           | Bugs matching raw REST query parameters                         |
 |               | `get_bugs`              | One or more bugs by id, in a single bulk request                |
-|               | `get_bug_comments`      | Every comment on a bug                                          |
+|               | `get_bug_comments`      | A bug's comments, all or one page by comment number             |
+|               | `get_bug_history`       | Who changed which fields of a bug, and when                     |
 |               | `get_bug_attachments`   | A bug's attachments                                             |
 |               | `download_attachment`   | One attachment decoded to a local file                          |
 | `phabricator` | `get_revision`          | A revision's title, summary, status, reviewers                  |
