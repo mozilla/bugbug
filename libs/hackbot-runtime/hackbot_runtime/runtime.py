@@ -59,6 +59,13 @@ def _configure_sentry(entrypoint: Callable) -> None:
     sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
 
 
+def configure_broker_sentry(entrypoint: Callable) -> None:
+    # The SDK reads SENTRY_DSN, which the API sets per execution; without it
+    # this is a no-op. Keep the broker's secrets out of Sentry events.
+    sentry_sdk.init(include_local_variables=False)
+    sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
+
+
 def _configure_logging() -> None:
     if not logging.getLogger().handlers:
         logging.basicConfig(
