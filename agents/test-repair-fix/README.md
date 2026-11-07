@@ -53,9 +53,11 @@ and the patch to the culprit's author, linking back to the analysis run (see
 ## Test the agent
 
 Run [test-repair](../test-repair/README.md#test-the-agent) first, then point this
-agent at its run id, the directory name under `~/hackbot/artifacts/`:
+agent at its run id, the directory name under `~/hackbot/artifacts/`. From the repository root, run the
+following commands with that ID as `PARENT_RUN_ID`:
 
 ```sh
+cd agents/test-repair-fix
 PARENT_RUN_ID=local-20261020-120000-abcdef \
-  docker compose up test-repair-fix-agent --build
+  docker compose --env-file ../../.env up test-repair-fix-agent --build
 ```

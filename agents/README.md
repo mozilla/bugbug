@@ -55,8 +55,7 @@ It's an easy mistake to make, and a confusing one to debug.
 ## Running an agent locally
 
 Each agent ships a `compose.yml` so you can run it on your machine the same way it
-ships — no platform, no uploader. The reference `bug-fix` agent is already wired into
-the repo's root `docker-compose.yml`, so running it is three steps:
+ships — no platform, no uploader. To run the bug-fix agent locally, follow these two steps:
 
 1. **Create a `.env` file in the repo root** with the secrets the agent needs:
 
@@ -67,25 +66,14 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    BUGZILLA_API_KEY=...
    ```
 
-   `docker compose` reads `.env` from the directory you run it in automatically, so
-   these values flow into the services defined in the agent's `compose.yml`.
+   The command in step 2 uses `--env-file ../../.env` to load the `.env` file from the repository root.
 
-2. **Make sure the agent's `compose.yml` is included** from the root `docker-compose.yml`.
-   For `bug-fix` this is already in place:
-
-   ```yaml
-   # docker-compose.yml
-   include:
-     - path: agents/bug-fix/compose.yml
-   ```
-
-   When you add a new agent, add its `compose.yml` to this `include` list the same way.
-
-3. **Run it**, passing the per-run inputs inline. `BUG_ID` is the only input the
+2. **Run it**, passing the per-run inputs inline. `BUG_ID` is the only input the
    `bug-fix` agent requires:
 
    ```sh
-   BUG_ID=1234567 docker compose up bug-fix-agent --build
+   cd agents/bug-fix
+   BUG_ID=1234567 docker compose --env-file ../../.env up bug-fix-agent --build
    ```
 
    Here `bug-fix-agent` is the service name defined in the agent's `compose.yml` —

@@ -143,11 +143,11 @@ BUGZILLA_API_URL=https://bugzilla.mozilla.org/rest
 BUGZILLA_API_KEY=...
 ```
 
-Then run from the repo root — the root `docker-compose.yml` includes this
-agent's `compose.yml`, so the service and its broker sidecar are available:
+From the repository root, run the following commands:
 
 ```sh
-BUG_ID=2014702 docker compose up frontend-triage-agent --build
+cd agents/frontend-triage
+BUG_ID=2014702 docker compose --env-file ../../.env up frontend-triage-agent --build
 ```
 
 The first run shallow-clones mozilla-central into a Docker volume: expect several
