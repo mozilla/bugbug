@@ -9,6 +9,7 @@ from claude_agent_sdk import SystemMessage
 from conftest import (
     BUG,
     NOW,
+    REACTION_FOOTER,
     FakeClient,
     _fake_fetch,
     _record_verdict,
@@ -26,6 +27,7 @@ from hackbot_agents.gecko_triage import (
 from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
+from hackbot_agents.gecko_triage.config import BOT_ACCOUNT
 from hackbot_agents.gecko_triage.investigations import Investigations
 from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_agents.gecko_triage.steps import Steps
@@ -1618,6 +1620,14 @@ def test_a_long_thread_then_leaves_out_the_oldest_other_comments():
     kept = [c["count"] for c in _comments_in(text)]
     assert 99 not in kept and kept[0] == 0 and kept[-1] == 9
     assert kept == [0, *range(10 - len(kept) + 1, 10)]
+
+
+def test_the_prompt_shows_no_runtime_footer_to_copy():
+    # The model copied the footer of an earlier agent comment into a new one.
+    own = _comment(4, f"Analysis.{REACTION_FOOTER}", creator=BOT_ACCOUNT)
+    text = agent.render_bug({"id": BUG}, [_comment(0), own])
+    assert _comments_in(text)[1]["text"] == "Analysis."
+    assert "please use the" not in text
 
 
 def test_the_agent_own_comments_are_not_left_out_as_automation():

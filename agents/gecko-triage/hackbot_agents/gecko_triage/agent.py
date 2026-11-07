@@ -37,6 +37,7 @@ from claude_agent_sdk import (
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER, without_footer
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 from hackbot_runtime.searchfox import (
@@ -618,11 +619,23 @@ def render_bug(
     bot_aliases: frozenset[str] = frozenset(),
     cap: int = COMMENTS_CAP,
 ) -> str:
-    """The bug's fields and its comments, as `bugzilla_prompt.render_bug` gives them."""
+    """The bug's fields and its comments, as `bugzilla_prompt.render_bug` gives them.
+
+    The runtime's footer is left out of every comment, so the model does not copy it.
+    The `get_bug_comments` tool still shows it; `add_comment` then keeps one footer.
+    """
     aliases = frozenset(a.strip().lower() for a in bot_aliases)
+    shown = [
+        dict(c, text=without_footer(text))
+        if isinstance(c, dict)
+        and isinstance(text := c.get("text"), str)
+        and COMMENT_FOOTER in text
+        else c
+        for c in comments
+    ]
     return bugzilla_prompt.render_bug(
         bug,
-        comments,
+        shown,
         cap=cap,
         read_from="read through the broker when the run started",
         drop_first=lambda login: _is_automation(login, aliases),

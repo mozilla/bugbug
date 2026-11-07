@@ -69,7 +69,7 @@ from pathlib import Path
 
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
-from hackbot_runtime.actions.bugzilla import COMMENT_FOOTER_SEPARATOR
+from hackbot_runtime.actions.bugzilla import without_footer
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 from hackbot_runtime.searchfox import permalink_hook, permalink_prefix
 
@@ -172,10 +172,9 @@ def block_placeholder_hook(action: dict) -> None:
 
 def split_runtime_footer(text: str) -> tuple[str, str]:
     """``(agent's text, runtime's trailer)``; the trailer is empty when absent."""
-    head, sep, tail = text.rpartition(COMMENT_FOOTER_SEPARATOR)
-    if not sep:
-        return text, ""
-    return head, sep + tail
+    head = without_footer(text)
+    tail = text[len(head) :]
+    return (head, tail) if tail.strip() else (text, "")
 
 
 _FENCED_CODE = re.compile(
