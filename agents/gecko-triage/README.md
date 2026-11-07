@@ -97,11 +97,11 @@ use a key that cannot read private bugs or private comments.
 2. `state.py` reads the bug, all its comments and its open needinfos. A bug it cannot read
    fails the run, so BugBot retries it. A bug read that does not end in 3 minutes also
    fails the run. A history read that does not end in 2 minutes gives no history, and the
-   agent runs. The user prompt gives the model the bug's fields and its public comments
-   from this read, so the model does not read them again. `render_bug` in `agent.py` gives
-   them as escaped JSON, so no comment text can pose as another comment, another author or
-   a rule file. It drops a comment that is not marked public, and fails the run when a
-   thread with comments has none marked public. Over `COMMENTS_CAP` characters it leaves
+   agent runs. The user prompt gives the model the bug's fields and its comments from this
+   read, so the model does not read them again. `render_bug` in `agent.py` gives them as
+   escaped JSON, so no comment text can pose as another comment, another author or a rule
+   file. It filters no comment by its privacy mark: the Bugzilla proxy controls which
+   comments a key can read. Over `COMMENTS_CAP` characters it leaves
    out the oldest automation comments, then the oldest other ones, keeps comment 0 and the
    newest, and names the left-out comments so the model can read them with
    `get_bug_comments`.
@@ -242,8 +242,8 @@ comment in review.
 The main agent, `investigator`, `bug_investigator` and `log_analyst` read attachments
 with the `fetch_attachment` tool (`attachments.py`), an in-process MCP server bound to the
 triaged bug. It reads the attachment anonymously from `BUGZILLA_API_URL` (default
-`https://bugzilla.mozilla.org/rest`) and refuses a private one, one of another bug and one
-over 64 MiB. It writes to `/tmp/gecko-triage-attachments/bug-<bug>-<attachment>/` and adds
+`https://bugzilla.mozilla.org/rest`), so an attachment that the anonymous read cannot get
+fails. It refuses an attachment of another bug and one over 64 MiB. It writes to `/tmp/gecko-triage-attachments/bug-<bug>-<attachment>/` and adds
 a row to `/tmp/gecko-triage-attachments/manifest.jsonl`. A second fetch of the same
 attachment checks its metadata again, then returns the finished copy; a result that a
 later call may improve (`retry`, such as a missing ffmpeg or a timeout) is not kept. It unpacks gzip, zip and tar files with caps

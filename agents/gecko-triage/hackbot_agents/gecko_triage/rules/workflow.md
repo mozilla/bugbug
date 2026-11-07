@@ -2,7 +2,7 @@
 
 ## Step 1: read the bug
 
-The bug's fields and its public comments are in the user prompt, under **The bug**. Do not
+The bug's fields and its comments are in the user prompt, under **The bug**. Do not
 fetch them again, unless the prompt says that comments were left out: then read those with
 `get_bug_comments` when they can matter. Read the comments of a long bug, here or on
 another bug, in pages with `start` and `limit`. `start` is a comment number. Take the next

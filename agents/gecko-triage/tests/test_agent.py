@@ -1571,31 +1571,20 @@ async def test_the_user_prompt_holds_the_bug_and_every_public_comment(
 
 
 @pytest.mark.parametrize("mark", [True, 1, None, "false"])
-async def test_a_comment_not_marked_public_never_reaches_the_prompt(
+async def test_every_comment_the_read_returns_reaches_the_prompt(
     fake_client, tmp_path, bug_new, comments_new, mark
 ):
-    secret = dict(
-        comments_new[-1], count=7, text="SECRET private text", is_private=mark
-    )
+    # Access control is the Bugzilla proxy's job: the agent filters no comment by its
+    # privacy mark.
+    other = dict(comments_new[-1], count=7, text="Another comment", is_private=mark)
     if mark is None:
-        del secret["is_private"]
-    state = TriageState(bug=bug_new, comments=[*comments_new, secret], now=NOW)
+        del other["is_private"]
+    state = TriageState(bug=bug_new, comments=[*comments_new, other], now=NOW)
     await _run(tmp_path, state)
-    assert "SECRET" not in fake_client.prompt
     assert [c["count"] for c in _comments_in(fake_client.prompt)] == [
-        c["count"] for c in comments_new
+        *(c["count"] for c in comments_new),
+        7,
     ]
-
-
-async def test_a_thread_with_no_public_comment_fails_the_run(
-    fake_client, tmp_path, bug_new, comments_new
-):
-    fake_client.prompt = None
-    hidden = [{k: v for k, v in c.items() if k != "is_private"} for c in comments_new]
-    state = TriageState(bug=bug_new, comments=hidden, now=NOW)
-    with pytest.raises(AgentError, match="marked public"):
-        await _run(tmp_path, state)
-    assert fake_client.prompt is None
 
 
 def test_a_bug_with_no_comments_renders_an_empty_list():

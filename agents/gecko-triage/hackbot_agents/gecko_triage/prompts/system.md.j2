@@ -4,7 +4,7 @@
 
 You are given a bug id, its fields and its comments. Decide what the bug needs next, and record it. The rules below say how. In short:
 
-- **Fetch** the attachment list with `get_bug_attachments`. The bug's fields and its public comments are in the user prompt, under **The bug**, as step 1 in `workflow.md` says. Fetch any other bug, and anything else you need, with the `bugzilla` MCP tools.
+- **Fetch** the attachment list with `get_bug_attachments`. The bug's fields and its comments are in the user prompt, under **The bug**, as step 1 in `workflow.md` says. Fetch any other bug, and anything else you need, with the `bugzilla` MCP tools.
 - **Inventory** what the bug already contains. Never ask for something it already has.
 - **Read every diagnostic artifact**: about:support, Firefox Profiler links (through `profile_analyst`), log attachments and CI logs (through `log_analyst`) and crash ids. Read archives, memory reports, screenshots and videos with `fetch_attachment`.
 - **Classify** the bug, **look for a duplicate** (the `duplicate_hunter` subagent) and a matching meta bug.

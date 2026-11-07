@@ -44,29 +44,9 @@ from hackbot_agents.gecko_triage.attachments import (
     sanitize_name,
     short,
 )
-from hackbot_agents.gecko_triage.visibility import marked_public
 
 BUG = 9000001
 ATT = 777
-
-
-# Bugzilla's privacy marks
-
-
-@pytest.mark.parametrize(
-    ("item", "public"),
-    [
-        ({"is_private": 0}, True),
-        ({"is_private": False}, True),
-        ({"is_private": 1}, False),
-        ({"is_private": True}, False),
-        ({"is_private": None}, False),
-        ({"is_private": "0"}, False),
-        ({}, False),
-    ],
-)
-def test_marked_public(item, public):
-    assert marked_public(item) is public
 
 
 # Names and kinds
@@ -816,11 +796,11 @@ def meta(**overrides):
 def test_attachment_refusal():
     assert attachment_refusal(meta(), BUG) is None
     assert "bug 1" in attachment_refusal(meta(bug_id=1), BUG)
-    assert "private" in attachment_refusal(meta(is_private=1), BUG)
-    assert "private" in attachment_refusal(meta(is_private=None), BUG)
+    # Access control is the Bugzilla proxy's job: no refusal by the privacy mark.
+    assert attachment_refusal(meta(is_private=1), BUG) is None
     no_mark = meta()
     del no_mark["is_private"]
-    assert "private" in attachment_refusal(no_mark, BUG)
+    assert attachment_refusal(no_mark, BUG) is None
     assert "64 MiB" in attachment_refusal(meta(size=65 * 1024 * 1024), BUG)
     assert "no size" in attachment_refusal(meta(size=None), BUG)
 
@@ -925,7 +905,6 @@ def http_error(code):
     ("overrides", "reason"),
     [
         ({"bug_id": 1}, "belongs to bug 1"),
-        ({"is_private": 1}, "private"),
         ({"missing": True}, "private or missing"),
         ({"size": 100 * 1024 * 1024}, "64 MiB"),
         ({"error": OSError("no network")}, "no network"),
@@ -945,13 +924,13 @@ def test_fetch_refuses_without_downloading_the_data(tmp_path, overrides, reason)
 def test_fetch_checks_the_data_reply_again(tmp_path):
     bugzilla = FakeBugzilla()
 
-    def turns_private(url, limit, deadline=None):
+    def moves_bug(url, limit, deadline=None):
         reply = bugzilla(url, limit)
         if "data" in fields(url):
-            reply["attachments"][str(ATT)]["is_private"] = 1
+            reply["attachments"][str(ATT)]["bug_id"] = 1
         return reply
 
-    assert "private" in fetch(tmp_path, turns_private)["refused"]
+    assert "belongs to bug 1" in fetch(tmp_path, moves_bug)["refused"]
 
 
 def test_fetch_asks_for_a_reply_no_larger_than_the_cap(tmp_path):
@@ -1164,11 +1143,10 @@ def test_the_tool_description_states_the_caps():
 # Review round 3
 
 
-def test_a_cached_copy_is_not_served_once_the_attachment_turns_private(tmp_path):
-    fetch(tmp_path, FakeBugzilla())
+def test_an_attachment_marked_private_is_read_like_any_other(tmp_path):
+    # Access control is the Bugzilla proxy's job: a read that returns it may use it.
     result = fetch(tmp_path, FakeBugzilla(is_private=1))
-    assert "private" in result["refused"] and "files" not in result
-    assert not (tmp_path / f"bug-{BUG}-{ATT}").exists()
+    assert "refused" not in result and result["files"]
 
 
 def test_a_truncated_cache_marker_is_a_miss(tmp_path):

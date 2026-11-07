@@ -55,7 +55,6 @@ which bugs a key can read.
 | ---------------- | ------------------------------------------------------------ |
 | `broker.py`      | Holds the Bugzilla key and serves the read tools             |
 | `attachments.py` | Downloads one attachment for `fetch_attachment`, with no key |
-| `visibility.py`  | Decides whether a comment or an attachment is marked public  |
 
 The broker leaves out `download_attachment`, because it would write the file inside the
 broker's container. Each request has a 60-second timeout and runs in a worker thread, so
@@ -65,9 +64,9 @@ one slow request does not stop the other clients.
 key. It checks that the attachment is public and belongs to the triaged bug. Then it
 downloads the file anonymously.
 
-The agent also reads public attachments of the bug it triages. It fetches each one
-anonymously from Bugzilla's REST API. It refuses a private attachment, an attachment of
-another bug and a file over 64 MiB. It unpacks gzip, zip and tar files, and about:memory
+The agent also reads the attachments of the bug it triages. It fetches each one
+anonymously from Bugzilla's REST API, so an attachment that the anonymous read cannot get
+fails. It refuses an attachment of another bug and a file over 64 MiB. It unpacks gzip, zip and tar files, and about:memory
 reports. For a video or a screen recording, it reads the codec, the resolution and the
 duration, and it looks at up to six frames. It reads up to 3 videos for each attachment.
 It also looks at screenshots. The agent's code never runs a file from an attachment. The

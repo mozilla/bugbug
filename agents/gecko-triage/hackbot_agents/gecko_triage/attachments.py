@@ -42,8 +42,6 @@ from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.registry import ToolDefinition, ToolError
 from pydantic import Field
 
-from .visibility import marked_public
-
 SERVER_NAME = "attachments"
 FETCH_ATTACHMENT_TOOL = f"mcp__{SERVER_NAME}__fetch_attachment"
 
@@ -104,7 +102,7 @@ ZIP_CD_ENTRY_SIZE = 46  # a central directory entry without its name, extra and 
 # Each attachment folder holds these beside the attachment, so it may not take the names.
 RESERVED_NAMES = frozenset({"extracted", "frames", RESULT_NAME})
 
-META_FIELDS = "id,bug_id,file_name,content_type,size,is_private"
+META_FIELDS = "id,bug_id,file_name,content_type,size"
 
 TAR_SUFFIXES = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz")
 TAR_TYPES = frozenset({"application/x-tar", "application/x-gtar"})
@@ -855,8 +853,6 @@ def attachment_refusal(
             f"attachment {att_id} belongs to bug {att.get('bug_id')}, "
             f"not the triaged bug {bug_id}"
         )
-    if not marked_public(att):
-        return f"attachment {att_id} is private"
     size = att.get("size")
     if not isinstance(size, int) or isinstance(size, bool):
         return f"attachment {att_id} reports no size"
