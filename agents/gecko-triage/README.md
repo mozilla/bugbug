@@ -296,7 +296,7 @@ that need a local machine. The skills' wiki steps are switched off. The session 
 write its investigation file, and the write guard allows writes only under `/tmp`. A
 PreToolUse hook refuses Write and Edit on any other path. The job container discards the
 file. On the host, it stays in /tmp. The image also has Node 24,
-`@firefox-devtools/profiler-cli@0.12.0`, `webspec-index` 0.14.0, `socorro-cli` 0.6.0 and,
+`@firefox-devtools/profiler-cli@0.13.0`, `webspec-index` 0.14.0, `socorro-cli` 0.6.0 and,
 on amd64, `treeherder-cli` 0.3.1, from their release builds (installed by
 `cargo-binstall`), and Debian's `ffmpeg`.
 
