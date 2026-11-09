@@ -3,7 +3,9 @@
 from unittest.mock import AsyncMock
 
 import httpx
-from app.bugzilla_authorization import AUTHORIZED_GROUP_NAME, BugzillaAuthorizer
+from app.bugzilla_authorization import BugzillaAuthorizer
+
+AUTHORIZED_GROUP_NAME = "authorized-group"
 
 BUGZILLA_API_KEY = "test-bugzilla-api-key"
 

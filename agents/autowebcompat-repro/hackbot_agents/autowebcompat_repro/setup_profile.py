@@ -1,7 +1,5 @@
 """Build a Firefox profile, optionally preinstalling AMO extensions."""
 
-from __future__ import annotations
-
 import json
 import logging
 import shutil

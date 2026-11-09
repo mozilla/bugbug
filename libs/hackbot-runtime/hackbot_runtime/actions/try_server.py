@@ -1,7 +1,5 @@
 """Try-server-domain recordable actions."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
 from agent_tools.registry import ToolError, tool, tools_in
@@ -95,15 +93,6 @@ async def push(
             ),
         ),
     ] = None,
-    ref: Annotated[
-        str | None,
-        Field(
-            description=(
-                "Label for this action so a later one can use "
-                "{{actions.<ref>.url}} to link this push."
-            ),
-        ),
-    ] = None,
 ) -> str:
     """Run your changes on the Firefox try server.
 
@@ -119,9 +108,7 @@ async def push(
     This records the push for review rather than performing it, so you will not
     see the results.
 
-    Always set ``ref`` so a later action in the same run can link the new CI
-    push's Treeherder URL as ``{{actions.<ref>.url}}``. Record this push before
-    the action containing the link.
+    Later actions can reference its `url`.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:
@@ -149,7 +136,7 @@ async def push(
     if tests:
         params["test_paths"] = validate_test_paths(tests)
 
-    action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning, ref=ref)
+    action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

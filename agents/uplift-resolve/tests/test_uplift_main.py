@@ -4,8 +4,6 @@
 is stubbed rather than mocked, so the contract is pinned by assertions.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

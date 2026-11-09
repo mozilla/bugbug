@@ -12,7 +12,6 @@ from hackbot_deploy.manifest import (
 )
 from hackbot_deploy.schema import DeployConfig
 
-REPO_ROOT = Path(__file__).parents[3]
 # The hand-written agents.json that webservices-infra started from.
 FIXTURE = Path(__file__).parent / "fixtures" / "agents.json"
 
@@ -23,11 +22,26 @@ def config(**fields: object) -> DeployConfig:
     return DeployConfig.model_validate({**JOB, **fields})
 
 
+def fixture_configs() -> dict[str, DeployConfig]:
+    # The [deploy] tables the fixture was written for, kept here so adding or
+    # retuning an agent under agents/ doesn't break the byte-for-byte check.
+    broker = {"cpu": "1", "memory": "512Mi"}
+    return {
+        "autowebcompat-diagnosis": config(timeout_seconds=7200, broker=broker),
+        "autowebcompat-repro": config(timeout_seconds=7200, broker=broker),
+        "bug-fix": config(
+            timeout_seconds=7200, workspace={"size": "40Gi"}, broker=broker
+        ),
+        "build-repair": config(timeout_seconds=7200, broker=broker),
+        "frontend-triage": config(timeout_seconds=7200, broker=broker),
+        "test-plan-generator": config(timeout_seconds=7200),
+        "test-repair": config(timeout_seconds=7200),
+    }
+
+
 def test_reproduces_the_infra_manifest_byte_for_byte() -> None:
     previous = json.loads(FIXTURE.read_text())
-    generated, changes = build_manifest(
-        manifest.load_configs(REPO_ROOT / "agents"), previous
-    )
+    generated, changes = build_manifest(fixture_configs(), previous)
 
     expected = FIXTURE.read_text().replace(
         '"generator": "manual"', f'"generator": "{manifest.GENERATOR}"'
@@ -182,3 +196,82 @@ def test_a_previous_manifest_of_another_schema_version_is_refused() -> None:
 
 def test_dumps_escapes_non_ascii_like_the_infra_hook() -> None:
     assert "h\\u00e9llo" in manifest.dumps({"greeting": "héllo"})
+
+
+REPO = "us-docker.pkg.dev/moz-fx-hackbot-prod/hackbot-prod"
+
+
+def built(n: int, broker: bool = False) -> dict[str, str]:
+    images = {"agent": f"{REPO}/a-agent@sha256:{n:064x}"}
+    if broker:
+        images["broker"] = f"{REPO}/a-broker@sha256:{n:064x}"
+    return images
+
+
+def test_images_are_pinned_when_the_shape_changes() -> None:
+    first, _ = build_manifest({"a": config()}, images={"a": built(1)})
+    assert first["agents"]["a"]["images"] == built(1)
+
+    entry, change = _regenerate_with(first, config(cpu="8"), images={"a": built(2)})
+    assert change is Change.EXPAND
+    assert entry["images"] == built(2)
+
+
+def test_images_for_an_unchanged_shape_are_ignored() -> None:
+    first, _ = build_manifest({"a": config()}, images={"a": built(1)})
+    entry, change = _regenerate_with(first, config(), images={"a": built(2)})
+    assert change is Change.UNCHANGED
+    assert entry["images"] == built(1)
+
+
+def test_a_changed_shape_without_images_has_none() -> None:
+    first, _ = build_manifest({"a": config()}, images={"a": built(1)})
+    entry, _ = _regenerate_with(first, config(cpu="8"))
+    assert "images" not in entry
+
+
+def test_pending_images_are_kept_for_the_same_shape_only() -> None:
+    main, _ = build_manifest({"a": config(), "b": config()})
+    # A run for b, after a run for a pinned a's images in the bot PR.
+    pending, _ = build_manifest(
+        {"a": config(cpu="8"), "b": config()}, main, images={"a": built(1)}
+    )
+    generated, _ = build_manifest(
+        {"a": config(cpu="8"), "b": config(cpu="8")},
+        main,
+        pending=pending,
+        images={"b": built(2)},
+    )
+    assert generated["agents"]["a"]["images"] == built(1)
+    assert generated["agents"]["b"]["images"] == built(2)
+
+    # a's shape moved on again: what the PR pinned was built for the old one.
+    generated, _ = build_manifest(
+        {"a": config(cpu="10"), "b": config()}, main, pending=pending
+    )
+    assert "images" not in generated["agents"]["a"]
+
+
+def test_images_must_match_the_containers() -> None:
+    with pytest.raises(manifest.ManifestError, match="broker"):
+        build_manifest({"a": config(broker={})}, images={"a": built(1)})
+    with pytest.raises(manifest.ManifestError, match="no \\[deploy\\] table"):
+        build_manifest({"a": config()}, images={"z": built(1)})
+
+
+def test_images_must_be_digests() -> None:
+    with pytest.raises(Exception, match="digest"):
+        build_manifest({"a": config()}, images={"a": {"agent": f"{REPO}/a:latest"}})
+
+
+def test_images_do_not_change_the_hash() -> None:
+    plain, _ = build_manifest({"a": config()})
+    pinned, _ = build_manifest({"a": config()}, images={"a": built(1)})
+    assert plain["agents"]["a"]["config_hash"] == pinned["agents"]["a"]["config_hash"]
+
+
+def _regenerate_with(
+    previous: dict, cfg: DeployConfig, **kw: object
+) -> tuple[dict, Change]:
+    generated, changes = build_manifest({"a": cfg}, previous, **kw)  # type: ignore[arg-type]
+    return generated["agents"]["a"], changes["a"]

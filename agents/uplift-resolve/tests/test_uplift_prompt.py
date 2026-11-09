@@ -5,8 +5,6 @@ All pure: these turn inputs into prompt text and never touch the filesystem, so
 ``test_uplift_diffs``.
 """
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

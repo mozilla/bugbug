@@ -24,8 +24,6 @@ this module is inert, so local/compose runs keep using ``WANDB_API_KEY``.
 See https://docs.wandb.ai/platform/hosting/iam/identity_federation
 """
 
-from __future__ import annotations
-
 import contextlib
 import logging
 import os

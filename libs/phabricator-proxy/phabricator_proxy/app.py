@@ -15,8 +15,6 @@ Requests and responses are otherwise relayed as-is — including Conduit's own
 error envelope — so a client's existing error handling keeps working.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import urllib.parse

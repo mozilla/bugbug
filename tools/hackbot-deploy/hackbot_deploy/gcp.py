@@ -7,8 +7,7 @@ logic as the dicts the REST API would return, so it and its test fake don't
 depend on the client types.
 """
 
-from __future__ import annotations
-
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -28,6 +27,7 @@ from hackbot_deploy.deploy import DeployError, StoredObject, split_image
 # credentials. So they only go to Artifact Registry hosts, in any region.
 _REGISTRY_HOST_SUFFIX = "-docker.pkg.dev"
 _TOKENINFO = "https://oauth2.googleapis.com/tokeninfo"
+_TAG = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 _MANIFEST_TYPES = ", ".join(
     [
         "application/vnd.oci.image.index.v1+json",
@@ -84,7 +84,7 @@ class GoogleCloud:
             response = requests.get(
                 _TOKENINFO, params={"access_token": self.credentials.token}, timeout=10
             )
-        except (GoogleAuthError, requests.RequestException):
+        except GoogleAuthError, requests.RequestException:
             return None
         return response.json().get("email") if response.ok else None
 
@@ -124,6 +124,24 @@ class GoogleCloud:
                 f"{what}: HTTP {response.status_code}: {response.text[:500]}"
             )
         return response.json()
+
+    def image_digest(self, image: str) -> str:
+        reference, _, tag = image.rpartition(":")
+        # Checked the same way a digest reference is, before any request.
+        try:
+            host, path, _ = split_image(f"{reference}@sha256:{'0' * 64}")
+        except DeployError:
+            host = path = ""
+        if not host.endswith(_REGISTRY_HOST_SUFFIX) or not _TAG.fullmatch(tag):
+            raise DeployError(f"{image}: not an Artifact Registry image tag")
+        response = self.registry.head(
+            f"https://{host}/v2/{path}/manifests/{tag}",
+            headers={"Accept": _MANIFEST_TYPES},
+        )
+        digest = response.headers.get("Docker-Content-Digest")
+        if response.status_code >= 400 or not digest:
+            raise DeployError(f"{image}: HTTP {response.status_code}, no digest")
+        return f"{reference}@{digest}"
 
     def image_labels(self, image: str) -> dict[str, str]:
         # split_image allows only DNS-label characters in the host, so a host

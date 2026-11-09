@@ -5,8 +5,6 @@ using the Firefox DevTools MCP. The bug is passed either inline as ``bug_data``
 text or a Bugzilla ``bug_id`` (read via Bugzilla broker).
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import subprocess

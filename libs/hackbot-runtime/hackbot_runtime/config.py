@@ -6,8 +6,6 @@ can prepare them on the agent's behalf. Per-run inputs and secrets are NOT here
 — they arrive via environment variables.
 """
 
-from __future__ import annotations
-
 import tomllib
 from pathlib import Path
 

@@ -130,12 +130,14 @@ telling a human what to look at, not deciding anything.
 On `VERDICT: <bug_id>`, open your comment with this single line, and nothing else about it:
 
 ```
-**Possible duplicate:** [1998432](https://bugzilla.mozilla.org/show_bug.cgi?id=1998432)
+**Possible duplicate:** bug 1998432
 ```
 
 It is the first thing in the comment, above your analysis, because whether a bug is already
-filed is what a reader wants before reading anything else. Substitute the real id in both the
-link text and the URL. Do not explain it, hedge it, or repeat it further down.
+filed is what a reader wants before reading anything else. Substitute the real id, and keep it
+plain `bug 1998432` rather than a link: Bugzilla links it itself and shows the bug's status and
+summary on hover, which a Markdown link loses. Do not explain it, hedge it, or repeat it
+further down.
 
 On `VERDICT: NEW`, write nothing about duplicates. Do not announce that you looked. Your
 comment opens with the analysis as normal.

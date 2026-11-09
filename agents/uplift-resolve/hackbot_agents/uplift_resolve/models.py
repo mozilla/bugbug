@@ -5,8 +5,6 @@ describe itself in the prompt (`render_work_item`), so a new kind touches only
 this module.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from pathlib import Path

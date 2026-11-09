@@ -9,8 +9,6 @@ cannot read falls through to a triage. A needless triage costs a dollar; a wrong
 skipped bug costs a triage nobody notices is missing.
 """
 
-from __future__ import annotations
-
 import json
 import sys
 

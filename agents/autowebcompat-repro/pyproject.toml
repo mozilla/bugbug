@@ -2,7 +2,7 @@
 name = "hackbot-agent-autowebcompat-repro"
 version = "0.1.0"
 description = "Cloud Run Job image that runs the autowebcompat-repro agent for hackbot-api"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
     "agent-tools[bugzilla]",

@@ -8,9 +8,11 @@ include:
   - path: agents/bug-fix/compose.yml
   - path: agents/build-repair/compose.yml
   - path: agents/test-repair/compose.yml
+  - path: agents/test-repair-fix/compose.yml
   - path: agents/frontend-triage/compose.yml
   - path: agents/test-plan-generator/compose.yml
   - path: agents/uplift-resolve/compose.yml
+  - path: agents/autowebcompat-intervention/compose.yml
 
 services:
   bugbug-base:

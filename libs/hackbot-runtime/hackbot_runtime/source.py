@@ -1,7 +1,5 @@
 """Prepare a source checkout for agents that operate on a code repository."""
 
-from __future__ import annotations
-
 import logging
 import subprocess
 import sys

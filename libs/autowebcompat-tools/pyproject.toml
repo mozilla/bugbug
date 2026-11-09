@@ -2,9 +2,9 @@
 name = "autowebcompat-tools"
 version = "0.1.0"
 description = "Code shared by the autowebcompat agents"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
-    "claude-agent-sdk>=0.2.0",
+    "claude-agent-sdk>=0.2.165",
     "hackbot-runtime[claude-sdk]",
     "pydantic>=2.0.0",
 ]

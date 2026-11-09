@@ -12,8 +12,6 @@ variables Terraform gives every agent. Secrets are here because only
 infrastructure can grant access to them.
 """
 
-from __future__ import annotations
-
 import re
 from typing import Annotated, Any, Literal
 

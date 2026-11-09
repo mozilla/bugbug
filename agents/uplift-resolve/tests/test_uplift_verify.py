@@ -4,8 +4,6 @@ Real repositories throughout: every check is a statement about git's own
 state, which a stub could only assert we asked for.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from hackbot_agents.uplift_resolve.models import Report

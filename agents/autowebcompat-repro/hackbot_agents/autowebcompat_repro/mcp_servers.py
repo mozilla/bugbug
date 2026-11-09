@@ -4,8 +4,6 @@ The MCP servers are npm packages pinned in ``package.json`` and installed into
 the image with ``npm ci`` (see the Dockerfile).
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from claude_agent_sdk.types import McpStdioServerConfig

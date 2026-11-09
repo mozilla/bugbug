@@ -17,8 +17,6 @@ Phabricator action in the first place -- ``severity`` is a suggestion in the com
 now, which is what left that tool with no caller.
 """
 
-from __future__ import annotations
-
 import re
 
 from agent_tools.registry import ToolError

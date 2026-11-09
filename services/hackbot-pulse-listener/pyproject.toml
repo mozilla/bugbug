@@ -2,11 +2,11 @@
 name = "hackbot-pulse-listener"
 version = "0.1.0"
 description = "Listens to Taskcluster build failures and triggers the build-repair hackbot agent"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "kombu>=5.6,<6",
-    "mozci~=2.4.8",
-    "taskcluster>=97.1,<103.1",
+    "mozci~=2.4.10",
+    "taskcluster~=114.0",
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "cachetools>=5.3.0",

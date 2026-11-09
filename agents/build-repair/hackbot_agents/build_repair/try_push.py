@@ -7,8 +7,6 @@ capability when it explicitly wires it in — a try push is an outward-facing
 action that not every run should perform.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import re

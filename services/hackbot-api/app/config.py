@@ -1,7 +1,16 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from phabricator_client import PhabricatorSettings
-from pydantic import BaseModel, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+)
 from pydantic_settings import BaseSettings
 
 # An HMAC key that must actually be a key. Required alone only rejects a *missing*
@@ -25,6 +34,9 @@ class WebhookSettings(BaseModel):
     bot_phid: str = ""
     # The mention that triggers a bug-fix follow-up run.
     mention_token: str = "@hackbot"
+    # Slug of the Phabricator project whose members may trigger a run with a
+    # mention, e.g. the project mirroring a Bugzilla group.
+    authorized_group: str
 
 
 class BugzillaWebhookSettings(BaseModel):
@@ -34,6 +46,8 @@ class BugzillaWebhookSettings(BaseModel):
     secret: str
     # The Bugzilla account to which the needinfo request must be directed.
     bot_login: str = "hackbot@mozilla.tld"
+    # Name of the Bugzilla group whose members may trigger a run with a needinfo.
+    authorized_group: str
 
 
 class SlackSettings(BaseModel):
@@ -48,6 +62,33 @@ class SlackSettings(BaseModel):
     bot_token: str
 
 
+class GitHubAppSettings(BaseModel):
+    # Never echo the private key back in a validation error.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    app_id: Annotated[int, Field(gt=0)]
+    private_key: SecretStr
+    # Default installation for callers that don't pass one, e.g. a deployment
+    # that only ever talks to one org.
+    installation_id: Annotated[int | None, Field(gt=0)] = None
+
+    @field_validator("private_key")
+    @classmethod
+    def _check_private_key(cls, value: SecretStr) -> SecretStr:
+        # Env vars and secret stores often flatten the PEM's newlines to "\n".
+        pem = value.get_secret_value().replace("\\n", "\n").strip()
+        try:
+            key = load_pem_private_key(pem.encode(), password=None)
+        except ValueError, TypeError:
+            key = None
+        if not isinstance(key, RSAPrivateKey):
+            raise ValueError(
+                "must be the GitHub App's PEM-encoded RSA private key "
+                "(-----BEGIN RSA PRIVATE KEY----- ...)"
+            )
+        return SecretStr(pem)
+
+
 class Settings(BaseSettings):
     # GCP
     gcp_project: str = ""
@@ -56,6 +97,7 @@ class Settings(BaseSettings):
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
+    cloud_sql_ip_type: Literal["PUBLIC", "PRIVATE", "PSC"] = "PUBLIC"
     db_user: str = ""
     db_pass: str = ""
     db_name: str = "hackbot"
@@ -75,13 +117,13 @@ class Settings(BaseSettings):
 
     # API auth
     external_api_key: str = ""
+    allowed_service_accounts: list[str] = []
 
     phabricator: PhabricatorSettings
 
-    # Inbound webhook receiver config, embedded as a nested model and populated
-    # from WEBHOOK_<FIELD> env vars in this single parse (WEBHOOK_SECRET,
-    # WEBHOOK_BOT_PHID, WEBHOOK_MENTION_TOKEN).
-    # Required via its `secret` field, so WEBHOOK_SECRET must be set at startup.
+    # Optional until the GitHub App credentials are deployed.
+    github: GitHubAppSettings | None = None
+
     webhook: WebhookSettings
 
     # Bugzilla uses a separate shared-secret header and bot identity. These map
@@ -110,7 +152,6 @@ class Settings(BaseSettings):
     push_auth_service_account: str = ""
 
     # Run-completion email settings (see app/notifications.py).
-    hackbot_ui_url: str = "http://localhost:3000"
     sendgrid_api_key: str
     notification_sender: str
 
@@ -118,11 +159,13 @@ class Settings(BaseSettings):
     port: int = 8080
     environment: str = "development"
     sentry_dsn: str | None = None
+    agents_sentry_dsn: str
 
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
+        "hide_input_in_errors": True,
         # Populate the nested `phabricator` / webhook models from their prefixed
         # env vars in this single parse.
         # max_split=1 splits only on the first underscore, so PHABRICATOR_API_KEY

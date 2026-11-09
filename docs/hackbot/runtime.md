@@ -9,7 +9,8 @@ identical for all agents, so an agent's code is only its own logic.
 run_async(main)
   ├─ discover hackbot.toml (cwd, then above the entry point's module)
   ├─ build HackbotContext from that config + environment
-  ├─ configure Anthropic + W&B credentials (Workload Identity Federation, or API keys)
+  ├─ configure Anthropic, OpenAI + W&B credentials (Workload Identity Federation, or API keys)
+  ├─ download the parent run's artifacts, for a chained run
   ├─ start a Weave trace labelled with the agent's name
   ├─ call main(ctx)  ──> HackbotAgentResult, or an exception
   ├─ publish logs/agent.log
@@ -78,6 +79,14 @@ what makes local runs faithful.
 | `changes/phabricator_diff.json`   | Prebuilt Phabricator submission payload (only when needed) |
 | `attachments/<action_idx>/<name>` | Files attached to a recorded action                        |
 
+### Chained runs
+
+A run started by another run's `agents.start_run` action gets `PARENT_RUN_ID` and
+`PARENT_ARTIFACTS` (signed download URLs by key). The runtime downloads them before
+`main()` and exposes them as `ctx.parent_artifacts_dir`, under the keys the parent
+published them with; a failed download fails the run. Locally there are no URLs, and the
+directory is the parent's own `artifacts_dir/<parent_run_id>`, so treat it as read-only.
+
 ## Capturing source changes
 
 After the agent runs, its work may be committed locally, uncommitted, or untracked.
@@ -95,11 +104,12 @@ checkout of its own. It's best-effort: a failure to build it doesn't fail the ru
 
 ## Model credentials
 
-Anthropic (model access) and W&B (tracing) are both configured before `main()` runs, so an
-agent just reads `ctx.anthropic.api_key` and never touches the environment. Deployed, both
-use Workload Identity Federation and the container holds no long-lived key; locally both
-fall back to their API-key env var, with no special casing needed either side. Mechanism
-and failure modes: [security.md](security.md).
+Anthropic and OpenAI (model access) and W&B (tracing) are all configured before `main()`
+runs, so an agent just reads `ctx.anthropic.api_key` (or lets Codex pick up the OpenAI
+federation env) and never touches the environment. Deployed, all three use Workload Identity
+Federation and the container holds no long-lived key; locally each falls back to its API-key
+env var, with no special casing needed either side. Mechanism and failure modes:
+[security.md](security.md).
 
 ## Tools and actions
 

@@ -1,8 +1,5 @@
 """Structured result reporting for the autowebcompat-repro agent."""
 
-from __future__ import annotations
-
-import imghdr
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -137,10 +134,18 @@ class ReproductionResult(BaseModel):
         if path is None:
             return None
 
-        if not path.exists():
-            raise ValueError(f"Screenshot path {path} doesn't exist")
-        if imghdr.what(str(path)) != "png":
+        png_signature = b"\x89PNG\r\n\x1a\n"
+        try:
+            with path.open("rb") as f:
+                is_png = f.read(len(png_signature)) == png_signature
+        except OSError as exc:
+            raise ValueError(
+                f"Cannot read screenshot path {path}: {exc.strerror}"
+            ) from exc
+
+        if not is_png:
             raise ValueError(f"Screenshot path {path} is not a valid PNG image")
+
         return path
 
 

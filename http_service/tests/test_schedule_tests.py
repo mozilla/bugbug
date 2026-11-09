@@ -3,15 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 from typing import Callable
 
 import hglib
 import orjson
 import pytest
+import responses
 import zstandard
+from responses import matchers
 
+from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
+
+from .conftest import MOCK_KNOWN_TASKS, MockModelCache
 
 
 @pytest.mark.parametrize(
@@ -22,35 +28,35 @@ from bugbug_http import models
             {"test-linux1804-64-opt-label1": 0.9},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # one from label, none from group
         (
             {"test-linux1804-64-opt-label1": 0.9},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # none from label, one from group
         (
             {},
             {"test-group1": 0.9},
             {},
-            {"test-group1": ["test-linux1804-64/opt", "test-windows10/debug"]},
+            {"test-group1": ["test-linux1804-64/opt-*"]},
         ),
         # two from label, one from group
         (
             {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.5},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # two redundant from label, one from group
         (
             {"test-linux1804-64/opt": 0.9, "test-windows10/opt": 0.8},
             {"test-group1": 0.9},
             {"test-linux1804-64/opt": 0.9},
-            {"test-group1": ["test-linux1804-64/opt", "test-windows10/debug"]},
+            {"test-group1": ["test-linux1804-64/opt-*"]},
         ),
     ],
 )
@@ -104,7 +110,7 @@ def test_simple_schedule(
     assert result["groups"] == groups_to_choose
     assert result["reduced_tasks"] == reduced_labels
     assert result["reduced_tasks_higher"] == reduced_labels
-    assert result["known_tasks"] == ["prova"]
+    assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
     assert {k: set(v) for k, v in result["config_groups"].items()} == {
@@ -161,3 +167,405 @@ def test_schedule_with_confidence_thresholds(
     # The reduced tasks use the medium and high thresholds.
     assert result["reduced_tasks"] == {"test-linux1804-64-opt-label1": 0.9}
     assert result["reduced_tasks_higher"] == {}
+
+
+JOB_PROPERTY_NAMES = [
+    "failure_classification_id",
+    "job_type_name",
+    "push_id",
+    "task_id",
+]
+
+
+def mock_treeherder_recent_failures() -> None:
+    responses.add(
+        responses.GET,
+        "https://treeherder.mozilla.org/api/project/autoland/push/",
+        match=[matchers.query_param_matcher({"count": "20", "tochange": "rev"})],
+        json={
+            "results": [
+                {"id": 2, "revision": "rev2"},
+                {"id": 1, "revision": "rev1"},
+            ]
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://treeherder.mozilla.org/api/jobs/",
+        match=[
+            matchers.query_param_matcher(
+                {"push_id__in": "2,1", "result": "testfailed", "count": "2000"}
+            )
+        ],
+        json={
+            "job_property_names": JOB_PROPERTY_NAMES,
+            "results": [
+                # Not classified.
+                [1, "test-linux1804-64-opt-label1", 1, "task1"],
+                # Classified as intermittent.
+                [4, "test-linux1804-64-opt-label2", 1, "task2"],
+                # Classified as infra.
+                [5, "test-linux1804-64/opt", 1, "task5"],
+                # Classified as expected fail.
+                [3, "test-linux1804-64/opt", 1, "task6"],
+                # Not classified, without group results.
+                [1, "test-linux1804-64/opt-mochitest-1", 1, "task7"],
+                # Not classified, without group results nor test paths.
+                [1, "build-linux64/opt", 1, "task8"],
+            ],
+            "next": "https://treeherder.mozilla.org/api/jobs/?page=2",
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://treeherder.mozilla.org/api/jobs/",
+        match=[matchers.query_param_matcher({"page": "2"})],
+        json={
+            "job_property_names": JOB_PROPERTY_NAMES,
+            "results": [
+                # New failure not classified, on a task unknown to the model.
+                [6, "test-unknown", 2, "task3"],
+                # Classified as autoclassified intermittent.
+                [7, "test-windows10/opt", 2, "task4"],
+            ],
+            "next": None,
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://treeherder.mozilla.org/api/project/autoland/push/group_results/",
+        match=[matchers.query_param_matcher({"revision": "rev1"})],
+        json={
+            "task1": {
+                "test-group1:test-group-parent": False,
+                "test-group2": True,
+                "/wpt-dir": False,
+                ":/_mozilla/wpt-dir": False,
+            },
+            "task2": {"test-group2": False},
+            "task5": {"test-group2": False},
+            "task6": {"test-group2": False},
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://treeherder.mozilla.org/api/project/autoland/push/group_results/",
+        match=[matchers.query_param_matcher({"revision": "rev2"})],
+        json={
+            "task3": {"test-unknown-group": False},
+            "task4": {"test-group2": False},
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts",
+        json={
+            "artifacts": [
+                {"name": "public/logs/live_backing.log"},
+                {"name": "public/test_info/mochitest-plain_errorsummary.log"},
+            ]
+        },
+    )
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts/public/test_info/mochitest-plain_errorsummary.log",
+        body=b"\n".join(
+            orjson.dumps(line)
+            for line in [
+                # Groups which did not fail are not selected.
+                {"action": "test_groups", "groups": ["test-group2", "test-group3"]},
+                {
+                    "action": "test_result",
+                    "test": "test1.html",
+                    "group": "test-group2",
+                    "status": "FAIL",
+                    "expected": "PASS",
+                },
+            ]
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "group, expected",
+    [
+        ("test-group1", "test-group1"),
+        ("test-group1:test-group-parent", "test-group1"),
+        ("/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (":/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (
+            "/_mozilla/fetch/api/request",
+            "testing/web-platform/mozilla/tests/fetch/api/request",
+        ),
+    ],
+)
+def test_normalize_group(group: str, expected: str) -> None:
+    assert models._normalize_group(group) == expected
+
+
+def test_get_recent_failures(
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    past_failures_data = test_scheduling.PastFailures("group", False)
+    past_failures_data.all_runnables = [
+        *past_failures_data.all_runnables,
+        "test-group3",
+        "testing/web-platform/tests/wpt-dir",
+        "testing/web-platform/mozilla/tests/wpt-dir",
+    ]
+    past_failures_data.close()
+
+    mock_treeherder_recent_failures()
+
+    tasks, groups = models._get_recent_failures("autoland", "rev")
+
+    assert tasks == {"test-linux1804-64-opt-label1"}
+    assert groups == {
+        "test-group1",
+        "test-group2",
+        "testing/web-platform/tests/wpt-dir",
+        "testing/web-platform/mozilla/tests/wpt-dir",
+    }
+
+
+def add_backout(remote_repo_dir: str) -> bytes:
+    """Back out the last commit of the remote repository, returning the backout node."""
+    with hglib.open(str(remote_repo_dir)) as hg:
+        backedout = hg.log(limit=1)[0].node.decode("ascii")
+        hg.backout(
+            rev=backedout,
+            message=f"Backed out changeset {backedout[:12]} (bug 1) for causing failures",
+            user="sheriff",
+        )
+        return hg.log(limit=1)[0].node
+
+
+def test_schedule_backout(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    node = add_backout(remote_repo_dir)
+    rev = node.decode("ascii")[:12]
+    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+
+    # The mock models would select these, but they are ignored for backouts.
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}
+    )
+
+    def _get_recent_failures(project, r):
+        assert (project, r) == ("autoland", node.decode("ascii"))
+        return {"test-linux1804-64/opt", "test-windows10/opt"}, {"test-group1"}
+
+    monkeypatch.setattr(models, "_get_recent_failures", _get_recent_failures)
+
+    assert models.schedule_tests("integration/autoland", rev) == "OK"
+
+    value = models.redis.get(
+        f"bugbug:job_result:schedule_tests:integration/autoland_{rev}"
+    )
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == {
+        "test-linux1804-64/opt": 1.0,
+        "test-windows10/opt": 1.0,
+    }
+    assert result["groups"] == {"test-group1": 1.0}
+    # The recently failing tasks are not reduced, even if they are redundant.
+    assert result["reduced_tasks"] == result["tasks"]
+    assert result["reduced_tasks_higher"] == result["tasks"]
+    # The recently failing manifests run on all configs.
+    assert result["config_groups"] == {"test-group1": ["*"]}
+
+
+def test_schedule_backout_try(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    node = add_backout(remote_repo_dir)
+    rev = node.decode("ascii")[:12]
+    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+
+    # The mock models would select these, but they are ignored for backouts.
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}
+    )
+
+    def _get_recent_failures(project, r):
+        raise AssertionError("Recent failures should not be used on try")
+
+    monkeypatch.setattr(models, "_get_recent_failures", _get_recent_failures)
+
+    assert models.schedule_tests("try", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:try_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == {}
+    assert result["groups"] == {}
+
+
+def test_schedule_backout_treeherder_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    node = add_backout(remote_repo_dir)
+    rev = node.decode("ascii")[:12]
+    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}
+    )
+
+    # Simulate an unexpected response from Treeherder.
+    def _get_recent_failures(project, r):
+        raise KeyError("results")
+
+    monkeypatch.setattr(models, "_get_recent_failures", _get_recent_failures)
+
+    assert models.schedule_tests("integration/autoland", rev) == "OK"
+
+    value = models.redis.get(
+        f"bugbug:job_result:schedule_tests:integration/autoland_{rev}"
+    )
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == {}
+    assert result["groups"] == {}
+
+
+@pytest.mark.parametrize(
+    "calibrated, very_high", [(True, None), (False, None), (True, 0.6)]
+)
+def test_schedule_config_selection_risk(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+    calibrated: bool,
+    very_high: float | None,
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify({}, {"test-group1": 0.99, "test-group2": 0.6})
+
+    class ModelCache(MockModelCache):
+        def get(self, model_name):
+            model = super().get(model_name)
+            if model_name == "testgroupselect" and calibrated:
+                # Confidences 0.5 -> 0.01, 1 -> 0.21.
+                model.calibration = ([0.5, 1.0], [0.01, 0.21])
+            if model_name == "testgroupselect" and very_high is not None:
+                model.confidence_thresholds = {
+                    "low": 0.5,
+                    "medium": 0.6,
+                    "high": 0.7,
+                    "very_high": very_high,
+                }
+            return model
+
+    monkeypatch.setattr(models, "MODEL_CACHE", ModelCache())
+    risks: dict[str, float] = {}
+    very_likely: list[str] = []
+
+    def select_configs(groups, modified_paths, very_likely_groups):
+        risks.update(groups)
+        very_likely.extend(very_likely_groups)
+        return {group: ["*"] for group in groups}
+
+    monkeypatch.setattr(models, "select_configs", select_configs)
+    # The manifests including the modified tests are certain to run.
+    monkeypatch.setattr(
+        models.test_scheduling,
+        "find_manifests_for_paths",
+        lambda repo_dir, paths: ["test-group3"],
+    )
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    # Groups are selected by confidence, configs weighted by the calibrated probabilities (the
+    # confidences, if the group model isn't calibrated).
+    if calibrated:
+        assert risks == pytest.approx(
+            {"test-group1": 0.206, "test-group2": 0.05, "test-group3": 1.0}
+        )
+    else:
+        assert risks == {"test-group1": 0.99, "test-group2": 0.6, "test-group3": 1.0}
+    # The manifests including the modified tests, and the groups selected with at least the model's
+    # "very_high" confidence, run on every OS family.
+    if very_high is None:
+        assert very_likely == ["test-group3"]
+    else:
+        assert sorted(very_likely) == ["test-group1", "test-group2", "test-group3"]
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["groups"] == {
+        "test-group1": 0.99,
+        "test-group2": 0.6,
+        "test-group3": 1.0,
+    }
+
+
+def test_select_configs_never_vetoes_groups(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(models, "MODEL_CACHE", MockModelCache())
+
+    # The cheapest config of the current task graph; a group that no current task runs is not
+    # restricted (the taskgraph would otherwise remove all of its tasks).
+    assert models.select_configs(
+        {"test-group2": 0.9, "unknown-group": 0.9}, ["dom/foo.cpp"]
+    ) == {"test-group2": ["test-linux1804-64/opt-*"], "unknown-group": ["*"]}
+
+    # If the selection fails, no group is restricted.
+    def fail(*args, **kwargs):
+        raise Exception("model missing")
+
+    monkeypatch.setattr(models, "get_live_config_candidates", fail)
+    assert models.select_configs({"test-group2": 0.9}, ["dom/foo.cpp"]) == {
+        "test-group2": ["*"]
+    }
+
+
+def test_select_configs_very_likely_and_build_platforms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(models, "MODEL_CACHE", MockModelCache())
+
+    # Very likely regressions (e.g. the manifests including the modified tests) run on every OS family,
+    # whatever their risk.
+    assert models.select_configs(
+        {"test-group1": 0.01}, ["dom/foo.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}
+
+    # A patch only touching files built on Windows only runs groups on Windows configs.
+    built = {"windows": ["widget/windows/a.cpp", "dom/foo.cpp"]}
+    for platform in ("android", "linux", "macosx"):
+        built[platform] = ["dom/foo.cpp"]
+    with open("build_platforms.json", "w") as f:
+        json.dump(built, f)
+    models.get_build_platforms.cache_clear()
+    assert models.select_configs(
+        {"test-group1": 1.0}, ["widget/windows/a.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-windows10/opt-*"]}
+    assert models.select_configs(
+        {"test-group1": 1.0}, ["dom/foo.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}

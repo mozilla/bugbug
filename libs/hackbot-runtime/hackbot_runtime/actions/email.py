@@ -12,8 +12,6 @@ The team address, the sender and the local-testing override live apply-side, so
 an agent only names the individuals its result concerns.
 """
 
-from __future__ import annotations
-
 import re
 from collections.abc import Iterable
 from typing import Annotated
@@ -112,7 +110,6 @@ def record_email(
     subject: str,
     body_markdown: str,
     attach_patch: bool = False,
-    ref: str | None = None,
 ) -> dict:
     """Record a report the agent was never asked to decide on.
 
@@ -128,7 +125,6 @@ def record_email(
     return recorder.record(
         ACTION_TYPE,
         _params(to, subject, body_markdown, attach_patch),
-        ref=ref,
     )
 
 

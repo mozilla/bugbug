@@ -6,20 +6,27 @@ detect an ``@hackbot`` mention, and resolve the revision to a revision id +
 Bugzilla bug id. The route in ``app/routers/webhooks.py`` orchestrates these.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NamedTuple
 from xml.sax.saxutils import escape
 
+from sqlalchemy import select
+
+from app.database.models import Run, RunAction
+
 if TYPE_CHECKING:
     from phabricator_client import PhabricatorClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.config import WebhookSettings
     from app.phabricator_authorization import PhabricatorAuthorizer
 
 log = logging.getLogger(__name__)
+
+# Agents that can follow up on a revision they filed; mentions on any other
+# revision go to bug-fix.
+_FOLLOW_UP_AGENTS = frozenset({"bug-fix", "autowebcompat-intervention"})
 
 # Transaction types that carry a comment we can scan for the mention.
 _COMMENT_TYPES = frozenset({"comment", "inline"})
@@ -155,9 +162,24 @@ async def resolve_revision(
     bug_id_raw = fields.get("bugzilla.bug-id")
     try:
         bug_id = int(bug_id_raw) if bug_id_raw not in (None, "") else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         bug_id = None
     return revision_id, bug_id
+
+
+async def follow_up_agent(db: AsyncSession, revision_id: int) -> str:
+    """The authoring agent to answer a mention on ``D<revision_id>``."""
+    creator = await db.scalar(
+        select(Run.agent)
+        .join(RunAction, RunAction.run_id == Run.run_id)
+        .where(
+            RunAction.type == "phabricator.submit_patch",
+            RunAction.status == "applied",
+            RunAction.result["revision_id"].as_integer() == revision_id,
+        )
+        .limit(1)
+    )
+    return creator if creator in _FOLLOW_UP_AGENTS else "bug-fix"
 
 
 async def detect_mention_and_revision(
@@ -193,7 +215,7 @@ async def detect_mention_and_revision(
             authorized_mentions.append(mention)
         else:
             log.warning(
-                "Ignoring %s mention from non-editbugs user %s on %s",
+                "Ignoring %s mention from unauthorized user %s on %s",
                 webhook.mention_token,
                 mention.author_phid,
                 object_phid,

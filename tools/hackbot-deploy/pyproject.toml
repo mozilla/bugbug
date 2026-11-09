@@ -2,7 +2,7 @@
 name = "hackbot-deploy"
 version = "0.1.0"
 description = "Hackbot agent deploy tooling: the [deploy] schema, the agents.json generator and the deploy script"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "google-auth>=2.0.0",
     "google-cloud-build>=3.0.0",

@@ -11,8 +11,6 @@ is lost. The checkout is ephemeral (one run per container), so mutating its inde
 and creating that commit is safe.
 """
 
-from __future__ import annotations
-
 import base64
 import contextlib
 import logging

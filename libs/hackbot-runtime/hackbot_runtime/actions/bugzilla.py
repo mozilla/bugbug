@@ -8,8 +8,6 @@ Handlers record an intended change (nothing is mutated) and return a short
 confirmation string, raising ``ToolError`` on invalid input.
 """
 
-from __future__ import annotations
-
 import mimetypes
 import os
 from pathlib import Path
@@ -209,6 +207,8 @@ async def create_bug(
 
     The description becomes comment 0 and is rendered as Markdown. Recorded into
     the run summary for human review — does not file in Bugzilla.
+
+    Later actions can reference its `bug_id` and `url`.
     """
     body: dict[str, Any] = {
         "product": product,

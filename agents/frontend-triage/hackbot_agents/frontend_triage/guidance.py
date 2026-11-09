@@ -6,8 +6,6 @@ than on disk, and would not serve `hooks.component_guidance_hook` either, which 
 load to be observable.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
