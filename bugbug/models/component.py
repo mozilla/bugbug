@@ -103,6 +103,11 @@ class ComponentModel(BugModel):
             bug_features.Patches(),
             bug_features.Landings(),
             bug_features.BugReporter(),
+            # Bugs are rolled back to their creation, so this is the product the bug
+            # was filed in.
+            bug_features.Product(),
+            bug_features.OpSys(),
+            bug_features.Platform(),
         ]
 
         cleanup_functions = [
