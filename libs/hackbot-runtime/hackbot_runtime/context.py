@@ -23,6 +23,7 @@ from pydantic import Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hackbot_runtime import artifacts, changes
+from hackbot_runtime.actions import github
 from hackbot_runtime.actions.phabricator import (
     PATCH_ACTION_TYPES,
     SUBMIT_PATCH_ACTION_TYPE,
@@ -53,7 +54,11 @@ def _default_run_id() -> str:
 
 def _wip_commit_message(actions: list[dict]) -> str:
     """The patch title, else the try push title, for the agent's uncommitted work."""
-    for action_type in (SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
+    for action_type in (
+        SUBMIT_PATCH_ACTION_TYPE,
+        github.SUBMIT_PATCH_ACTION_TYPE,
+        TRY_PUSH_ACTION_TYPE,
+    ):
         for action in actions:
             if action["type"] == action_type and action["params"]["title"]:
                 return action["params"]["title"]
@@ -304,6 +309,7 @@ class HackbotContext(BaseSettings):
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
         try_push_key: str = "changes/try_push.json",
+        github_commits_key: str = "changes/github_commits.json",
     ) -> str | None:
         """Collect the agent's source-tree changes and publish them as artifacts."""
         if self._source_base is None:
@@ -333,6 +339,25 @@ class HackbotContext(BaseSettings):
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)
+
+        if recorded_types & github.PATCH_ACTION_TYPES:
+            # From the published base, like the try push: the commits are
+            # recreated on GitHub on top of it, so it has to be a commit the
+            # repository already has.
+            try:
+                github_payload = changes.build_github_commits(
+                    self.repo_path,
+                    self._published_base,
+                    self._config.source.repo_url,
+                )
+            except Exception:
+                # Best-effort, as for the Phabricator diff: without the
+                # artifact the action fails when applied, saying so, rather
+                # than failing an otherwise successful run here.
+                log.warning("Could not build the GitHub commits", exc_info=True)
+                github_payload = None
+            if github_payload is not None:
+                self.publish_json(github_commits_key, github_payload)
 
         if recorded_types & TRY_ACTION_TYPES:
             # From the *published* base, not `_source_base`: Lando has to

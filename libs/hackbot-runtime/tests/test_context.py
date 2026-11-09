@@ -440,3 +440,80 @@ def test_a_parent_with_no_artifacts_is_not_mistaken_for_a_local_run(
     )
     hb.fetch_parent_artifacts()
     assert hb.parent_artifacts_dir != tmp_path / "artifacts" / "parent"
+
+
+def test_publish_changes_builds_github_commits_from_the_published_base(
+    tmp_path, monkeypatch
+):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    calls = {}
+
+    def _github_commits(repo, base, repo_url):
+        calls["github"] = (base, repo_url)
+        return {"repo_url": repo_url, "base_commit": base, "commits": []}
+
+    def _phabricator_diff(*args):
+        calls["phabricator"] = args
+        return None
+
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_github_commits", _github_commits
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff", _phabricator_diff
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda repo: "localseededsha"
+    )
+    hb.record_source_base()
+    hb.actions.record("github.submit_patch", {"title": "Fix"}, reasoning="r")
+
+    hb.publish_changes()
+
+    payload = json.loads(
+        (
+            tmp_path / "artifacts" / "local-test" / "changes" / "github_commits.json"
+        ).read_text()
+    )
+    # GitHub parents the recreated commits on the base, so it must be a commit
+    # the repository has, not one seeded locally.
+    assert payload["base_commit"] == "basecommit"
+    assert calls["github"] == ("basecommit", hb.config.source.repo_url)
+    # A GitHub submission does not build a Phabricator diff.
+    assert "phabricator" not in calls
+
+
+def test_publish_changes_survives_a_failed_github_commits_build(tmp_path, monkeypatch):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+
+    def _boom(*args):
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad path")
+
+    monkeypatch.setattr("hackbot_runtime.context.changes.build_github_commits", _boom)
+    hb.actions.record("github.submit_patch", {"title": "Fix"}, reasoning="r")
+
+    assert hb.publish_changes() == "changes/changes.patch"
+    assert not (
+        tmp_path / "artifacts" / "local-test" / "changes" / "github_commits.json"
+    ).exists()
+
+
+def test_publish_changes_names_the_agents_commit_after_a_github_title(
+    tmp_path, monkeypatch
+):
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    messages = []
+
+    def _collect(repo, base, repo_url, message):
+        messages.append(message)
+        return ChangeSet(patch=b"x", metadata={"base": base})
+
+    monkeypatch.setattr("hackbot_runtime.context.changes.collect", _collect)
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_github_commits", lambda *a: None
+    )
+    hb.actions.record("github.submit_patch", {"title": "Fix it"}, reasoning="r")
+
+    hb.publish_changes()
+
+    assert messages == ["Fix it"]

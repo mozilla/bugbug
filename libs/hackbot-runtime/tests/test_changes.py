@@ -13,6 +13,7 @@ import builtins
 from hackbot_runtime.changes import (
     _git,
     _synthetic_commit,
+    build_github_commits,
     build_phabricator_diff,
     build_try_push,
     has_changes,
@@ -209,6 +210,92 @@ def test_build_try_push_rejects_abbreviated_base(tmp_path):
     # Lando needs a full published hash; a short one would fail server-side with
     # a far less obvious error.
     assert build_try_push(tmp_path, base[:12]) is None
+
+
+# --- build_github_commits ------------------------------------------------ #
+
+_REPO_URL = "https://github.com/owner/repo.git"
+
+
+def _changes_by_path(commit):
+    return {change["path"]: change for change in commit["changes"]}
+
+
+def test_build_github_commits_one_entry_per_commit(tmp_path):
+    base = _init_repo(tmp_path)
+    _commit_change(tmp_path, "one\n", message="First\n\nWith a body.")
+    _commit_change(tmp_path, "two\n", message="Second")
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    assert payload["repo_url"] == _REPO_URL
+    assert payload["base_commit"] == base
+    first, second = payload["commits"]
+    assert first["message"] == "First\n\nWith a body."
+    assert second["message"] == "Second"
+    assert first["author"]["name"] == "Test"
+    assert first["author"]["email"] == "test@test.com"
+    assert first["author"]["date"]
+    # Each commit carries the file as it is at that commit, not at HEAD.
+    assert base64.b64decode(first["changes"][0]["content"]) == b"one\n"
+    assert base64.b64decode(second["changes"][0]["content"]) == b"two\n"
+    assert second["changes"][0] == {
+        "path": "file.txt",
+        "mode": "100644",
+        "content": base64.b64encode(b"two\n").decode(),
+    }
+
+
+def test_build_github_commits_includes_uncommitted_work(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "file.txt").write_text("edited\n")
+    (tmp_path / "new.txt").write_text("untracked\n")
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    (commit,) = payload["commits"]
+    assert commit["message"] == "Uncommitted agent changes"
+    assert set(_changes_by_path(commit)) == {"file.txt", "new.txt"}
+
+
+def test_build_github_commits_records_deletions_modes_and_binaries(tmp_path):
+    base = _init_repo(tmp_path)
+    (tmp_path / "file.txt").unlink()
+    script = tmp_path / "dir with space" / "run.sh"
+    script.parent.mkdir()
+    script.write_text("#!/bin/sh\n")
+    script.chmod(0o755)
+    (tmp_path / "image.bin").write_bytes(b"\x00\xff\x10")
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    changes = _changes_by_path(payload["commits"][0])
+    assert changes["file.txt"] == {
+        "path": "file.txt",
+        "mode": "100644",
+        "deleted": True,
+    }
+    assert changes["dir with space/run.sh"]["mode"] == "100755"
+    assert base64.b64decode(changes["image.bin"]["content"]) == b"\x00\xff\x10"
+
+
+def test_build_github_commits_reports_a_rename_as_delete_and_add(tmp_path):
+    base = _init_repo(tmp_path)
+    _git(tmp_path, "mv", "file.txt", "renamed.txt")
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    changes = _changes_by_path(payload["commits"][0])
+    assert changes["file.txt"]["deleted"] is True
+    assert base64.b64decode(changes["renamed.txt"]["content"]) == (
+        b"line1\nline2\nline3\n"
+    )
+
+
+def test_build_github_commits_no_changes_returns_none(tmp_path):
+    base = _init_repo(tmp_path)
+
+    assert build_github_commits(tmp_path, base, _REPO_URL) is None
 
 
 # --- has_changes ------------------------------------------------------- #
