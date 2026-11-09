@@ -593,6 +593,18 @@ class Model:
                         labels=confidence_class_names,
                     )
                 )
+
+                # The averages in the report above count classes without any
+                # prediction above the threshold as having precision 0, which
+                # makes precision look lower as the threshold increases. Those
+                # classes only affect recall, so compute the actual values.
+                classified = y_pred_filter.astype(str) != "__NOT_CLASSIFIED__"
+                correct = (y_pred_filter.astype(str) == y_test.astype(str)) & classified
+                logger.info(
+                    "Precision of classified items: %.4f, recall: %.4f",
+                    correct.sum() / max(classified.sum(), 1),
+                    correct.sum() / len(y_test),
+                )
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )
