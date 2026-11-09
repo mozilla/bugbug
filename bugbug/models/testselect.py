@@ -34,10 +34,7 @@ from bugbug import (
     utils,
 )
 from bugbug.model import Model
-from bugbug.model_calibration import (
-    fit_isotonic_breakpoints,
-    interpolate_breakpoints,
-)
+from bugbug.model_calibration import fit_isotonic_breakpoints
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -837,7 +834,7 @@ class TestSelectModel(Model):
         if calibration is None:
             return dict(confidences)
         names = list(confidences)
-        probabilities = interpolate_breakpoints(
+        probabilities = np.interp(
             [confidences[name] for name in names], calibration[0], calibration[1]
         )
         return {name: float(p) for name, p in zip(names, probabilities)}
@@ -1035,7 +1032,7 @@ class TestSelectModel(Model):
                     f"{calibration_failures[b] / calibration_totals[b]:.4f}"
                     if calibration_totals[b]
                     else "-",
-                    interpolate_breakpoints(confidence, *self.calibration),
+                    np.interp(confidence, *self.calibration),
                 )
 
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]

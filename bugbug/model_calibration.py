@@ -7,7 +7,6 @@
 
 from typing import Sequence
 
-import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
@@ -19,8 +18,9 @@ def fit_isotonic_breakpoints(
     """Weighted isotonic regression of observed rates on a score, as breakpoints.
 
     The regression is clipped to [0, 1] and pools adjacent violators; the
-    breakpoints scikit-learn keeps, through ``interpolate_breakpoints``,
-    reproduce its predictions without the fitted estimator.
+    breakpoints scikit-learn keeps reproduce its predictions through
+    ``numpy.interp`` without the fitted estimator, the nearest end holding
+    outside them.
     """
     from sklearn.isotonic import IsotonicRegression
 
@@ -30,13 +30,6 @@ def fit_isotonic_breakpoints(
         [float(value) for value in regression.X_thresholds_],
         [float(value) for value in regression.y_thresholds_],
     )
-
-
-def interpolate_breakpoints(
-    values: float | Sequence[float], x: Sequence[float], y: Sequence[float]
-) -> np.ndarray:
-    """Linear interpolation between breakpoints; outside them, the nearest end."""
-    return np.interp(values, x, y)
 
 
 class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):

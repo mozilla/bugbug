@@ -16,9 +16,9 @@ threshold tuned on raw scores drifts as the score distribution moves.
 ``fit_calibration`` learns a monotone mapping from raw scores to observed
 culprit rates on labeled history, by isotonic regression over equal-count
 bins of commits so that no step rests on a handful of them, stored as
-breakpoints that ``Calibration.apply`` interpolates without the fitted
-estimator; the fit and the interpolation are ``bugbug.model_calibration``'s,
-shared with test selection. The
+breakpoints that ``Calibration.apply`` interpolates with numpy, without the
+fitted estimator; the fit is ``bugbug.model_calibration``'s, shared with test
+selection. The
 pipeline's ``calibrate`` command builds one record per model version into
 ``perf_risk_calibration.json``; the HTTP service applies the published mapping
 before answering and the simulator fits its own on its optimize window.
@@ -33,7 +33,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from bugbug.model_calibration import fit_isotonic_breakpoints, interpolate_breakpoints
+from bugbug.model_calibration import fit_isotonic_breakpoints
 from bugbug.perf.label_policy import POLICY_VERSION, POSITIVE_OUTCOMES
 from bugbug.perf.push_status import iter_clean_commits
 from bugbug.utils import parse_timestamp, utcnow
@@ -67,7 +67,7 @@ class Calibration:
     fitted_at: str | None = None
 
     def apply(self, score: float) -> float:
-        return float(interpolate_breakpoints(score, self.x, self.y))
+        return float(np.interp(score, self.x, self.y))
 
     def to_record(self) -> dict[str, Any]:
         return {
