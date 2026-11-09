@@ -203,7 +203,9 @@ class DeltaRequestMerge(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
-                if change["added"].startswith("approval-mozilla"):
+                if change["field_name"] == "flagtypes.name" and change[
+                    "added"
+                ].startswith("approval-mozilla"):
                     uplift_request_datetime = datetime.strptime(
                         history["when"], "%Y-%m-%dT%H:%M:%SZ"
                     ).replace(tzinfo=timezone.utc)
@@ -223,7 +225,8 @@ class DeltaNightlyRequestMerge(SingleBugFeature):
         for history in bug["history"]:
             for change in history["changes"]:
                 if not (
-                    change["added"].startswith("approval-mozilla")
+                    change["field_name"] == "flagtypes.name"
+                    and change["added"].startswith("approval-mozilla")
                     and change["added"].endswith("?")
                 ):
                     continue
@@ -600,7 +603,8 @@ class CCNumber(SingleBugFeature):
 class IsUplifted(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return any(
-            change["added"].startswith("approval-mozilla")
+            change["field_name"] == "flagtypes.name"
+            and change["added"].startswith("approval-mozilla")
             and change["added"].endswith("+")
             for history in bug["history"]
             for change in history["changes"]

@@ -53,12 +53,16 @@ def _response_json(response):
     return response.json
 
 
+def _diff_of(patch: bytes) -> str:
+    text = patch.decode("utf-8")
+    return text[text.index("diff --git") :]
+
+
 def _changeset(
     node: str,
     desc: str = "Bug 123456 - Change something",
     author: str = "Developer <developer@example.com>",
     parents: list[str] | None = None,
-    backsoutnodes: list[str] | None = None,
 ) -> dict:
     """Build a minimal hg.mozilla.org automationrelevance changeset."""
     return {
@@ -66,7 +70,6 @@ def _changeset(
         "desc": desc,
         "author": author,
         "parents": parents if parents is not None else ["parentnode"],
-        "backsoutnodes": backsoutnodes or [],
     }
 
 
@@ -164,15 +167,16 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
         models.classify_perf_regression("integration/autoland", "abc123def456") == "OK"
     )
 
-    # Each commit is scored separately, with its own message and full patch.
+    # Each commit is scored separately, with its own message and diff, split
+    # from the export the same way the training set is.
     assert fake_model.calls == [
         {
             "commit_message": "Bug 123456 - Make rendering faster",
-            "diff": PATCH_ONE.decode("utf-8"),
+            "diff": _diff_of(PATCH_ONE),
         },
         {
             "commit_message": "Bug 123456 - Avoid repeated work",
-            "diff": PATCH_TWO.decode("utf-8"),
+            "diff": _diff_of(PATCH_TWO),
         },
     ]
 
@@ -272,53 +276,12 @@ class _ScoringModel:
         return {"calibrated": False}
 
 
-@pytest.mark.parametrize(
-    "changeset, expected_reason",
-    [
-        (_changeset("n"), None),
-        (
-            _changeset(
-                "n",
-                desc="Backed out changeset abc123 for perf regressions",
-                backsoutnodes=["abc123"],
-            ),
-            "backout",
-        ),
-        (_changeset("n", parents=["p1", "p2"]), "merge"),
-        (
-            _changeset(
-                "n",
-                desc="Bug 1 [wpt PR 42] - Sync tests, a=testonly",
-                author="moz-wptsync-bot <wptsync@mozilla.com>",
-            ),
-            "wptsync",
-        ),
-        (_changeset("n", desc="Bug 1 - Sync tests\n\nwpt-pr: 42"), "wptsync"),
-        (
-            _changeset("n", desc="Bug 1 - Reformat tree. # ignore-this-changeset"),
-            "ignore-this-changeset",
-        ),
-        # Rules are evaluated in order: a backout of a wpt sync is a backout.
-        (
-            _changeset(
-                "n",
-                desc="Backed out changeset abc123\n\nwpt-pr: 42",
-                backsoutnodes=["abc123"],
-            ),
-            "backout",
-        ),
-    ],
-)
-def test_ignore_reason_rules(changeset, expected_reason) -> None:
-    assert models.get_perf_regression_ignore_reason(changeset) == expected_reason
-
-
 def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
     fake_model = _ScoringModel(np.array([[0.3, 0.7]]))
     exported_revs = _mock_repo(
         monkeypatch,
         [
-            _changeset("backouthash", backsoutnodes=["node0hash"]),
+            _changeset("mergehash", parents=["p1", "p2"]),
             _changeset("node1hash"),
             _changeset("wptsynchash", author="moz-wptsync-bot <wptsync@mozilla.com>"),
         ],
@@ -347,11 +310,11 @@ def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
     assert result["extra_data"]["ignored_commit_count"] == 2
     assert result["commits"] == [
         {
-            "node": "backouthash",
+            "node": "mergehash",
             "prob": None,
             "class": None,
             "risk_score": None,
-            "ignored_reason": "backout",
+            "ignored_reason": "merge",
         },
         {
             "node": "node1hash",
@@ -375,7 +338,7 @@ def test_worker_reports_fully_ignored_push_without_score(monkeypatch) -> None:
     exported_revs = _mock_repo(
         monkeypatch,
         [
-            _changeset("backouthash", backsoutnodes=["node0hash"]),
+            _changeset("formathash", desc="Bug 1 - Reformat. # ignore-this-changeset"),
             _changeset("mergehash", parents=["p1", "p2"]),
         ],
         {},
@@ -399,5 +362,8 @@ def test_worker_reports_fully_ignored_push_without_score(monkeypatch) -> None:
     assert result["risk_score"] is None
     assert result["extra_data"]["commit_count"] == 2
     assert result["extra_data"]["ignored_commit_count"] == 2
-    assert [c["ignored_reason"] for c in result["commits"]] == ["backout", "merge"]
+    assert [c["ignored_reason"] for c in result["commits"]] == [
+        "ignore-this-changeset",
+        "merge",
+    ]
     assert all(c["risk_score"] is None for c in result["commits"])

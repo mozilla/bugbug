@@ -487,7 +487,7 @@ def test_schedule_config_selection_risk(
     risks: dict[str, float] = {}
     very_likely: list[str] = []
 
-    def select_configs(groups, modified_paths, very_likely_groups):
+    def select_configs(groups, modified_paths, very_likely_groups, used_configs=()):
         risks.update(groups)
         very_likely.extend(very_likely_groups)
         return {group: ["*"] for group in groups}
@@ -523,6 +523,69 @@ def test_schedule_config_selection_risk(
         "test-group1": 0.99,
         "test-group2": 0.6,
         "test-group3": 1.0,
+    }
+
+
+@pytest.mark.parametrize("group2_confidence", [0.4, 0.55, 0.65])
+def test_schedule_config_selection_by_level(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+    group2_confidence: float,
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify(
+        {}, {"test-group1": 0.99, "test-group2": group2_confidence}
+    )
+
+    class ModelCache(MockModelCache):
+        def get(self, model_name):
+            model = super().get(model_name)
+            if model_name == "testgroupselect":
+                model.confidence_thresholds = {
+                    "very_low": 0.3,
+                    "low": 0.5,
+                    "medium": 0.6,
+                    "high": 0.7,
+                }
+            return model
+
+    monkeypatch.setattr(models, "MODEL_CACHE", ModelCache())
+    calls: list[tuple[dict[str, float], list[str]]] = []
+
+    def select_configs(groups, modified_paths, very_likely_groups, used_configs=()):
+        calls.append((dict(groups), sorted(used_configs)))
+        return {
+            group: ["test-linux1804-64/opt-*"]
+            if group == "test-group1"
+            else ["test-windows10/opt-*"]
+            for group in groups
+        }
+
+    monkeypatch.setattr(models, "select_configs", select_configs)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    # The groups are returned down to the "very_low" threshold. The configs of a level ("high" for
+    # test-group1, "very_low", "low" or "medium" for test-group2) are selected after the ones of
+    # the levels above, reusing them.
+    assert result["groups"] == {"test-group1": 0.99, "test-group2": group2_confidence}
+    assert calls == [
+        ({"test-group1": 0.99}, []),
+        ({"test-group2": group2_confidence}, ["test-linux1804-64/opt-*"]),
+    ]
+    assert result["config_groups"] == {
+        "test-group1": ["test-linux1804-64/opt-*"],
+        "test-group2": ["test-windows10/opt-*"],
     }
 
 

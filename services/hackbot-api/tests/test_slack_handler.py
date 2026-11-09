@@ -13,7 +13,12 @@ def _ctx():
     async def download(_key):
         raise AssertionError("Slack messages do not use artifacts")
 
-    return ApplyContext(run_id="run-1", agent="test-agent", download_artifact=download)
+    return ApplyContext(
+        run_id="run-1",
+        agent="test-agent",
+        download_artifact=download,
+        hackbot_client=object(),
+    )
 
 
 @pytest.fixture(autouse=True)
