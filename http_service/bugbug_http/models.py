@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from datetime import timedelta
 from functools import lru_cache
-from typing import Any, Callable, Collection, Sequence
+from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
 
 import orjson
@@ -24,7 +24,7 @@ from bugbug.models import testconfigselect, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.models.perf_regression_predictor import PatchCommitMessageExtractor
+from bugbug.perf.commit_risk import get_ignore_reason
 from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -296,44 +296,13 @@ def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> st
     return "OK"
 
 
-# Commits the perf regression predictor must not score, keyed by the reason
-# reported to the client. Rules are evaluated in order and the first match
-# wins. Each predicate receives a hg.mozilla.org automationrelevance changeset.
-PERF_REGRESSION_IGNORED_COMMIT_RULES: dict[str, Callable[[dict], bool]] = {
-    # Backouts revert an earlier patch, so their diff mirrors the original
-    # change and tells nothing about new regressions.
-    "backout": lambda changeset: len(changeset.get("backsoutnodes", [])) > 0,
-    # Merges (e.g. mozilla-central into autoland) carry no change of their own.
-    "merge": lambda changeset: len(changeset.get("parents", [])) > 1,
-    # Automated web-platform-tests imports from upstream.
-    "wptsync": lambda changeset: repository.is_wptsync(
-        {
-            "author_email": changeset.get("author", ""),
-            "desc": changeset.get("desc", ""),
-        }
-    ),
-    # Large mechanical changes (e.g. reformatting) excluded from blame.
-    "ignore-this-changeset": lambda changeset: (
-        "ignore-this-changeset" in changeset.get("desc", "")
-    ),
-}
-
-
-def get_perf_regression_ignore_reason(changeset: dict) -> str | None:
-    """Return why the perf regression predictor skips a commit, or None to score it."""
-    for reason, matches in PERF_REGRESSION_IGNORED_COMMIT_RULES.items():
-        if matches(changeset):
-            return reason
-    return None
-
-
 def classify_perf_regression(branch: str, rev: str) -> str:
     """Predict performance-regression risk for a push.
 
     Mirrors :func:`schedule_tests`: the push is resolved server-side against
-    the service's own local hg clone. Commits matching one of
-    ``PERF_REGRESSION_IGNORED_COMMIT_RULES`` are listed with their
-    ``ignored_reason`` but not scored. Every other commit is scored
+    the service's own local hg clone. Commits matching one of the rules in
+    :mod:`bugbug.perf.commit_risk` are listed with their ``ignored_reason``
+    but not scored. Every other commit is scored
     separately and the top-level ``risk_score`` is the maximum across the
     scored commits, or ``None`` when every commit in the push was ignored.
     """
@@ -393,7 +362,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     to_score: list[tuple[int, bytes]] = []
     for changeset in changesets:
         node = changeset["node"]
-        ignored_reason = get_perf_regression_ignore_reason(changeset)
+        ignored_reason = get_ignore_reason(changeset)
         commits.append(
             {
                 "node": node,
@@ -417,16 +386,10 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
-    extract_commit_message = PatchCommitMessageExtractor()
     for (index, _), patch in zip(to_score, patches):
-        patch_text = patch.decode("utf-8", "replace")
+        export = repository.parse_hg_export(patch)
         commit_probabilities = model.classify(
-            [
-                {
-                    "commit_message": extract_commit_message(patch_text) or "",
-                    "diff": patch_text,
-                }
-            ],
+            [{"commit_message": export.message, "diff": export.diff}],
             probabilities=True,
         )[0]
         commits[index].update(
@@ -511,11 +474,12 @@ def select_configs(
     groups: dict[str, float],
     modified_paths: list[str],
     very_likely_groups: Collection[str] = (),
+    used_configs: Collection[str] = (),
 ) -> dict[str, list[str]]:
     """The configs to run each group on (patterns over task labels, e.g. test-linux2404-64/opt-*).
 
     `groups` maps groups to their probability of regressing; `very_likely_groups` run on a config of
-    each OS family.
+    each OS family. `used_configs` are configs already selected for other groups of the push.
     """
     selected: dict[str, list[str]] = {}
     try:
@@ -532,6 +496,7 @@ def select_configs(
             modified_paths,
             None if platforms == build_platforms.ALL_PLATFORMS else platforms,
             very_likely_groups,
+            used_configs,
         )
     except Exception:
         LOGGER.exception("Failed to select configs, running groups on all of them")
@@ -897,7 +862,30 @@ def _analyze_patch(
     for group in backout_groups:
         groups[group] = 1.0
 
-    config_groups = select_configs(risks, modified_paths, very_likely_groups)
+    # The taskgraph runs the groups at or above a confidence level, so configs are selected one
+    # level at a time from the highest one: each level reuses the configs of the levels above, and
+    # doesn't depend on the groups below, which don't run with it.
+    levels = sorted(set(groups_thresholds.values()), reverse=True)
+    risks_by_level: dict[float, dict[str, float]] = defaultdict(dict)
+    for group, risk in risks.items():
+        level = next((t for t in levels if groups[group] >= t), 0.0)
+        risks_by_level[level][group] = risk
+    config_groups: dict[str, list[str]] = {}
+    for level in sorted(risks_by_level, reverse=True):
+        used_configs = {
+            config
+            for configs in config_groups.values()
+            for config in configs
+            if config != "*"
+        }
+        config_groups.update(
+            select_configs(
+                risks_by_level[level],
+                modified_paths,
+                very_likely_groups & risks_by_level[level].keys(),
+                used_configs,
+            )
+        )
     # The recently failing manifests run on all configs, as the failures might be specific to
     # their configuration.
     for group in backout_groups:

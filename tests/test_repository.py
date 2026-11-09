@@ -2963,3 +2963,40 @@ new file mode 100644
     assert commits[0].desc == "First commit message"
     assert commits[1].desc == "Second commit message"
     assert commits[2].desc == "Third commit message"
+
+
+def test_parse_hg_export():
+    patch = (
+        b"# HG changeset patch\n# User Developer <dev@example.com>\n# Date 1 0\n"
+        b"#      Thu Jan 01 00:00:00 1970 +0000\n# Node ID " + b"1" * 40 + b"\n"
+        b"# Parent  " + b"2" * 40 + b"\n# Parent  " + b"3" * 40 + b"\n"
+        b"Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset\n\n"
+        b"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+    )
+    export = repository.parse_hg_export(patch)
+    assert export.author == "Developer <dev@example.com>"
+    assert export.parents == ["2" * 40, "3" * 40]
+    # Only the leading header lines are metadata: the message keeps its own
+    # "#" line.
+    assert export.message == "Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset"
+    assert export.diff == "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+    assert repository.parse_hg_export(patch.decode("utf-8")) == export
+
+
+def test_parse_hg_export_without_diff():
+    export = repository.parse_hg_export(
+        b"# HG changeset patch\n# User a@b.c\n# Parent  "
+        + b"0" * 40
+        + b"\nMerge a to b\n"
+    )
+    assert export.parents == ["0" * 40]
+    assert export.message == "Merge a to b"
+    assert export.diff == ""
+
+
+def test_parse_hg_export_mercurial_diff_header():
+    export = repository.parse_hg_export(
+        "# HG changeset patch\n# User a@b.c\nSpeed up\n\ndiff -r def -r abc w.py\n--- a/w.py\n"
+    )
+    assert export.message == "Speed up"
+    assert export.diff == "diff -r def -r abc w.py\n--- a/w.py\n"
