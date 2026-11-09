@@ -239,7 +239,7 @@ def test_detect_issue_comment_on_pr():
 def test_detect_review_comment():
     mention = _detect("pull_request_review_comment", _review_comment())
     assert mention is not None
-    assert mention.full_name == "mozilla/gecko-dev"
+    assert mention.full_repo_name == "mozilla/gecko-dev"
     assert mention.pr_number == 7
     assert mention.head_sha == HEAD_SHA
     assert mention.dedupe_key == "github-review-comment:2002"
@@ -305,7 +305,7 @@ def test_detect_reads_targets_from_payload_not_comment_text():
     payload = _issue_comment("@hackbot fix evil/repo#99")
     mention = _detect("issue_comment", payload)
     assert mention is not None
-    assert (mention.full_name, mention.pr_number) == ("mozilla/gecko-dev", 7)
+    assert (mention.full_repo_name, mention.pr_number) == ("mozilla/gecko-dev", 7)
 
 
 # --- head lookup ---

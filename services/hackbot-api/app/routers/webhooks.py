@@ -303,7 +303,7 @@ async def github_webhook(
         log.warning(
             "Timed out handling GitHub delivery %s for %s#%s (%s)",
             x_github_delivery,
-            mention.full_name,
+            mention.full_repo_name,
             mention.pr_number,
             mention.dedupe_key,
         )
@@ -330,7 +330,7 @@ async def _trigger_github_mention(
     ):
         log.info(
             "Ignored GitHub mention on %s#%s (delivery %s): %s is not authorized",
-            mention.full_name,
+            mention.full_repo_name,
             mention.pr_number,
             x_github_delivery,
             mention.sender_login,
@@ -348,7 +348,7 @@ async def _trigger_github_mention(
     run = await api_client.trigger_run(
         "bug-fix",
         {
-            "github_repo": mention.full_name,
+            "github_repo": mention.full_repo_name,
             "github_pr_number": mention.pr_number,
             "github_head_sha": head_sha,
             "comment": mention.comment,
@@ -359,7 +359,7 @@ async def _trigger_github_mention(
         log.info(
             "Duplicate GitHub delivery %s for %s#%s (%s) resolved to run %s",
             x_github_delivery,
-            mention.full_name,
+            mention.full_repo_name,
             mention.pr_number,
             mention.dedupe_key,
             run.run_id,
@@ -372,7 +372,7 @@ async def _trigger_github_mention(
     log.info(
         "Triggered bug-fix run %s for %s#%s from %s mention by %s (%s)",
         run.run_id,
-        mention.full_name,
+        mention.full_repo_name,
         mention.pr_number,
         settings.github.mention_token,
         mention.sender_login,

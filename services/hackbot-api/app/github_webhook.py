@@ -62,7 +62,7 @@ class GitHubMention:
     head_sha: str | None
 
     @property
-    def full_name(self) -> str:
+    def full_repo_name(self) -> str:
         return f"{self.owner}/{self.repo}"
 
     @property
