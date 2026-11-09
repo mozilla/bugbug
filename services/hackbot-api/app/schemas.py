@@ -198,6 +198,12 @@ class FrontendTriageInputs(AgentInputs):
     effort: str | None = None
 
 
+class ExampleCodexInputs(AgentInputs):
+    bug_id: int
+    model: str | None = None
+    effort: str | None = None
+
+
 class TestPlanGeneratorInputs(AgentInputs):
     feature_name: str
     feature_description: str

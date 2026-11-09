@@ -1,0 +1,17 @@
+services:
+  example-codex-agent:
+    build:
+      context: ../..
+      dockerfile: agents/example-codex/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      - MODEL
+      - EFFORT
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
