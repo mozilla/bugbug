@@ -108,6 +108,7 @@ class ComponentModel(BugModel):
             bug_features.Product(),
             bug_features.OpSys(),
             bug_features.Platform(),
+            bug_features.MentionedPathsComponents(),
         ]
 
         cleanup_functions = [

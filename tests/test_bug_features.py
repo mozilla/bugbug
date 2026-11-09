@@ -28,6 +28,7 @@ from bugbug.bug_features import (
     IsMozillian,
     Keywords,
     Landings,
+    MentionedPathsComponents,
     Patches,
     Product,
     Severity,
@@ -187,3 +188,41 @@ def test_BugTypes(read) -> None:
         BugTypes,
         [["performance"], ["memory"], ["power"], ["security"], ["crash"]],
     )
+
+
+def test_mentioned_paths_components():
+    feature = MentionedPathsComponents()
+    # Set the mapping directly instead of downloading it.
+    feature.path_to_component = {
+        "dom/base/Element.cpp": "Core::DOM: Core & HTML",
+        "dom/media/MediaDecoder.cpp": "Core::Audio/Video: Playback",
+    }
+    feature.file_name_to_components = {
+        "Element.cpp": [("Core::DOM: Core & HTML", 1.0)],
+        "MediaDecoder.cpp": [("Core::Audio/Video: Playback", 1.0)],
+    }
+    feature.directory_to_components = {
+        "dom": [("Core::DOM: Core & HTML", 0.5), ("Core::Audio/Video: Playback", 0.5)],
+        "dom/media": [("Core::Audio/Video: Playback", 1.0)],
+    }
+
+    bug = {
+        "summary": "Crash in MediaDecoder.cpp",
+        "comments": [
+            {
+                "text": "Stack:\n/builds/worker/checkouts/gecko/dom/base/Element.cpp:42\n"
+                "dom/media/MediaDecoder.cpp:7\nSee https://example.com/dom/base/Element.cpp"
+            }
+        ],
+    }
+
+    # The URL is ignored, the path with extra leading directories is found, and
+    # paths are weighted by their position.
+    assert feature(bug) == {
+        "Core::DOM: Core & HTML (path)": 1.0,
+        "Core::DOM: Core & HTML (first path)": 1,
+        "Core::Audio/Video: Playback (path)": 0.5,
+        "Core::Audio/Video: Playback (file name)": 1.0,
+        "Core::DOM: Core & HTML (file name)": 1.0,
+        "Core::Audio/Video: Playback (directory)": 1.0,
+    }
