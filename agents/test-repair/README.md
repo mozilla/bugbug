@@ -84,8 +84,9 @@ the hand-off, so a succeeded run reports without waiting for a human.
 ## Test the agent
 
 ```sh
+cd agents/test-repair
 FAILURE_TASKS='{"test-linux1804-64/opt-xpcshell-1":"XyU4b_BIRdO_IeK6z_kcQg"}' \
-  docker compose up test-repair-agent --build
+  docker compose --env-file ../../.env up test-repair-agent --build
 ```
 
 Artifacts are written to `~/hackbot/artifacts/`.

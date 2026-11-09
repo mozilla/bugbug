@@ -78,7 +78,8 @@ auto-apply, so a succeeded run reports without waiting for a human.
 ## Test the agent
 
 ```sh
-FAILURE_TASKS='{"build-linux":"XyU4b_BIRdO_IeK6z_kcQg"}' docker compose up build-repair-agent --build
+cd agents/build-repair
+FAILURE_TASKS='{"build-linux":"XyU4b_BIRdO_IeK6z_kcQg"}' docker compose --env-file ../../.env up build-repair-agent --build
 ```
 
 Artifacts are written to `~/hackbot/artifacts/`.

@@ -91,15 +91,14 @@ lockfile.
 
 ```bash
 # .env at the repo root: ANTHROPIC_API_KEY, BUGZILLA_API_URL, BUGZILLA_API_KEY, ...
-BUG_ID=1234567 docker compose up bug-fix-agent --build
+cd agents/bug-fix
+BUG_ID=1234567 docker compose --env-file ../../.env up bug-fix-agent --build
 ```
 
 Compose starts the broker alongside the agent, just like the Job does. With no upload
 policy configured, `summary.json`, logs, attachments and the source patch are written to
 `~/hackbot/artifacts/<run_id>` on the host under the same keys they'd have in GCS. Apply the
 agent's changes with `git am changes/changes.patch`.
-
-Add a new agent's `compose.yml` to the root `docker-compose.yml` `include:` list.
 
 **The services:**
 
