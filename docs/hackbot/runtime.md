@@ -106,10 +106,10 @@ checkout of its own. It's best-effort: a failure to build it doesn't fail the ru
 
 Anthropic and OpenAI (model access) and W&B (tracing) are all configured before `main()`
 runs, so an agent just reads `ctx.anthropic.api_key` (or lets Codex pick up the OpenAI
-federation env) and never touches the environment. Deployed, all three use Workload Identity
-Federation and the container holds no long-lived key; locally each falls back to its API-key
-env var, with no special casing needed either side. Mechanism and failure modes:
-[security.md](security.md).
+federation env). Deployed, all three use Workload Identity Federation and the container holds
+no long-lived key; locally each falls back to its API-key env var. Codex doesn't log in from
+`OPENAI_API_KEY` on its own, so locally a Codex agent passes it to `login_api_key()`,
+as `example-codex` does. Mechanism and failure modes: [security.md](security.md).
 
 ## Tools and actions
 

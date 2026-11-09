@@ -47,6 +47,7 @@ on:
           - agents/bug-fix
           - agents/build-repair
           - agents/dataset-eval
+          - agents/example-codex
           - agents/frontend-triage
           - agents/gecko-triage
           - agents/test-plan-generator

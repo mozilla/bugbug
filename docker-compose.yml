@@ -7,6 +7,7 @@ include:
   - path: agents/autowebcompat-diagnosis/compose.yml
   - path: agents/bug-fix/compose.yml
   - path: agents/build-repair/compose.yml
+  - path: agents/example-codex/compose.yml
   - path: agents/test-repair/compose.yml
   - path: agents/test-repair-fix/compose.yml
   - path: agents/frontend-triage/compose.yml
