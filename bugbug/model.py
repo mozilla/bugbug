@@ -364,6 +364,10 @@ class Model:
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
 
+    def get_test_subsets(self) -> dict[str, np.ndarray]:
+        """Subclasses can return boolean masks over the test set, to also report metrics on those subsets."""
+        return {}
+
     def get_sample_weights(self, y) -> np.ndarray | None:
         """Subclasses can return a weight for each training sample, passed to the estimator."""
         return None
@@ -523,6 +527,14 @@ class Model:
 
             tracking_metrics["report"] = report
 
+            for name, mask in self.get_test_subsets().items():
+                logger.info(
+                    "%s: accuracy %.4f (%d items)",
+                    name,
+                    np.mean(y_pred[mask] == y_test[mask]),
+                    mask.sum(),
+                )
+
         print_labeled_confusion_matrix(
             confusion_matrix, self.class_names, is_multilabel=is_multilabel
         )
@@ -600,11 +612,17 @@ class Model:
                 # classes only affect recall, so compute the actual values.
                 classified = y_pred_filter.astype(str) != "__NOT_CLASSIFIED__"
                 correct = (y_pred_filter.astype(str) == y_test.astype(str)) & classified
-                logger.info(
-                    "Precision of classified items: %.4f, recall: %.4f",
-                    correct.sum() / max(classified.sum(), 1),
-                    correct.sum() / len(y_test),
-                )
+                subsets = {
+                    "All items": np.ones(len(y_test), dtype=bool),
+                    **self.get_test_subsets(),
+                }
+                for name, mask in subsets.items():
+                    logger.info(
+                        "%s: precision of classified items: %.4f, recall: %.4f",
+                        name,
+                        correct[mask].sum() / max(classified[mask].sum(), 1),
+                        correct[mask].sum() / max(mask.sum(), 1),
+                    )
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )
