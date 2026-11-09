@@ -115,11 +115,20 @@ def null_str(val):
     return val
 
 
+def null_int(val):
+    if val == "":
+        return None
+
+    return int(val)
+
+
 FIELD_TYPES = {
     "blocks": int,
     "depends_on": int,
     "regressed_by": int,
     "regressions": int,
+    "duplicates": int,
+    "dupe_of": null_int,
     "is_confirmed": bool_str,
     "is_cc_accessible": bool_str,
     "is_creator_accessible": bool_str,
