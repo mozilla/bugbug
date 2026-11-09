@@ -6,18 +6,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from hackbot_agents.evaluator import dataset, prices, runner, tree
-from hackbot_agents.evaluator.grading import checks, tests
-from hackbot_agents.evaluator.isolation import example_env, run_isolated
-from hackbot_agents.evaluator.prompt_executor.harnesses import harness_env
-from hackbot_agents.evaluator.prompt_executor.harnesses.claude_code import _usage
-from hackbot_agents.evaluator.prompt_executor.harnesses.codex import (
+from hackbot_agents.dataset_eval import dataset, prices, runner, tree
+from hackbot_agents.dataset_eval.grading import checks, tests
+from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
+from hackbot_agents.dataset_eval.prompt_executor.harnesses import harness_env
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.claude_code import _usage
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
     _record_usage,
     normalize,
     to_messages,
     trace,
 )
-from hackbot_agents.evaluator.weave_log import WeaveLog
+from hackbot_agents.dataset_eval.weave_log import WeaveLog
 
 
 def _entry(status, **subtests):

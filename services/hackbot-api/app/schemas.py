@@ -246,8 +246,8 @@ UpliftSource = Annotated[
 ]
 
 
-class EvaluatorInputs(BaseModel):
-    """Inputs for the evaluator: one experiment over an eval dataset."""
+class DatasetEvalInputs(BaseModel):
+    """Inputs for dataset-eval: one experiment over an eval dataset."""
 
     # Weave dataset ref, pinned by version (`name:digest`).
     dataset: str

@@ -27,7 +27,7 @@ from .weave_log import WeaveLog
 
 log = logging.getLogger(__name__)
 
-AGENTS = {"prompt-executor": "hackbot_agents.evaluator.prompt_executor"}
+AGENTS = {"prompt-executor": "hackbot_agents.dataset_eval.prompt_executor"}
 METRICS = (
     "test_progress",
     "quality",

@@ -1,8 +1,8 @@
-# Evaluator agent
+# Dataset eval agent
 
 Runs an agent over an eval dataset, grades every example, and logs one Weave
 evaluation per run, so experiments (agent × harness × model × effort) can be
-compared. Logic in [`hackbot_agents/evaluator/`](hackbot_agents/evaluator/).
+compared. Logic in [`hackbot_agents/dataset_eval/`](hackbot_agents/dataset_eval/).
 
 The code knows nothing about any task: what the agent is asked and which tests
 grade it come from the dataset, and the judge's rubric from a Weave prompt. Both
@@ -10,12 +10,12 @@ live in a private Weave project.
 
 ## How a run works
 
-One run is one experiment, in one container ([`runner.py`](hackbot_agents/evaluator/runner.py)):
+One run is one experiment, in one container ([`runner.py`](hackbot_agents/dataset_eval/runner.py)):
 
 1. Clone the latest Firefox, build it, and run every row's tests once for a
    baseline. The commit is recorded with the results.
 2. For each example, in turn: reset the tree, run the agent with a fresh HOME and
-   TMPDIR and a time limit ([`isolation.py`](hackbot_agents/evaluator/isolation.py)),
+   TMPDIR and a time limit ([`isolation.py`](hackbot_agents/dataset_eval/isolation.py)),
    then grade it and log it to Weave.
 
 Grading restores the test harness's own files, builds, reruns the row's tests and
@@ -24,7 +24,7 @@ the test files fails `integrity`.
 
 ## The agent under test
 
-`prompt-executor` ([`prompt_executor/`](hackbot_agents/evaluator/prompt_executor/))
+`prompt-executor` ([`prompt_executor/`](hackbot_agents/dataset_eval/prompt_executor/))
 is a hackbot agent like the others -- inputs from env, result in `summary.json`,
 logged with `Reporter` and traced to Weave under this run's id -- that runs a coding
 harness unmodified on the prompt: `claude_code` (Claude Agent SDK)
@@ -56,7 +56,7 @@ directory off the repo.
 
 `test_progress` (per test file, the share of the gap to passing that the patch
 closes), `test_regressions`, `builds`, `integrity`, `quality`, and cost from
-token usage ([`prices.py`](hackbot_agents/evaluator/prices.py)).
+token usage ([`prices.py`](hackbot_agents/dataset_eval/prices.py)).
 
 ## Input
 
@@ -69,7 +69,7 @@ token usage ([`prices.py`](hackbot_agents/evaluator/prices.py)).
 
 ```sh
 FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>:latest \
-  docker compose --env-file .env -f agents/evaluator/compose.yml run --rm --build evaluator
+  docker compose --env-file .env -f agents/dataset-eval/compose.yml run --rm --build dataset-eval
 ```
 
 `.env` needs `ANTHROPIC_API_KEY` and `WANDB_API_KEY` (and `CODEX_API_KEY` for the

@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-"""Evaluator: run an agent over a dataset, grade every example, log to Weave."""
+"""Dataset eval: run an agent over a dataset, grade every example, log to Weave."""
 
 from hackbot_runtime import AgentError, HackbotAgentResult, HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,14 +30,14 @@ class AgentInputs(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
 
 
-class EvaluatorResult(HackbotAgentResult):
+class DatasetEvalResult(HackbotAgentResult):
     experiment: str
     firefox_commit: str
     summary: dict
     weave_url: str | None = None
 
 
-async def main(ctx: HackbotContext) -> EvaluatorResult:
+async def main(ctx: HackbotContext) -> DatasetEvalResult:
     inputs = AgentInputs()
     if inputs.agent not in AGENTS:
         raise AgentError(f"unknown agent {inputs.agent!r}; known: {', '.join(AGENTS)}")
@@ -47,7 +47,7 @@ async def main(ctx: HackbotContext) -> EvaluatorResult:
     if not rows:
         raise AgentError(f"no examples to run in {inputs.dataset}")
     exp = Experiment(**inputs.model_dump(exclude={"tasks"}))
-    return EvaluatorResult(num_turns=0, **await Runner(exp, ctx, rows).run())
+    return DatasetEvalResult(num_turns=0, **await Runner(exp, ctx, rows).run())
 
 
 if __name__ == "__main__":

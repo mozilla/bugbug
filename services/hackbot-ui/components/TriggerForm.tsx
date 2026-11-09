@@ -78,7 +78,7 @@ export function TriggerForm() {
   const isTestRepairFixAgent = agent === "test-repair-fix";
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
-  const isEvaluatorAgent = agent === "evaluator";
+  const isDatasetEvalAgent = agent === "dataset-eval";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -160,7 +160,7 @@ export function TriggerForm() {
       inputs.target_branch = targetBranch.trim();
       inputs.sources = parsed.sources;
       if (hasBugId) inputs.bug_id = parsedBugId;
-    } else if (isEvaluatorAgent) {
+    } else if (isDatasetEvalAgent) {
       if (!dataset.trim() || !judgeRubric.trim()) {
         setError("Enter a Weave dataset ref and a judge rubric ref.");
         return;
@@ -230,7 +230,7 @@ export function TriggerForm() {
               ? featureName.trim()
               : isUpliftAgent
                 ? `uplift to ${targetBranch.trim()}`
-                : isEvaluatorAgent
+                : isDatasetEvalAgent
                   ? `eval ${dataset.trim()} (${harness})`
                   : hasBugId
                     ? `bug ${parsedBugId}`
@@ -288,7 +288,7 @@ export function TriggerForm() {
         !isTestRepairFixAgent &&
         !isTestPlanAgent &&
         !isUpliftAgent &&
-        !isEvaluatorAgent && (
+        !isDatasetEvalAgent && (
           <div className="field">
             <label htmlFor="bugId">
               {isWebcompatAgent
@@ -420,7 +420,7 @@ export function TriggerForm() {
         </>
       )}
 
-      {isEvaluatorAgent && (
+      {isDatasetEvalAgent && (
         <>
           <div className="field">
             <label htmlFor="dataset">Weave dataset *</label>

@@ -1,5 +1,5 @@
 [project]
-name = "hackbot-agent-evaluator"
+name = "hackbot-agent-dataset-eval"
 version = "0.1.0"
 description = "Runs an agent over an eval dataset, grades it and logs the results to Weave"
 requires-python = ">=3.12"

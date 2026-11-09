@@ -11,7 +11,7 @@ The directory holds only data, kept off the repo:
     <dir>/prompts/<name>.md   e.g. judge-rubric.md, published as <dataset>-<name>
 
 Usage:
-    uv run --package hackbot-agent-evaluator python agents/evaluator/scripts/publish.py \
+    uv run --package hackbot-agent-dataset-eval python agents/dataset-eval/scripts/publish.py \
         --dir ~/private/evals --name my-dataset [--project ENTITY/PROJECT] [--dry-run]
 """
 
@@ -19,7 +19,7 @@ import argparse
 from pathlib import Path
 
 from agent_tools.firefox.tools.run_tests import TEST_ROOTS
-from hackbot_agents.evaluator import dataset
+from hackbot_agents.dataset_eval import dataset
 
 
 def check(row: dict) -> None:

@@ -18,7 +18,7 @@ export const AGENTS = [
     value: "uplift-resolve",
     label: "uplift-resolve",
   },
-  { value: "evaluator", label: "evaluator" },
+  { value: "dataset-eval", label: "dataset-eval" },
 ] as const;
 
 export type AgentValue = (typeof AGENTS)[number]["value"];

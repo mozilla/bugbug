@@ -60,7 +60,7 @@ def to_messages(item: dict, model: str) -> list:
 
 
 def normalize(items: list[dict], usage: dict | None, model: str) -> Run:
-    """A turn's items and total token usage, in the evaluator's shapes."""
+    """A turn's items and total token usage, in dataset-eval's shapes."""
     run = Run(models=[model])
     for item in items:
         for msg in to_messages(item, model):

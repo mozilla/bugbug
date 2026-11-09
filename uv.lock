@@ -22,7 +22,7 @@ members = [
     "hackbot-agent-autowebcompat-repro",
     "hackbot-agent-bug-fix",
     "hackbot-agent-build-repair",
-    "hackbot-agent-evaluator",
+    "hackbot-agent-dataset-eval",
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
@@ -2515,9 +2515,9 @@ requires-dist = [
 provides-extras = ["eval"]
 
 [[package]]
-name = "hackbot-agent-evaluator"
+name = "hackbot-agent-dataset-eval"
 version = "0.1.0"
-source = { editable = "agents/evaluator" }
+source = { editable = "agents/dataset-eval" }
 dependencies = [
     { name = "agent-tools", extra = ["firefox"] },
     { name = "anthropic" },

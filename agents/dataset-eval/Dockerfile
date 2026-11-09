@@ -17,11 +17,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=VERSION,target=VERSION \
-    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-evaluator --extra a11y
+    uv sync --frozen --no-dev --no-install-workspace --package hackbot-agent-dataset-eval --extra a11y
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,target=/app,rw \
-    uv sync --locked --no-dev --no-editable --package hackbot-agent-evaluator --extra a11y
+    uv sync --locked --no-dev --no-editable --package hackbot-agent-dataset-eval --extra a11y
 
 FROM python:3.14 AS base
 
@@ -81,8 +81,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
-COPY agents/evaluator/hackbot.toml /app/hackbot.toml
-COPY agents/evaluator/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY agents/dataset-eval/hackbot.toml /app/hackbot.toml
+COPY agents/dataset-eval/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash agent \
@@ -124,4 +124,4 @@ COPY --from=builder /opt/venv /opt/venv
 USER agent
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["python", "-m", "hackbot_agents.evaluator"]
+CMD ["python", "-m", "hackbot_agents.dataset_eval"]
