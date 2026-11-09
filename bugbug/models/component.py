@@ -9,16 +9,17 @@ from datetime import datetime, timezone
 
 import dateutil.parser
 import numpy as np
-import xgboost
 from dateutil.relativedelta import relativedelta
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.svm import LinearSVC
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
-from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class ComponentModel(BugModel):
         "Firefox for Android": "Firefox for Android::General",
     }
 
-    def __init__(self, calibration=True, lemmatization=False):
+    def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
@@ -101,6 +102,7 @@ class ComponentModel(BugModel):
             bug_features.Whiteboard(),
             bug_features.Patches(),
             bug_features.Landings(),
+            bug_features.BugReporter(),
         ]
 
         cleanup_functions = [
@@ -120,11 +122,17 @@ class ComponentModel(BugModel):
             ]
         )
 
-        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        if calibration:
-            estimator = IsotonicRegressionCalibrator(estimator)
-            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
-            self.calculate_importance = False
+        # A linear model on sparse n-gram features is more accurate (and faster
+        # to train) than gradient boosted trees for this task. The L1 penalty
+        # keeps the weights sparse, so the model stays small despite the large
+        # vocabulary. Probabilities are calibrated on out-of-fold predictions.
+        estimator = CalibratedClassifierCV(
+            LinearSVC(penalty="l1", dual=False),
+            method="isotonic",
+            cv=3,
+            ensemble=False,
+            n_jobs=3,
+        )
 
         self.clf = Pipeline(
             [
@@ -133,10 +141,35 @@ class ComponentModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            (
+                                "title",
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=30000,
+                                ),
+                                "title",
+                            ),
+                            (
+                                "title_char",
+                                TfidfVectorizer(
+                                    min_df=3,
+                                    analyzer="char_wb",
+                                    ngram_range=(2, 5),
+                                    sublinear_tf=True,
+                                    max_features=30000,
+                                ),
+                                "title",
+                            ),
                             (
                                 "comments",
-                                self.text_vectorizer(min_df=0.0001),
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=80000,
+                                ),
                                 "comments",
                             ),
                         ]
@@ -192,6 +225,16 @@ class ComponentModel(BugModel):
 
     def get_test_subsets(self):
         return self.test_subsets
+
+    def fit_classifier(self, X, y):
+        super().fit_classifier(X, y)
+
+        # Most weights are zero thanks to the L1 penalty, store them as a sparse
+        # matrix to reduce the model size.
+        for calibrated_classifier in self.clf.named_steps[
+            "estimator"
+        ].calibrated_classifiers_:
+            calibrated_classifier.estimator.sparsify()
 
     def filter_component(self, product, component):
         if product == "Firefox for Android" or product == "GeckoView":
