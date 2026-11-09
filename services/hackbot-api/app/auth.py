@@ -47,6 +47,48 @@ async def require_phabricator_signature(
         )
 
 
+def verify_github_signature(
+    raw_body: bytes, signature: str | None, secret: str
+) -> bool:
+    """Constant-time-check GitHub's ``X-Hub-Signature-256``.
+
+    GitHub signs each delivery with HMAC-SHA256 over the raw request body, keyed
+    by the App's webhook secret, and sends ``sha256=<hex digest>``. Only SHA-256
+    is accepted: the legacy ``X-Hub-Signature`` (SHA-1) header is never read.
+    """
+    if not secret or not signature or not signature.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    # Bytes, because compare_digest raises on non-ASCII strings, and a header
+    # like "sha256=é" must be a 401, not a 500.
+    return hmac.compare_digest(f"sha256={expected}".encode(), signature.encode())
+
+
+async def require_github_signature(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+) -> None:
+    """Reject the request unless GitHub's webhook signature is valid.
+
+    The App is optional until deployed, so without it the webhook answers 503
+    (not configured) rather than 401 (bad signature). With it, the secret is
+    required at startup.
+    """
+    if settings.github is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GitHub webhook is not configured",
+        )
+    raw = await request.body()
+    if not verify_github_signature(
+        raw, x_hub_signature_256, settings.github.webhook_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing webhook signature",
+        )
+
+
 def require_bugzilla_webhook_secret(
     x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
@@ -64,16 +106,17 @@ def require_api_key(
     request: Request,
     x_api_key: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
-) -> None:
+) -> str | None:
     """Accept either API key (X-API-Key) or service account token (Bearer).
 
     Service accounts with the "read" role may only make read requests.
+    Returns the service account email, or None for the API key.
     """
     if x_api_key is not None:
         if settings.external_api_key and hmac.compare_digest(
             x_api_key, settings.external_api_key
         ):
-            return
+            return None
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid X-API-Key",
@@ -98,7 +141,8 @@ def require_api_key(
             detail="Invalid credentials",
         ) from None
 
-    role = settings.service_account_roles.get(claims.get("email"))
+    email = claims.get("email")
+    role = settings.service_account_roles.get(email)
     if role is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -109,6 +153,7 @@ def require_api_key(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access",
         )
+    return email
 
 
 async def require_push_auth(authorization: str | None = Header(default=None)) -> None:
