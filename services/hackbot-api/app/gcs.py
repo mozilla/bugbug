@@ -121,9 +121,7 @@ def _generate_post_policy_sync(run_id: str, timeout_seconds: int) -> dict[str, A
     return {"url": url, "fields": fields}
 
 
-async def generate_results_policy(
-    run_id: str, timeout_seconds: int = settings.job_execution_timeout_seconds
-) -> dict[str, Any]:
+async def generate_results_policy(run_id: str, timeout_seconds: int) -> dict[str, Any]:
     return await asyncio.to_thread(_generate_post_policy_sync, run_id, timeout_seconds)
 
 

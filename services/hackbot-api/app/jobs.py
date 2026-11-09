@@ -70,9 +70,7 @@ def _trigger_sync(
 
 
 async def trigger_execution(
-    job_name: str,
-    env_overrides: dict[str, str],
-    timeout_seconds: int = settings.job_execution_timeout_seconds,
+    job_name: str, env_overrides: dict[str, str], timeout_seconds: int
 ) -> str:
     return await asyncio.to_thread(
         _trigger_sync, job_name, env_overrides, timeout_seconds
