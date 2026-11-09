@@ -33,7 +33,7 @@ from app.github_webhook import (
     DELIVERY_DEADLINE_SECONDS,
     GitHubMention,
     detect_mention,
-    resolve_head_sha,
+    resolve_pull_request_refs,
 )
 from app.hackbot_client import get_hackbot_client
 from app.phabricator_authorization import PhabricatorAuthorizer
@@ -337,11 +337,12 @@ async def _trigger_github_mention(
         )
         return {"status": "ignored", "reason": "unauthorized user"}
 
-    head_sha = mention.head_sha
-    if head_sha is None:
-        head_sha = await resolve_head_sha(github_app, mention)
-        if head_sha is None:
+    head_sha, base_ref = mention.head_sha, mention.base_ref
+    if head_sha is None or base_ref is None:
+        refs = await resolve_pull_request_refs(github_app, mention)
+        if refs is None:
             return {"status": "ignored", "reason": "pull request is not open"}
+        head_sha, base_ref = refs
 
     # The comment or review ID identifies the request, so a redelivery (which
     # GitHub sends only on request) is answered with the run it first created.
@@ -351,6 +352,7 @@ async def _trigger_github_mention(
             "github_repo": mention.full_repo_name,
             "github_pr_number": mention.pr_number,
             "github_head_sha": head_sha,
+            "github_base_ref": base_ref,
             "comment": mention.comment,
         },
         dedupe_key=mention.dedupe_key,

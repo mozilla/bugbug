@@ -20,14 +20,16 @@ from app.github import GitHubApp
 from app.github_authorization import GitHubAuthorizer
 from app.github_webhook import (
     GitHubMention,
+    PullRequestRefs,
     _format_comment,
     detect_mention,
     mentions,
-    resolve_head_sha,
+    resolve_pull_request_refs,
 )
 from app.hackbot_client import get_hackbot_client
 from app.main import app
 from app.routers import webhooks
+from app.schemas import BugFixInputs
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -39,6 +41,7 @@ BOT_LOGIN = "hackbot"
 TOKEN = "@hackbot"
 INSTALLATION_ID = 456
 HEAD_SHA = "a" * 40
+BASE_REF = "release"
 
 
 def _sign(body: bytes, secret: str = SECRET) -> str:
@@ -184,7 +187,12 @@ def _issue_comment(body: str = "@hackbot fix", **overrides) -> dict:
 
 
 def _pull_request(state: str = "open") -> dict:
-    return {"number": 7, "state": state, "head": {"sha": HEAD_SHA}}
+    return {
+        "number": 7,
+        "state": state,
+        "head": {"sha": HEAD_SHA},
+        "base": {"ref": BASE_REF},
+    }
 
 
 def _review_comment(body: str = "@hackbot fix this", **overrides) -> dict:
@@ -233,6 +241,7 @@ def test_detect_issue_comment_on_pr():
         dedupe_key="github-issue-comment:1001",
         # Not in an issue_comment payload; looked up by the route.
         head_sha=None,
+        base_ref=None,
     )
 
 
@@ -242,6 +251,7 @@ def test_detect_review_comment():
     assert mention.full_repo_name == "mozilla/gecko-dev"
     assert mention.pr_number == 7
     assert mention.head_sha == HEAD_SHA
+    assert mention.base_ref == BASE_REF
     assert mention.dedupe_key == "github-review-comment:2002"
     assert mention.comment == (
         '  <comment comment_id="2002" type="inline" path="dom/base/Foo.cpp" '
@@ -262,6 +272,7 @@ def test_detect_review():
     mention = _detect("pull_request_review", _review())
     assert mention is not None
     assert mention.head_sha == HEAD_SHA
+    assert mention.base_ref == BASE_REF
     assert mention.dedupe_key == "github-review:3003"
     assert mention.comment.startswith('  <comment review_id="3003" type="review">')
 
@@ -349,7 +360,7 @@ class _FakeGitHub:
 
 def _pull_request_response(state: str) -> dict:
     # Trimmed: the lookup reads only these fields.
-    return {"number": 7, "state": state, "head": {"sha": HEAD_SHA}}
+    return _pull_request(state)
 
 
 def _github_app(pem: str, fake: _FakeGitHub) -> GitHubApp:
@@ -361,11 +372,13 @@ def _github_app(pem: str, fake: _FakeGitHub) -> GitHubApp:
     )
 
 
-async def test_resolve_head_sha_reads_open_pr_with_a_narrow_token(pem):
+async def test_resolve_pull_request_refs_reads_open_pr_with_a_narrow_token(pem):
     fake = _FakeGitHub()
     mention = _detect("issue_comment", _issue_comment())
 
-    assert await resolve_head_sha(_github_app(pem, fake), mention) == HEAD_SHA
+    assert await resolve_pull_request_refs(
+        _github_app(pem, fake), mention
+    ) == PullRequestRefs(HEAD_SHA, BASE_REF)
 
     mint = next(r for r in fake.requests if r.url.path.endswith("/access_tokens"))
     assert mint.url.path == f"/app/installations/{INSTALLATION_ID}/access_tokens"
@@ -375,19 +388,18 @@ async def test_resolve_head_sha_reads_open_pr_with_a_narrow_token(pem):
     }
 
 
-async def test_resolve_head_sha_of_closed_pr_is_none(pem):
+async def test_resolve_pull_request_refs_of_closed_pr_is_none(pem):
     mention = _detect("issue_comment", _issue_comment())
-    assert (
-        await resolve_head_sha(_github_app(pem, _FakeGitHub("closed")), mention) is None
-    )
+    github_app = _github_app(pem, _FakeGitHub("closed"))
+    assert await resolve_pull_request_refs(github_app, mention) is None
 
 
-async def test_resolve_head_sha_deadline_covers_token_mint_and_lookup(pem):
+async def test_resolve_pull_request_refs_deadline_covers_token_mint_and_lookup(pem):
     # Each request alone fits the deadline; the mint and the fetch together don't.
     github_app = _github_app(pem, _FakeGitHub(delay=0.06))
     mention = _detect("issue_comment", _issue_comment())
     with pytest.raises(TimeoutError):
-        await resolve_head_sha(github_app, mention, timeout_seconds=0.1)
+        await resolve_pull_request_refs(github_app, mention, timeout_seconds=0.1)
 
 
 # --- route ---
@@ -447,9 +459,9 @@ def head_lookups(monkeypatch):
 
     async def fake_resolve(github_app, mention):
         calls.append((github_app, mention))
-        return HEAD_SHA
+        return PullRequestRefs(HEAD_SHA, BASE_REF)
 
-    monkeypatch.setattr(webhooks, "resolve_head_sha", fake_resolve)
+    monkeypatch.setattr(webhooks, "resolve_pull_request_refs", fake_resolve)
     return calls
 
 
@@ -626,6 +638,7 @@ def test_route_triggers_run_for_conversation_comment(
                 "github_repo": "mozilla/gecko-dev",
                 "github_pr_number": 7,
                 "github_head_sha": HEAD_SHA,
+                "github_base_ref": BASE_REF,
                 "comment": (
                     '  <comment comment_id="1001" type="regular">\n'
                     "    @hackbot fix\n"
@@ -635,6 +648,8 @@ def test_route_triggers_run_for_conversation_comment(
         )
     ]
     assert api.dedupe_keys == ["github-issue-comment:1001"]
+    # The run API accepts it as a bug-fix run, with no Bugzilla bug.
+    BugFixInputs.model_validate(api.calls[0][1])
 
 
 @pytest.mark.parametrize(
@@ -654,9 +669,10 @@ def test_route_triggers_run_for_review_without_head_lookup(
     resp = _post(client, event, payload)
 
     assert resp.json()["status"] == "triggered"
-    # The review payload already carries the head.
+    # The review payload already carries the head and base.
     assert head_lookups == []
     assert api.calls[0][1]["github_head_sha"] == HEAD_SHA
+    assert api.calls[0][1]["github_base_ref"] == BASE_REF
     assert api.dedupe_keys == [dedupe_key]
 
 
@@ -664,7 +680,7 @@ def test_route_ignores_pr_closed_before_lookup(client, api, monkeypatch):
     async def closed(github_app, mention):
         return None
 
-    monkeypatch.setattr(webhooks, "resolve_head_sha", closed)
+    monkeypatch.setattr(webhooks, "resolve_pull_request_refs", closed)
     resp = _post(client, "issue_comment", _issue_comment())
     assert resp.json() == {"status": "ignored", "reason": "pull request is not open"}
     assert api.calls == []
@@ -676,7 +692,7 @@ def test_route_fails_delivery_when_head_lookup_times_out(client, api, monkeypatc
     async def slow(github_app, mention):
         raise TimeoutError
 
-    monkeypatch.setattr(webhooks, "resolve_head_sha", slow)
+    monkeypatch.setattr(webhooks, "resolve_pull_request_refs", slow)
     resp = _post(client, "issue_comment", _issue_comment())
     assert resp.status_code == 503
     assert api.calls == []
@@ -688,9 +704,9 @@ def test_route_deadline_covers_the_whole_delivery(client, api, monkeypatch):
 
     async def slow(github_app, mention):
         await asyncio.sleep(0.06)
-        return HEAD_SHA
+        return PullRequestRefs(HEAD_SHA, BASE_REF)
 
-    monkeypatch.setattr(webhooks, "resolve_head_sha", slow)
+    monkeypatch.setattr(webhooks, "resolve_pull_request_refs", slow)
     api.delay = 0.06
     resp = _post(client, "issue_comment", _issue_comment())
     assert resp.status_code == 503

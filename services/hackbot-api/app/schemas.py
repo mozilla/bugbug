@@ -80,13 +80,32 @@ class RunDoc(BaseModel):
 # --- Per-agent input schemas ---
 
 
+# A GitHub repository's full name, as ``owner/repo``.
+GitHubRepo = Annotated[str, Field(pattern=r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")]
+# A full commit sha: the agent compares it with the checked-out head verbatim.
+GitSha = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+# A branch name or sha, passed to ``git fetch``: it must not read as an option
+# (a leading ``-``) or a refspec (a ``:``). Git rejects anything else invalid.
+GitRef = Annotated[str, Field(pattern=r"^[^-\s:][^\s:]*$")]
+
+
 class BugFixInputs(BaseModel):
-    bug_id: int
+    # Required for every mode except a GitHub pull request, which need not
+    # belong to a Bugzilla bug.
+    bug_id: int | None = None
     # When following up on an existing Phabricator revision (e.g. triggered by a
     # webhook), the revision to update and the comment that mentioned Hackbot.
     # Both are omitted for a plain "fix this bug" run and for Bugzilla needinfo.
     revision_id: int | None = None
     comment: str | None = None
+    # When following up on a GitHub pull request instead, the PR and (as for a
+    # revision) the comment that mentioned Hackbot. The head sha, if given, pins
+    # the commit the request was made at, and the base is the branch the PR
+    # targets (the repository's default branch if omitted).
+    github_repo: GitHubRepo | None = None
+    github_pr_number: Annotated[int | None, Field(gt=0)] = None
+    github_head_sha: GitSha | None = None
+    github_base_ref: GitRef | None = None
     # Set only by a Bugzilla flag.needinfo webhook. Its presence selects the
     # follow-up mode and lets the API clear that exact flag after the response.
     bugzilla_needinfo_flag_id: Annotated[int | None, Field(gt=0)] = None
@@ -96,7 +115,25 @@ class BugFixInputs(BaseModel):
 
     @model_validator(mode="after")
     def _validate_mode(self) -> BugFixInputs:
-        """Require exactly one coherent normal, Phabricator, or Bugzilla mode."""
+        """Require one coherent normal, Phabricator, GitHub, or Bugzilla mode."""
+        if (self.github_repo is None) != (self.github_pr_number is None):
+            raise ValueError("github_repo and github_pr_number must be set together")
+        if self.github_pr_number is not None:
+            if self.revision_id is not None:
+                raise ValueError("github_pr_number cannot be combined with revision_id")
+            if self.bugzilla_needinfo_flag_id is not None:
+                raise ValueError(
+                    "github_pr_number cannot be combined with bugzilla_needinfo_flag_id"
+                )
+            if not self.comment:
+                raise ValueError("comment is required when github_pr_number is set")
+            return self
+        if self.github_head_sha is not None or self.github_base_ref is not None:
+            raise ValueError(
+                "github_head_sha and github_base_ref require github_pr_number"
+            )
+        if self.bug_id is None:
+            raise ValueError("bug_id is required unless github_pr_number is set")
         if self.bugzilla_needinfo_flag_id is not None:
             if self.revision_id is not None:
                 raise ValueError(
@@ -110,7 +147,7 @@ class BugFixInputs(BaseModel):
             if not self.comment:
                 raise ValueError("comment is required when revision_id is set")
         elif self.comment is not None:
-            raise ValueError("comment requires revision_id")
+            raise ValueError("comment requires revision_id or github_pr_number")
         return self
 
 

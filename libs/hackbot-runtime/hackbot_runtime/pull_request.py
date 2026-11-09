@@ -34,8 +34,9 @@ async def checkout_pull_request(
     to the PR's branch would add).
 
     ``base`` is the branch or commit the PR targets (its ``base.ref`` or
-    ``base.sha``). It is fetched with enough history on both sides for git to
-    find the commit the PR branched from. Use the returned merge base with
+    ``base.sha``), or ``"HEAD"`` for the repository's default branch. It is
+    fetched with enough history on both sides for git to find the commit the PR
+    branched from. Use the returned merge base with
     ``git diff <merge-base> HEAD`` to see the same change as GitHub's "Files
     changed" tab, or ``git log <merge-base>..HEAD`` to list the PR's commits.
 

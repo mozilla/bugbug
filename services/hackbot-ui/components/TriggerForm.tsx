@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { AGENTS, type AgentValue } from "@/lib/agents";
 import { parseBugId } from "@/lib/bugzilla";
+import { GIT_REF, GIT_SHA, parsePullRequest } from "@/lib/github";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
 import { parseUpliftSources } from "@/lib/uplift";
@@ -23,6 +24,16 @@ export function TriggerForm() {
   );
   const [bugId, setBugId] = useState(() => params.get("bug_id") ?? "");
   const [bugData, setBugData] = useState(() => params.get("bug_data") ?? "");
+  const [pullRequest, setPullRequest] = useState(
+    () => params.get("pull_request") ?? ""
+  );
+  const [headSha, setHeadSha] = useState(
+    () => params.get("github_head_sha") ?? ""
+  );
+  const [baseRef, setBaseRef] = useState(
+    () => params.get("github_base_ref") ?? ""
+  );
+  const [comment, setComment] = useState(() => params.get("comment") ?? "");
   const [gitCommit, setGitCommit] = useState(
     () => params.get("git_commit") ?? ""
   );
@@ -57,6 +68,9 @@ export function TriggerForm() {
   const [error, setError] = useState<string | null>(null);
 
   const isWebcompatAgent = agent.startsWith("autowebcompat-");
+  const isBugFixAgent = agent === "bug-fix";
+  // A bug-fix run on a GitHub pull request needs no Bugzilla bug.
+  const targetsPullRequest = isBugFixAgent && pullRequest.trim().length > 0;
   const isBuildRepairAgent = agent === "build-repair";
   const isTestRepairAgent = agent === "test-repair";
   const isTestRepairFixAgent = agent === "test-repair-fix";
@@ -143,6 +157,34 @@ export function TriggerForm() {
       inputs.target_branch = targetBranch.trim();
       inputs.sources = parsed.sources;
       if (hasBugId) inputs.bug_id = parsedBugId;
+    } else if (targetsPullRequest) {
+      const pr = parsePullRequest(pullRequest);
+      if (!pr) {
+        setError(
+          "Enter a GitHub pull request URL or owner/repo#number (e.g. mozilla-firefox/firefox#42)."
+        );
+        return;
+      }
+      const sha = headSha.trim().toLowerCase();
+      if (sha && !GIT_SHA.test(sha)) {
+        setError("The head commit must be a full 40-character SHA.");
+        return;
+      }
+      const base = baseRef.trim();
+      if (base && !GIT_REF.test(base)) {
+        setError("Enter a valid base branch name.");
+        return;
+      }
+      if (!comment.trim()) {
+        setError("Enter what Hackbot should do on the pull request.");
+        return;
+      }
+      inputs.github_repo = pr.repo;
+      inputs.github_pr_number = pr.number;
+      if (sha) inputs.github_head_sha = sha;
+      if (base) inputs.github_base_ref = base;
+      inputs.comment = comment.trim();
+      if (hasBugId) inputs.bug_id = parsedBugId;
     } else if (!isWebcompatAgent) {
       if (!hasBugId) {
         setError("Enter a valid Bugzilla bug ID or bug URL.");
@@ -191,9 +233,11 @@ export function TriggerForm() {
               ? featureName.trim()
               : isUpliftAgent
                 ? `uplift to ${targetBranch.trim()}`
-                : hasBugId
-                  ? `bug ${parsedBugId}`
-                  : "inline report";
+                : targetsPullRequest
+                  ? `${inputs.github_repo}#${inputs.github_pr_number}`
+                  : hasBugId
+                    ? `bug ${parsedBugId}`
+                    : "inline report";
       saveRun({
         run_id: run.run_id,
         agent: run.agent,
@@ -251,17 +295,69 @@ export function TriggerForm() {
             <label htmlFor="bugId">
               {isWebcompatAgent
                 ? "Bugzilla bug ID or URL (optional if report text provided)"
-                : "Bugzilla bug ID or URL *"}
+                : targetsPullRequest
+                  ? "Bugzilla bug ID or URL (optional with a pull request)"
+                  : "Bugzilla bug ID or URL *"}
             </label>
             <input
               id="bugId"
               placeholder="e.g. 1846789 or https://bugzilla.mozilla.org/show_bug.cgi?id=1846789"
               value={bugId}
               onChange={(e) => setBugId(e.target.value)}
-              required={!isWebcompatAgent}
+              required={!isWebcompatAgent && !targetsPullRequest}
             />
           </div>
         )}
+
+      {isBugFixAgent && (
+        <div className="field">
+          <label htmlFor="pullRequest">
+            GitHub pull request to follow up on (optional)
+          </label>
+          <input
+            id="pullRequest"
+            placeholder="e.g. https://github.com/mozilla-firefox/firefox/pull/42 or mozilla-firefox/firefox#42"
+            value={pullRequest}
+            onChange={(e) => setPullRequest(e.target.value)}
+          />
+        </div>
+      )}
+
+      {targetsPullRequest && (
+        <>
+          <div className="field">
+            <label htmlFor="comment">Request for Hackbot *</label>
+            <textarea
+              id="comment"
+              placeholder="What should Hackbot do on the pull request?"
+              rows={4}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              required
+            />
+          </div>
+          <div className="row">
+            <div className="field">
+              <label htmlFor="headSha">Head commit SHA (optional)</label>
+              <input
+                id="headSha"
+                placeholder="the pull request's current head"
+                value={headSha}
+                onChange={(e) => setHeadSha(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="baseRef">Base branch (optional)</label>
+              <input
+                id="baseRef"
+                placeholder="the repository's default branch"
+                value={baseRef}
+                onChange={(e) => setBaseRef(e.target.value)}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {isWebcompatAgent && (
         <div className="field">

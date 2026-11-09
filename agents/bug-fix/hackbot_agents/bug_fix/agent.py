@@ -9,6 +9,7 @@ that holds the Bugzilla token — the agent process itself never sees it.
 import sys
 from pathlib import Path
 from shlex import quote
+from typing import NamedTuple
 
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
@@ -40,8 +41,21 @@ MAX_BUFFER_SIZE = 10 * 1024 * 1024
 
 
 class BugFixResult(HackbotAgentResult):
-    bug_id: int
+    # None for a GitHub pull request that belongs to no bug.
+    bug_id: int | None = None
     result: str | None = None
+
+
+class PullRequest(NamedTuple):
+    """The GitHub pull request a run follows up on, as checked out."""
+
+    repo: str
+    number: int
+    # The commit the PR branched from: ``git diff <merge_base> HEAD`` is its change.
+    merge_base: str
+
+    def __str__(self) -> str:
+        return f"{self.repo}#{self.number}"
 
 
 def render_prompt(name: str, **fields: object) -> str:
@@ -57,13 +71,25 @@ def render_prompt(name: str, **fields: object) -> str:
 
 def select_workflow(
     *,
-    bug: int,
+    bug: int | None,
     revision_id: int | None,
     comment: str | None,
     bugzilla_needinfo_flag_id: int | None,
     rules_dir: Path,
+    pull_request: PullRequest | None = None,
 ) -> str:
-    """Select the prompt for exactly one of the three bug-fix modes."""
+    """Select the prompt for exactly one of the four bug-fix modes."""
+    if pull_request is not None:
+        return render_prompt(
+            "github-follow-up.md",
+            github_repo=pull_request.repo,
+            github_pr_number=pull_request.number,
+            merge_base=pull_request.merge_base,
+            bug_context=f" (bug {bug})" if bug is not None else "",
+            comment=comment,
+        )
+    if bug is None:
+        raise ValueError("a bug is required unless following up on a pull request")
     if bugzilla_needinfo_flag_id is not None:
         return render_prompt("bugzilla-needinfo.md", bug_id=bug, comment=comment)
     if revision_id:
@@ -76,7 +102,7 @@ def select_workflow(
 
 
 def _record_needinfo_clear(
-    recorder: ActionsRecorder, *, bug_id: int, flag_id: int | None
+    recorder: ActionsRecorder, *, bug_id: int | None, flag_id: int | None
 ) -> None:
     """Record the clear after responding to a Bugzilla needinfo webhook."""
     if flag_id is None or not recorder.actions:
@@ -145,10 +171,11 @@ async def run_bug_fix(
     phabricator_mcp_server: McpServerConfig,
     source_repo: Path,
     fx_ctx: FirefoxContext,
-    bug: int,
+    bug: int | None,
     comment: str | None = None,
     revision_id: int | None = None,
     bugzilla_needinfo_flag_id: int | None = None,
+    pull_request: PullRequest | None = None,
     rules_dir: Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
@@ -159,13 +186,16 @@ async def run_bug_fix(
 ) -> BugFixResult:
     """Triage and fix a single Bugzilla bug with a claude-agent-sdk agent.
 
-    Returns a :class:`BugFixResult` on success; raises :class:`AgentError` if the
-    agent ends in an error.
+    With ``pull_request``, follow up on that GitHub PR instead; ``bug`` is then
+    optional. Returns a :class:`BugFixResult` on success; raises
+    :class:`AgentError` if the agent ends in an error.
     """
     if rules_dir is None:
         rules_dir = HERE / "rules"
 
-    print(f"[bug_fix] triaging bug {bug}", file=sys.stderr)
+    # What this run works on, for its log and errors.
+    subject = f"pull request {pull_request}" if pull_request else f"bug {bug}"
+    print(f"[bug_fix] working on {subject}", file=sys.stderr)
 
     # Firefox build/eval MCP server (in-process; no tokens). The runtime
     # derives fx_ctx from the prepared source checkout and the agent's
@@ -179,6 +209,7 @@ async def run_bug_fix(
         comment=comment,
         bugzilla_needinfo_flag_id=bugzilla_needinfo_flag_id,
         rules_dir=rules_dir,
+        pull_request=pull_request,
     )
 
     # Action-recording MCP server (in-process). Standalone/script runs pass
@@ -224,7 +255,7 @@ async def run_bug_fix(
 
     result_msg: ResultMessage | None = None
     with Reporter(verbose=verbose, log_path=log) as reporter:
-        reporter.header(f"bug {bug}")
+        reporter.header(subject)
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
             async for msg in client.receive_response():
@@ -233,11 +264,9 @@ async def run_bug_fix(
                     result_msg = msg
 
     if result_msg is None:
-        raise AgentError(f"bug {bug}: agent produced no result message")
+        raise AgentError(f"{subject}: agent produced no result message")
     if result_msg.is_error:
-        raise AgentError(
-            f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
-        )
+        raise AgentError(f"{subject} failed: {result_msg.result or result_msg.subtype}")
 
     _record_needinfo_clear(
         actions_recorder,

@@ -70,6 +70,116 @@ def test_bugzilla_needinfo_flag_id_must_be_positive():
         )
 
 
+HEAD_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_github_pr_mode_accepts_the_webhook_payload_without_a_bug():
+    # What the GitHub webhook sends: a PR is not tied to a Bugzilla bug.
+    inputs = BugFixInputs(
+        github_repo="mozilla-firefox/firefox",
+        github_pr_number=42,
+        github_head_sha=HEAD_SHA,
+        github_base_ref="main",
+        comment="<comment>@hackbot please fix</comment>",
+    )
+    assert model_to_env(inputs) == {
+        "GITHUB_REPO": "mozilla-firefox/firefox",
+        "GITHUB_PR_NUMBER": "42",
+        "GITHUB_HEAD_SHA": HEAD_SHA,
+        "GITHUB_BASE_REF": "main",
+        "COMMENT": "<comment>@hackbot please fix</comment>",
+    }
+
+
+@pytest.mark.parametrize("base", ["release/v1.2+esr", "feature@team#3", HEAD_SHA])
+def test_github_base_ref_accepts_any_branch_name(base):
+    inputs = BugFixInputs(
+        github_repo="mozilla-firefox/firefox",
+        github_pr_number=42,
+        github_base_ref=base,
+        comment="please fix",
+    )
+    assert inputs.github_base_ref == base
+
+
+def test_github_pr_mode_accepts_a_bug_and_no_pins():
+    inputs = BugFixInputs(
+        bug_id=1,
+        github_repo="mozilla-firefox/firefox",
+        github_pr_number=42,
+        comment="please fix",
+    )
+    assert inputs.github_head_sha is None
+    assert inputs.github_base_ref is None
+
+
+def test_bug_id_required_without_github_pr():
+    with pytest.raises(ValidationError, match="bug_id is required"):
+        BugFixInputs()
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [{"github_repo": "mozilla-firefox/firefox"}, {"github_pr_number": 42}],
+)
+def test_github_repo_and_pr_number_go_together(fields):
+    with pytest.raises(ValidationError, match="must be set together"):
+        BugFixInputs(bug_id=1, comment="please fix", **fields)
+
+
+def test_github_pr_requires_comment():
+    with pytest.raises(ValidationError, match="comment is required"):
+        BugFixInputs(github_repo="mozilla-firefox/firefox", github_pr_number=42)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [{"revision_id": 7}, {"bugzilla_needinfo_flag_id": 7}],
+)
+def test_github_pr_excludes_other_follow_ups(fields):
+    with pytest.raises(ValidationError, match="cannot be combined"):
+        BugFixInputs(
+            bug_id=1,
+            github_repo="mozilla-firefox/firefox",
+            github_pr_number=42,
+            comment="please fix",
+            **fields,
+        )
+
+
+@pytest.mark.parametrize(
+    "fields", [{"github_head_sha": HEAD_SHA}, {"github_base_ref": "main"}]
+)
+def test_github_pins_require_a_pr(fields):
+    with pytest.raises(ValidationError, match="require github_pr_number"):
+        BugFixInputs(bug_id=1, **fields)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"github_repo": "firefox"},
+        {"github_repo": "a/b/c"},
+        {"github_pr_number": 0},
+        {"github_head_sha": "0123456"},
+        {"github_head_sha": HEAD_SHA.upper()},
+        {"github_base_ref": "--upload-pack=evil"},
+        {"github_base_ref": "main branch"},
+        {"github_base_ref": "main:refs/heads/other"},
+    ],
+)
+def test_github_fields_are_validated(fields):
+    with pytest.raises(ValidationError):
+        BugFixInputs(
+            **{
+                "github_repo": "mozilla-firefox/firefox",
+                "github_pr_number": 42,
+                "comment": "please fix",
+                **fields,
+            }
+        )
+
+
 def test_model_to_env_does_not_emit_deploy_constants():
     # The broker loopback URL is static Job config, not a per-run input.
     env = model_to_env(BugFixInputs(bug_id=1, model="x", max_turns=2, effort="high"))

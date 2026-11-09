@@ -135,7 +135,9 @@ async def test_the_checkout_is_the_pr_head_with_nothing_uncommitted(tmp_path):
     assert _git(ctx.repo_path, "status", "--porcelain") == ""
 
 
-@pytest.mark.parametrize("base", ["main", "sha"], ids=["base-branch", "base-sha"])
+@pytest.mark.parametrize(
+    "base", ["main", "sha", "HEAD"], ids=["base-branch", "base-sha", "default-branch"]
+)
 async def test_the_base_gives_the_same_change_github_shows(tmp_path, base):
     origin = _origin(tmp_path)
     base = origin.base if base == "sha" else base

@@ -38,6 +38,12 @@ interface RunRow {
 // saves at trigger time (see components/TriggerForm.tsx) so every run reads
 // well straight from the API.
 function labelFromInputs(inputs: Record<string, unknown>): string {
+  if (
+    typeof inputs.github_repo === "string" &&
+    typeof inputs.github_pr_number === "number"
+  ) {
+    return `${inputs.github_repo}#${inputs.github_pr_number}`;
+  }
   if (typeof inputs.bug_id === "number") return `bug ${inputs.bug_id}`;
   if (typeof inputs.git_commit === "string" && inputs.git_commit.trim()) {
     return `commit ${inputs.git_commit.trim().slice(0, 12)}`;

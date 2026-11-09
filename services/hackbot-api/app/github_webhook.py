@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any
+from typing import Any, NamedTuple
 from xml.sax.saxutils import escape, quoteattr
 
 from app.github import GitHubApp
@@ -55,9 +55,11 @@ class GitHubMention:
     comment: str
     # Identifies the comment or review across redeliveries.
     dedupe_key: str
-    # Review payloads carry the PR head; a conversation comment's doesn't, so
-    # it is looked up with :func:`resolve_head_sha` instead.
+    # Review payloads carry the PR's head and the branch it targets; a
+    # conversation comment's carry neither, so they are looked up with
+    # :func:`resolve_pull_request_refs` instead.
     head_sha: str | None
+    base_ref: str | None = None
 
     @property
     def full_repo_name(self) -> str:
@@ -129,7 +131,7 @@ def detect_mention(
     if event not in TRIGGER_ACTIONS or payload.get("action") != TRIGGER_ACTIONS[event]:
         return None
 
-    head_sha = None
+    head_sha = base_ref = None
     if event == "issue_comment":
         issue = payload["issue"]
         if not issue.get("pull_request") or issue["state"] != "open":
@@ -144,6 +146,7 @@ def detect_mention(
             return None
         pr_number = pull_request["number"]
         head_sha = pull_request["head"]["sha"]
+        base_ref = pull_request["base"]["ref"]
         if event == "pull_request_review_comment":
             item = payload["comment"]
             attributes = {
@@ -173,16 +176,24 @@ def detect_mention(
         comment=_format_comment(body, attributes),
         dedupe_key=dedupe_key,
         head_sha=head_sha,
+        base_ref=base_ref,
     )
 
 
-async def resolve_head_sha(
+class PullRequestRefs(NamedTuple):
+    """Where a PR is now: its head commit and the branch it targets."""
+
+    head_sha: str
+    base_ref: str
+
+
+async def resolve_pull_request_refs(
     github_app: GitHubApp,
     mention: GitHubMention,
     *,
     timeout_seconds: float = HEAD_LOOKUP_TIMEOUT_SECONDS,
-) -> str | None:
-    """The PR's current head SHA, or ``None`` if the PR is no longer open.
+) -> PullRequestRefs | None:
+    """The PR's current head and base, or ``None`` if the PR is no longer open.
 
     Uses the installation the event came from, with a read-only token narrowed
     to that one repository. Raises :class:`TimeoutError` if minting the token
@@ -197,9 +208,9 @@ async def resolve_head_sha(
         response = await github.rest.pulls.async_get(
             mention.owner, mention.repo, mention.pr_number
         )
-    # Two fields from the raw body rather than ``parsed_data``, which validates
+    # A few fields from the raw body rather than ``parsed_data``, which validates
     # the whole PullRequest model and so breaks on unrelated schema drift.
     pull_request = response.json()
     if pull_request["state"] != "open":
         return None
-    return pull_request["head"]["sha"]
+    return PullRequestRefs(pull_request["head"]["sha"], pull_request["base"]["ref"])
