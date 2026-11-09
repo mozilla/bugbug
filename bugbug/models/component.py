@@ -8,6 +8,7 @@ from collections import Counter
 from datetime import datetime, timezone
 
 import dateutil.parser
+import numpy as np
 import xgboost
 from dateutil.relativedelta import relativedelta
 from sklearn.compose import ColumnTransformer
@@ -21,6 +22,18 @@ from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+GENERIC_COMPONENTS = {"General", "Untriaged"}
+
+
+def get_initial_component(bug):
+    for history in bug["history"]:
+        for change in history["changes"]:
+            if change["field_name"] == "component":
+                return change["removed"]
+
+    return bug["component"]
 
 
 class ComponentModel(BugModel):
@@ -73,6 +86,9 @@ class ComponentModel(BugModel):
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
+        # The test set is made of the most recent bugs (see train_test_split), so
+        # retrain on all bugs after the evaluation.
+        self.entire_dataset_training = True
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -136,6 +152,46 @@ class ComponentModel(BugModel):
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
         }
+
+    def items_gen(self, classes):
+        # Remember when each bug was filed and in which component, for the evaluation.
+        self.items_metadata = []
+        for bug, label in super().items_gen(classes):
+            self.items_metadata.append(
+                (bug["creation_time"], get_initial_component(bug) in GENERIC_COMPONENTS)
+            )
+            yield bug, label
+
+    def train_test_split(self, X, y):
+        # Test on the most recent bugs, as the model is used to classify new bugs.
+        # A random split overestimates the accuracy, e.g. it ignores the drift in the
+        # bugs that are filed and the creation of new components.
+        creation_times, filed_in_generic = zip(*self.items_metadata[: len(y)])
+        order = np.argsort(creation_times, kind="stable")
+        train_size = int(len(y) * 0.9)
+
+        # Make sure every component has at least 3 examples in the training set, by
+        # moving the oldest test bugs of recently created components to it.
+        train_idx = list(order[:train_size])
+        test_idx = []
+        counts = Counter(y[train_idx])
+        for i in order[train_size:]:
+            if counts[y[i]] < 3:
+                counts[y[i]] += 1
+                train_idx.append(i)
+            else:
+                test_idx.append(i)
+
+        # Bugs filed in a General/Untriaged component are the ones the model is mostly
+        # used for, i.e. the ones that need to be moved to the right component.
+        self.test_subsets = {
+            "Bugs filed in General/Untriaged": np.array(filed_in_generic)[test_idx]
+        }
+
+        return X.iloc[train_idx], X.iloc[test_idx], y[train_idx], y[test_idx]
+
+    def get_test_subsets(self):
+        return self.test_subsets
 
     def filter_component(self, product, component):
         if product == "Firefox for Android" or product == "GeckoView":
