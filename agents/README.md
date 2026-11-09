@@ -128,7 +128,7 @@ From **`hackbot-runtime`**:
   to stdout and your log (call `reporter.header(...)` per work item, `reporter.message(msg)` per message).
 - `from hackbot_runtime.actions.claude_sdk import actions_server_for` — gives you
   `(recorder, mcp_server)` so write-actions get recorded into `summary.json` rather than
-  silently mutating the world.
+  silently mutating the world. `hackbot_runtime.actions.codex_sdk` has the same for Codex.
 
 Your actual **tools** (the things the model can call) come from **`agent-tools`**, each behind
 its own extra (`[bugzilla]`, `[firefox]`):
@@ -142,6 +142,19 @@ server = build_sdk_server("bugzilla", BugzillaContext(client=...), bugzilla.TOOL
 
 From there, you assemble your own `ClaudeAgentOptions` and drive the `ClaudeSDKClient` loop —
 that part stays in your hands, where you want it.
+
+For a Codex agent, use the Codex adapter ([codex-sdk]). Start a local tool server and give Codex its address so it can call your tools:
+
+```python
+from agent_tools import bugzilla
+from agent_tools.codex_sdk import build_mcp_server, mcp_servers_config
+
+server = build_mcp_server("bugzilla", BugzillaContext(client=...), bugzilla.TOOLS)
+async with server.serve():
+    thread = await codex.thread_start(config=mcp_servers_config(server))
+```
+
+Then use the `AsyncCodex` thread to send prompts and handle response.
 
 ## Creating your own agent
 
