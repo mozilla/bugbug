@@ -18,7 +18,7 @@ from app.github import GitHubApp
 
 # The one action per event that carries a new comment. Edits and deletions are
 # ignored, as are mentions in PR descriptions and plain issues.
-TRIGGER_ACTIONS: Mapping[str, str] = MappingProxyType(
+TRIGGER_ACTIONS = MappingProxyType(
     {
         # A comment on the PR's conversation tab (PRs are issues to this API).
         "issue_comment": "created",
@@ -29,9 +29,7 @@ TRIGGER_ACTIONS: Mapping[str, str] = MappingProxyType(
     }
 )
 
-PULL_REQUEST_READ_PERMISSIONS: Mapping[str, str] = MappingProxyType(
-    {"pull_requests": "read"}
-)
+PULL_REQUEST_READ_PERMISSIONS = MappingProxyType({"pull_requests": "read"})
 
 # GitHub abandons a delivery that isn't answered within 10 seconds. Everything
 # after the signature check (authorizing the sender, looking up the PR head and
@@ -68,7 +66,11 @@ class GitHubMention:
     @property
     def sender_login(self) -> str | None:
         """For logging: safe on a sender the authorizer will deny."""
-        return (self.sender or {}).get("login")
+        if not self.sender:
+            # GitHub sends one with every event. Without it the authorizer
+            # denies the mention, and the route logs that.
+            return None
+        return self.sender.get("login")
 
 
 def _strip_quoted_lines(text: str) -> str:
