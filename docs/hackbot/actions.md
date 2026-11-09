@@ -65,6 +65,28 @@ be turned back on for a recorded message by passing `unfurl=True` to `record_mes
 `bugzilla.add_comment` appends a feedback-reaction footer to every recorded comment, and
 `is_private=true` marks it security-group-only.
 
+When hackbot-api posts a Bugzilla comment, it puts a front matter block at the top that
+links the comment to its run:
+
+```text
+---
+hackbot:
+  run: <run ID>
+  action: <action ID>
+  agent: <agent name>
+  url: https://hackbot.moz.tools/runs/<run ID>
+---
+```
+
+BMO's Hackbot extension hides the block from readers, bugmail, webhooks and Pulse, and shows
+the agent and a link to the run in the comment header instead. REST `raw_text` keeps it.
+The block is added at apply time, not recorded, so a model can't write or change it and the
+Hackbot UI and Slack never show it. It is left out when the action has no ID (summaries
+recorded before action IDs existed) or when a value isn't an identifier, because BMO would
+then show it as text. Agent text posted without the block (those comments, attachment
+comments and new-bug descriptions) is moved down a line when it starts with a rule, so BMO
+doesn't read a block the model wrote as the comment's metadata.
+
 Adding a type is a declaration in the runtime's domain module plus one line in hackbot-api's
 handler registry. The dispatch loop never changes.
 
