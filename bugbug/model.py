@@ -208,6 +208,8 @@ class Model:
                 feature_name = f"Description contains '{feature_name}'"
             elif type_ == "title":
                 feature_name = f"Title contains '{feature_name}'"
+            elif type_ == "title_char":
+                feature_name = f"Title contains characters '{feature_name}'"
             elif type_ == "first_comment":
                 feature_name = f"First comment contains '{feature_name}'"
             elif type_ == "comments":
