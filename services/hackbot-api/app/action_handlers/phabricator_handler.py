@@ -213,6 +213,38 @@ async def _set_local_commits(
     )
 
 
+def _inline_transaction(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "inline",
+        "value": {
+            "diff": params["diff_id"],
+            "path": params["file_path"],
+            "isNewFile": params["on_new_side"],
+            "line": params["line"],
+            # Phabricator counts every covered line; we record the extra ones.
+            "length": params["line_length"] + 1,
+            "content": params["content"],
+        },
+    }
+
+
+async def _edit_revision(
+    revision_id: int, transactions: list[dict[str, Any]]
+) -> ActionResult:
+    try:
+        await _conduit_request(
+            "differential.revision.edit",
+            objectIdentifier=revision_id,
+            transactions=transactions,
+        )
+    except Exception as exc:
+        log.exception("Failed to comment on revision D%s", revision_id)
+        return ActionResult.failed(str(exc))
+    return ActionResult.ok(
+        {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
+    )
+
+
 class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         revision_id = params["revision_id"]
@@ -232,33 +264,58 @@ class AddCommentHandler:
 
 class AddInlineCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
-        revision_id = params["revision_id"]
-        try:
-            await _conduit_request(
-                "differential.revision.edit",
-                objectIdentifier=revision_id,
-                transactions=[
-                    {
-                        "type": "inline",
-                        "value": {
-                            "diff": params["diff_id"],
-                            "path": params["file_path"],
-                            "isNewFile": params["on_new_side"],
-                            "line": params["line"],
-                            # Phabricator counts every covered line; we record
-                            # the extra ones.
-                            "length": params["line_length"] + 1,
-                            "content": params["content"],
-                        },
-                    }
-                ],
-            )
-        except Exception as exc:
-            log.exception("Failed to add inline comment on revision D%s", revision_id)
-            return ActionResult.failed(str(exc))
-        return ActionResult.ok(
-            {"revision_id": revision_id, "revision_url": _revision_url(revision_id)}
+        return await _edit_revision(
+            params["revision_id"], [_inline_transaction(params)]
         )
+
+
+class PostCommentsHandler:
+    """Posts a group of comments the applier merged, in one edit.
+
+    Internal: agents record ``add_comment``/``add_inline_comment``, never this.
+    """
+
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        transactions = [
+            _inline_transaction(inline) for inline in params["inline_comments"]
+        ]
+        transactions += [{"type": "comment", "value": text} for text in params["texts"]]
+        return await _edit_revision(params["revision_id"], transactions)
+
+
+def plan_inline_groups(actions: list[tuple[str, dict[str, Any]]]) -> list[list[int]]:
+    """Group each revision's inline and general comments.
+
+    Each group is posted as one ``differential.revision.edit``. Only groups of
+    >= 2 indices are returned.
+    """
+    groups: dict[Any, list[int]] = {}
+    for idx, (action_type, params) in enumerate(actions):
+        if action_type in (
+            "phabricator.add_comment",
+            "phabricator.add_inline_comment",
+        ):
+            groups.setdefault(params["revision_id"], []).append(idx)
+    return [group for group in groups.values() if len(group) >= 2]
+
+
+def merge_inline_comments(entries: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Build :class:`PostCommentsHandler` params from a planned group."""
+    inline_comments = [
+        params
+        for action_type, params in entries
+        if action_type == "phabricator.add_inline_comment"
+    ]
+    texts = [
+        params["text"]
+        for action_type, params in entries
+        if action_type == "phabricator.add_comment"
+    ]
+    return {
+        "revision_id": entries[0][1]["revision_id"],
+        "inline_comments": inline_comments,
+        "texts": texts,
+    }
 
 
 class SubmitPatchHandler:

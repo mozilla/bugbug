@@ -275,6 +275,7 @@ async def add_inline_comment(
 ) -> str:
     """Record an intended inline comment on a line of a Phabricator revision's diff.
 
+    Posted together with the revision's other recorded comments.
     Recorded into the run summary for human review; nothing is posted to
     Phabricator during the run.
     """

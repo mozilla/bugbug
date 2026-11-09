@@ -25,8 +25,10 @@ from app.action_handlers import (
     ActionResult,
     ApplyContext,
     get_handler,
+    merge_inline_comments,
     merge_resolved,
     plan_coalesced_groups,
+    plan_inline_groups,
 )
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
@@ -35,6 +37,13 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+# Each entry: plan groups of pending actions, the handler that applies a
+# group, and how to merge the group's params for it.
+_COALESCERS = [
+    (plan_coalesced_groups, "bugzilla.update_bug", merge_resolved),
+    (plan_inline_groups, "phabricator.post_comments", merge_inline_comments),
+]
 
 
 _CLAIMABLE_STATUSES = ("pending", "failed")
@@ -250,7 +259,10 @@ async def _apply_pending_rows(
     Same-bug Bugzilla field changes are coalesced with the closest comment into
     a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
     bugmail, one history entry); any other comments on that bug still apply
-    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
+    separately. A revision's Phabricator inline and general comments are posted
+    together in one `differential.revision.edit`. See
+    `plan_coalesced_groups`/`merge_resolved` and
+    `plan_inline_groups`/`merge_inline_comments` in `app.action_handlers`.
 
     Cross-action `{{actions.<action_id>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
@@ -271,7 +283,7 @@ async def _apply_pending_rows(
 
     pending = [(row, att) for row, att in rows if row.status != "applied"]
 
-    # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
+    # Plan which pending rows coalesce into one call (indices into `pending`).
     # Drop any group with a member another pending action references: a group
     # applies at its last member, possibly after the action that needs the
     # result. Everything else applies one row at a time as before.
@@ -280,17 +292,17 @@ async def _apply_pending_rows(
         for row, _ in pending
         for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
     }
+    planned = [(row.type, row.params) for row, _ in pending]
     groups = [
-        group
-        for group in plan_coalesced_groups(
-            [(row.type, row.params) for row, _ in pending]
-        )
+        (group, action_type, merge)
+        for plan, action_type, merge in _COALESCERS
+        for group in plan(planned)
         if all(pending[i][0].ref not in referenced for i in group)
     ]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
     # whole group there, once every earlier (backward) dependency is resolved.
-    anchor_of = {i: max(group) for group in groups for i in group}
-    group_at = {max(group): group for group in groups}
+    anchor_of = {i: max(group) for group, _, _ in groups for i in group}
+    group_at = {max(group): (group, t, m) for group, t, m in groups}
 
     for pos, (row, attachments) in enumerate(pending):
         anchor = anchor_of.get(pos)
@@ -298,17 +310,14 @@ async def _apply_pending_rows(
             continue  # non-anchor member: applied together with its anchor
 
         if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
+            group, action_type, merge = group_at[anchor]
+            member_rows = [pending[i][0] for i in group]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run,
-                "bugzilla.update_bug",
-                merge_resolved(entries),
-                [],
-                hackbot_client,
+                run, action_type, merge(entries), [], hackbot_client
             )
         else:
             member_rows = [row]
