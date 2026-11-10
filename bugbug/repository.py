@@ -22,7 +22,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Collection, Iterable, Iterator, NewType, Set, Union
+from typing import Collection, Iterable, Iterator, NamedTuple, NewType, Set, Union
 
 import hglib
 import lmdb
@@ -731,6 +731,47 @@ def get_commit_patch(hg: hglib.client, rev: bytes) -> bytes:
     The payload carries the commit message header followed by the diff.
     """
     return hg.export(revs=[rev], git=True)
+
+
+class HgExport(NamedTuple):
+    """The parts of an ``hg export`` payload, see parse_hg_export."""
+
+    author: str
+    parents: list[str]
+    message: str
+    diff: str
+
+
+def parse_hg_export(patch: bytes | str) -> HgExport:
+    """Split an ``hg export`` payload into its header fields, message and diff.
+
+    The header is the leading run of ``#`` lines: ``# User`` gives the author
+    and each ``# Parent`` line a parent, two for a merge. The message runs from
+    the header to the first ``diff`` line, where the diff starts; both are
+    empty when the payload has none.
+    """
+    text = patch.decode("utf-8", "replace") if isinstance(patch, bytes) else patch
+    author = ""
+    parents: list[str] = []
+    message_lines: list[str] = []
+    in_header = True
+    offset = 0
+    diff_start = len(text)
+    for line in text.splitlines(keepends=True):
+        if in_header and line.startswith("#"):
+            if line.startswith("# User "):
+                author = line[len("# User ") :].strip()
+            elif line.startswith("# Parent "):
+                parents.append(line[len("# Parent ") :].strip())
+            offset += len(line)
+            continue
+        in_header = False
+        if line.startswith("diff "):
+            diff_start = offset
+            break
+        message_lines.append(line)
+        offset += len(line)
+    return HgExport(author, parents, "".join(message_lines).strip(), text[diff_start:])
 
 
 def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:

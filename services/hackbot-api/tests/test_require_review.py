@@ -11,10 +11,10 @@ from conftest import FakeSession
 async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
     triggered = {}
 
-    async def fake_policy(run_id):
+    async def fake_policy(run_id, timeout_seconds):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         triggered["job_name"] = job_name
         triggered["env"] = env
         return "projects/p/locations/l/jobs/j/executions/e"
@@ -24,7 +24,9 @@ async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
     monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
 
     db = FakeSession()
-    await create_run(agent, payload, on_behalf_of=None, dedupe_key=None, db=db)
+    await create_run(
+        agent, payload, requested_via=None, on_behalf_of=None, dedupe_key=None, db=db
+    )
     return db.added, triggered
 
 

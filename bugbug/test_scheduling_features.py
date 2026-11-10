@@ -504,3 +504,94 @@ class TouchedGroupDirs(object):
             ),
             "touch_parent_dir": sum(1 for f in commit["files"] if f.startswith(parent)),
         }
+
+
+class ConfigTokens(object):
+    """The tokens of the config (see test_scheduling.config_tokens)."""
+
+    def __call__(self, test_job, **kwargs):
+        return list(test_scheduling.config_tokens(test_job["config"]))
+
+
+class ConfigFailureHistory(object):
+    """How often the group (its directory, suite) failed on the config and on configs sharing its tokens.
+
+    Computed by testconfigselect.ConfigHistory, only from regressions before the row's push.
+    """
+
+    def __call__(self, test_job, **kwargs):
+        return test_job["history"]
+
+
+class CandidateConfigs(object):
+    """The config's cost, and the configs the group can run on."""
+
+    def __call__(self, test_job, **kwargs):
+        platform = test_scheduling.config_platform_token(test_job["config"])
+        platforms = [
+            test_scheduling.config_platform_token(c) for c in test_job["candidates"]
+        ]
+        return {
+            "cost": test_job["cost"],
+            "candidates": len(platforms),
+            "candidate_platforms": len(set(platforms)),
+            "candidates_same_platform": platforms.count(platform),
+        }
+
+
+class SelectedConfigs(object):
+    """Overlap between the config and the configs already selected for the group (which passed)."""
+
+    def __call__(self, test_job, **kwargs):
+        selected = test_job["selected"]
+        tokens = set(test_scheduling.config_tokens(test_job["config"]))
+        platform = test_scheduling.config_platform_token(test_job["config"])
+        selected_tokens = [set(test_scheduling.config_tokens(c)) for c in selected]
+        shared = [len(tokens & t) for t in selected_tokens] or [0]
+        covered = set().union(*selected_tokens)
+        same_platform = sum(
+            test_scheduling.config_platform_token(c) == platform for c in selected
+        )
+        likelihoods = test_job["selected_likelihoods"] or [0.0]
+        return {
+            "selected": len(selected),
+            "selected_max_shared_tokens": max(shared),
+            "selected_mean_shared_tokens": sum(shared) / len(shared),
+            "selected_covered_tokens": len(tokens & covered) / max(len(tokens), 1),
+            "selected_same_platform": same_platform,
+            "selected_platforms": len(
+                {test_scheduling.config_platform_token(c) for c in selected}
+            ),
+            "selected_max_likelihood": max(likelihoods),
+            "selected_mean_likelihood": sum(likelihoods) / len(likelihoods),
+            "selected_cost": sum(test_job["selected_costs"]),
+        }
+
+
+class PatchPlatformHints(object):
+    """How many of the patch's files hint at the config's OS family, and at other ones.
+
+    See test_scheduling.get_path_platform_hints.
+    """
+
+    def __call__(self, test_job, **kwargs):
+        files_num = test_job["patch_files_num"]
+        if not files_num:
+            return None
+
+        hints = test_job["patch_hints"]
+        family = test_scheduling.config_platform_family(test_job["config"])
+        own = hints.get(family, 0)
+        other = sum(count for f, count in hints.items() if f != family)
+        return {
+            "patch_hints_own_family": own / files_num,
+            "patch_hints_other_families": other / files_num,
+            "patch_hints_only_own_family": own > 0 and other == 0,
+        }
+
+
+class ConfigDimensionFeatures(object):
+    """Features computed by the per-dimension config selection models (see testconfigdimensions)."""
+
+    def __call__(self, test_job, **kwargs):
+        return test_job["features"]

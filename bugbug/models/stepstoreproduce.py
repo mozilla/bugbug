@@ -88,7 +88,9 @@ class StepsToReproduceModel(BugModel):
             else:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
-                        if change["removed"].startswith("stepswanted"):
+                        if change["field_name"] == "keywords" and change[
+                            "removed"
+                        ].startswith("stepswanted"):
                             classes[int(bug_data["id"])] = 1
 
         logger.info(

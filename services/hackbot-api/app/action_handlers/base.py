@@ -2,6 +2,8 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from hackbot_client import HackbotClient
+
 
 class ArtifactTooLargeError(Exception):
     """An artifact is bigger than the caller is willing to download."""
@@ -43,6 +45,7 @@ class ApplyContext:
     run_id: str
     agent: str
     download_artifact: ArtifactDownloader
+    hackbot_client: HackbotClient
     attachments: list[dict[str, str]] = field(default_factory=list)
 
     def artifact_key(self, name: str) -> str | None:
