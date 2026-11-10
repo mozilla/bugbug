@@ -37,50 +37,8 @@ def get_initial_component(bug):
     return bug["component"]
 
 
-class ComponentModel(BugModel):
-    PRODUCTS = {
-        "Core",
-        "External Software Affecting Firefox",
-        "DevTools",
-        "Firefox for Android",
-        "Firefox",
-        "Toolkit",
-        "WebExtensions",
-        "Firefox Build System",
-    }
-
-    PRODUCT_COMPONENTS = {
-        "Cloud Services": {"Server: Firefox Accounts"},
-    }
-
-    CONFLATED_COMPONENTS = [
-        "Core::Audio/Video",
-        "Core::DOM",
-        "Core::Graphics",
-        "Core::IPC",
-        "Core::JavaScript",
-        "Core::Layout",
-        "Core::Networking",
-        "Core::Print",
-        "Core::WebRTC",
-        "Toolkit::Password Manager",
-        "DevTools",
-        "External Software Affecting Firefox",
-        "WebExtensions",
-        "Firefox Build System",
-        "Firefox for Android",
-    ]
-
-    CONFLATED_COMPONENTS_MAPPING = {
-        "Core::DOM": "Core::DOM: Core & HTML",
-        "Core::JavaScript": "Core::JavaScript Engine",
-        "Core::Print": "Core::Printing: Output",
-        "DevTools": "DevTools::General",
-        "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
-        "WebExtensions": "WebExtensions::Untriaged",
-        "Firefox Build System": "Firefox Build System::General",
-        "Firefox for Android": "Firefox for Android::General",
-    }
+class BaseComponentModel(BugModel):
+    """Pipeline and evaluation shared by the models that classify bugs into components."""
 
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
@@ -188,10 +146,6 @@ class ComponentModel(BugModel):
             ]
         )
 
-        self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
-            v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
-        }
-
     def items_gen(self, classes):
         # Remember when each bug was filed and in which component, for the evaluation.
         self.items_metadata = []
@@ -241,6 +195,62 @@ class ComponentModel(BugModel):
             "estimator"
         ].calibrated_classifiers_:
             calibrated_classifier.estimator.sparsify()
+
+    def get_feature_names(self):
+        return self.clf.named_steps["union"].get_feature_names_out()
+
+
+class ComponentModel(BaseComponentModel):
+    PRODUCTS = {
+        "Core",
+        "External Software Affecting Firefox",
+        "DevTools",
+        "Firefox for Android",
+        "Firefox",
+        "Toolkit",
+        "WebExtensions",
+        "Firefox Build System",
+    }
+
+    PRODUCT_COMPONENTS = {
+        "Cloud Services": {"Server: Firefox Accounts"},
+    }
+
+    CONFLATED_COMPONENTS = [
+        "Core::Audio/Video",
+        "Core::DOM",
+        "Core::Graphics",
+        "Core::IPC",
+        "Core::JavaScript",
+        "Core::Layout",
+        "Core::Networking",
+        "Core::Print",
+        "Core::WebRTC",
+        "Toolkit::Password Manager",
+        "DevTools",
+        "External Software Affecting Firefox",
+        "WebExtensions",
+        "Firefox Build System",
+        "Firefox for Android",
+    ]
+
+    CONFLATED_COMPONENTS_MAPPING = {
+        "Core::DOM": "Core::DOM: Core & HTML",
+        "Core::JavaScript": "Core::JavaScript Engine",
+        "Core::Print": "Core::Printing: Output",
+        "DevTools": "DevTools::General",
+        "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
+        "WebExtensions": "WebExtensions::Untriaged",
+        "Firefox Build System": "Firefox Build System::General",
+        "Firefox for Android": "Firefox for Android::General",
+    }
+
+    def __init__(self, lemmatization=False):
+        super().__init__(lemmatization)
+
+        self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
+            v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
+        }
 
     def filter_component(self, product, component):
         if product == "Firefox for Android" or product == "GeckoView":
@@ -353,9 +363,6 @@ class ComponentModel(BugModel):
             for product_component, count in product_component_counts
             if count > threshold and product_component in active_product_components
         )
-
-    def get_feature_names(self):
-        return self.clf.named_steps["union"].get_feature_names_out()
 
     def check(self):
         success = super().check()
