@@ -9,7 +9,7 @@ any agent. Production deployment and agent integration are separate work.
 Install Docker with Compose and start Docker, then run from the repository root:
 
 ```bash
-docker compose -f docs/hackbot/github-mcp/compose.yml up -d
+docker compose -f services/github-mcp/compose.yml up -d
 ```
 
 The server listens at `http://127.0.0.1:8082/`. Clients running on the same
@@ -25,7 +25,7 @@ read-only installation token from a test GitHub App with access to the repositor
 
 ```bash
 export GITHUB_MCP_TOKEN="$(gh auth token)"
-uv run --no-project --with 'mcp>=1,<2' python docs/hackbot/github-mcp/check.py \
+uv run --no-project --with 'mcp>=1,<2' python services/github-mcp/check.py \
   --repo OWNER/REPOSITORY --pr NUMBER
 unset GITHUB_MCP_TOKEN
 ```
@@ -41,5 +41,5 @@ replacement for production access control.
 When finished:
 
 ```bash
-docker compose -f docs/hackbot/github-mcp/compose.yml down
+docker compose -f services/github-mcp/compose.yml down
 ```

@@ -143,6 +143,8 @@ members = ["http_service", "agents/*", "libs/*", "services/*", "tools/*"]
 exclude = [
     # JavaScript package (no pyproject.toml).
     "services/hackbot-ui",
+    # Compose configuration, not a Python package.
+    "services/github-mcp",
     # Not migrated to the workspace yet.
     "services/buildrepair",
 ]
