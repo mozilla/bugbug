@@ -6,7 +6,7 @@
 import logging
 import os
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
@@ -17,14 +17,16 @@ import zstandard
 from redis import Redis
 from urllib3.util.retry import Retry
 
-from bugbug import bugzilla, build_platforms, repository, test_scheduling, utils
+from bugbug import bugzilla, build_platforms, db, repository, test_scheduling, utils
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testconfigselect, testselect
 from bugbug.models.perf_regression_predictor import (
     MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
 )
-from bugbug.perf.commit_risk import get_ignore_reason
+from bugbug.perf.calibration import Calibration, load_calibrations
+from bugbug.perf.commit_risk import get_ignore_reason, score_patch
+from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
 from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -72,6 +74,41 @@ MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
     timedelta(hours=1), lambda m: Model.load(f"{m}model")
 )
 MODEL_CACHE.start_ttl_thread()
+
+
+class RiskCalibrations:
+    """The published risk score calibrations, one per predictor model version.
+
+    The data pipeline refits them twice a month, so the dataset is fetched
+    again every ``refresh``, an ETag check when it has not changed, and the
+    last successful load is kept when the fetch fails.
+    """
+
+    def __init__(self, refresh: timedelta):
+        self.refresh = refresh
+        self.loaded_at: datetime | None = None
+        self.calibrations: dict[str, Calibration] = {}
+
+    def get(self, model_version: str | None) -> Calibration | None:
+        now = datetime.now(timezone.utc)
+        if self.loaded_at is None or now - self.loaded_at >= self.refresh:
+            try:
+                db.download(PERF_RISK_CALIBRATION_DB)
+                if db.exists(PERF_RISK_CALIBRATION_DB):
+                    self.calibrations = load_calibrations(
+                        db.read(PERF_RISK_CALIBRATION_DB)
+                    )
+            except Exception:
+                LOGGER.warning(
+                    "Could not refresh the risk score calibrations, keeping %d",
+                    len(self.calibrations),
+                    exc_info=True,
+                )
+            self.loaded_at = now
+        return self.calibrations.get(model_version) if model_version else None
+
+
+RISK_CALIBRATIONS = RiskCalibrations(timedelta(hours=6))
 
 cctx = zstandard.ZstdCompressor(level=10)
 
@@ -300,11 +337,13 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     """Predict performance-regression risk for a push.
 
     Mirrors :func:`schedule_tests`: the push is resolved server-side against
-    the service's own local hg clone. Commits matching one of the rules in
-    :mod:`bugbug.perf.commit_risk` are listed with their ``ignored_reason``
-    but not scored. Every other commit is scored
-    separately and the top-level ``risk_score`` is the maximum across the
-    scored commits, or ``None`` when every commit in the push was ignored.
+    the service's own local hg clone. Commits matching one of
+    ``IGNORED_COMMIT_RULES`` in ``bugbug.perf.commit_risk`` are listed with their
+    ``ignored_reason`` but not scored. Every other commit is scored
+    separately, its ``risk_score`` mapped through the published calibration
+    of the model version when there is one (``raw_risk_score`` keeps the
+    model's output), and the top-level ``risk_score`` is the maximum across
+    the scored commits, or ``None`` when every commit in the push was ignored.
     """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
@@ -369,6 +408,7 @@ def classify_perf_regression(branch: str, rev: str) -> str:
                 "prob": None,
                 "class": None,
                 "risk_score": None,
+                "raw_risk_score": None,
                 "ignored_reason": ignored_reason,
             }
         )
@@ -386,19 +426,14 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 
     # Score each commit separately. The service runs inference on CPU,
     # so we classify one at a time to keep memory flat.
+    extra_data = model.get_extra_data()
+    calibration = RISK_CALIBRATIONS.get(extra_data.get("model_version"))
     for (index, _), patch in zip(to_score, patches):
-        export = repository.parse_hg_export(patch)
-        commit_probabilities = model.classify(
-            [{"commit_message": export.message, "diff": export.diff}],
-            probabilities=True,
-        )[0]
-        commits[index].update(
-            {
-                "prob": commit_probabilities.tolist(),
-                "class": int(commit_probabilities.argmax()),
-                "risk_score": float(commit_probabilities[1]),
-            }
-        )
+        commit = commits[index]
+        commit.update(score_patch(model, patch))
+        commit["raw_risk_score"] = commit["risk_score"]
+        if calibration is not None:
+            commit["risk_score"] = calibration.apply(commit["raw_risk_score"])
 
     scored_risk_scores = [
         commit["risk_score"] for commit in commits if commit["ignored_reason"] is None
@@ -411,7 +446,11 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         "risk_score": risk_score,
         "commits": commits,
         "extra_data": {
-            **model.get_extra_data(),
+            **extra_data,
+            "calibrated": calibration is not None,
+            "calibration_fitted_at": (
+                calibration.fitted_at if calibration is not None else None
+            ),
             "commit_count": len(commits),
             "ignored_commit_count": len(commits) - len(scored_risk_scores),
         },

@@ -430,3 +430,12 @@ def test_build_prompt_drops_text_beyond_the_token_window() -> None:
     assert model._build_prompt({"commit_message": None, "diff": small}) == (
         model.build_model_input(None, small)
     )
+
+
+def test_model_version_falls_back_to_the_artifact_name() -> None:
+    from bugbug.models.perf_regression_predictor import PerfRegressionPredictorModel
+
+    model = PerfRegressionPredictorModel()
+    assert model.version == "perf-regression-predictor-v1"
+    model.model_metadata = {"model_version": "2026-10-01"}
+    assert model.version == "2026-10-01"
