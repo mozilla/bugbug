@@ -32,9 +32,9 @@ class FenixComponentModel(BaseComponentModel):
             ):
                 continue
 
-            # Exclude 'General' because it contains bugs that may belong to
-            # other components, thus introducing noise. However, include
-            # 'GeckoView::General' because the model should be able to move
+            # Exclude 'Firefox for Android::General' because it contains bugs that
+            # may belong to other components, thus introducing noise. However,
+            # include 'GeckoView::General' because the model should be able to move
             # bugs to GeckoView.
             if (
                 bug_data["component"] == "General"
@@ -45,7 +45,11 @@ class FenixComponentModel(BaseComponentModel):
             if dateutil.parser.parse(bug_data["creation_time"]) < date_limit:
                 continue
 
-            classes[int(bug_data["id"])] = bug_data["component"]
+            # Include the product, as some components exist in both products
+            # (e.g. Media).
+            classes[int(bug_data["id"])] = (
+                f"{bug_data['product']}::{bug_data['component']}"
+            )
 
         # Components with less than 100 bugs are not very useful, so we ignore them.
         low_count_components = {
