@@ -120,12 +120,8 @@ def _should_auto_apply(
     run_level_auto_apply: bool,
 ) -> bool:
     """Apply per-action overrides, falling back to the run-level decision."""
-    if spec is None:
-        return False
-    if action_type in spec.never_apply_actions:
-        return False
     # A review request holds every action, even `always_apply_actions`.
-    if require_review:
+    if spec is None or require_review or action_type in spec.never_apply_actions:
         return False
     if action_type in spec.always_apply_actions:
         return True
