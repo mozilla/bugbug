@@ -324,9 +324,9 @@ notifies. The run page shows the failed action.
 
 - **`rules/`** is the main behavior dial. `scoping.md` decides what gets skipped;
   `frontend-triage.md` sets comment content and the confidence thresholds for
-  recording an action. The agent globs the directory and reads only what it judges
-  relevant, so new `.md` files extend it — see `rules/README.md` for how to author
-  one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
+  recording an action. The agent always reads those two, then globs the directory
+  for the rest and reads only what it judges relevant, so new `.md` files extend
+  it — see `rules/README.md` for how to author one. Neither file lists components; `TRIAGE_SCOPE` in `config.py` does.
 - **`prompts/system.md`** holds the standing instructions: output format, the
   read-only mandate, when to reach for Searchfox versus reading a file, and how to use
   the in-tree documentation. It names no component: the component index and the
