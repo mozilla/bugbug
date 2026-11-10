@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from .browser import ChromeBrowsers, FirefoxBrowsers
 from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
-from .mcp_servers import build_chrome_devtools_server, build_firefox_devtools_server
+from .mcp_servers import Browser, browser_bin, chrome_server, firefox_server
 from .result import (
     RESULT_SERVER_NAME,
     BugReproductionResult,
@@ -33,7 +33,6 @@ from .result import (
     ReproductionResult,
     TestPlanResult,
 )
-from .setup_profile import setup_profile
 
 HERE = Path(__file__).resolve().parent
 
@@ -63,14 +62,10 @@ class Task(BaseTask[ResultT]):
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path, headless: bool
+    script_path: Path, firefox: Browser, headless: bool
 ) -> ReproductionResult | None:
     script_timeout = 5 * 60
-    env = {
-        **os.environ,
-        "BROWSER": "firefox",
-        "BROWSER_BIN": str(firefox_path),
-    }
+    env = {**os.environ, "BROWSER": "firefox", "BROWSER_BIN": browser_bin(firefox)}
     if headless:
         env["HEADLESS"] = "1"
 
@@ -178,38 +173,28 @@ class BugReproduction(Task):
         self,
         task_config: TaskConfig,
         run_tracker: RunTracker,
-        firefox_path: Path,
-        profile_path: Path,
+        firefox: Browser,
         input_data: AutoWebcompatInput,
         bugzilla_mcp_server: McpServerConfig,
         screenshot_dir: Path,
-        chrome_path: Path,
+        chrome: Browser,
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
-        self.firefox_path = firefox_path
-        self.chrome_path = chrome_path
+        self.firefox_bin = browser_bin(firefox)
+        self.chrome_bin = browser_bin(chrome)
         self.screenshot_path = make_empty_temp_file(
             screenshot_dir, "reproduction=", ".png"
         )
         self.script_path = make_empty_temp_file(self.repro_dir, "reproduction=", ".mjs")
         self.add_mcp_server(
             "firefox-devtools",
-            build_firefox_devtools_server(
-                firefox_path=firefox_path,
-                headless=task_config.headless,
-                enable_script=True,
-                enable_privileged_context=False,
-                profile_path=profile_path,
-            ),
+            firefox_server(firefox, headless=task_config.headless),
             DEVTOOLS_TOOLS,
         )
-
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(
-                chrome_path=chrome_path, headless=task_config.headless
-            ),
+            chrome_server(chrome, headless=task_config.headless),
             CHROME_DEVTOOLS_TOOLS,
         )
         if self.input_data.type == "bug_id":
@@ -252,8 +237,8 @@ class BugReproduction(Task):
    `{repro_reference}`, write your script to exactly `{self.script_path}`
    (read the file before writing), then run it with
 
-   `BROWSER=firefox BROWSER_BIN={self.firefox_path} node {self.script_path}`
-   `BROWSER=chrome BROWSER_BIN={self.chrome_path} node {self.script_path}`
+   `BROWSER=firefox BROWSER_BIN={self.firefox_bin} node {self.script_path}`
+   `BROWSER=chrome BROWSER_BIN={self.chrome_bin} node {self.script_path}`
 
    The script checks one browser per run: the difference is demonstrated
    when the Firefox run exits with 1 (not working) and the Chrome run exits with
@@ -297,21 +282,14 @@ class StepsReproduction(Task):
         self,
         task_config: TaskConfig,
         run_tracker: RunTracker,
-        firefox_path: Path,
-        profile_path: Path,
+        firefox: Browser,
         steps: str,
     ):
         super().__init__(task_config, run_tracker)
         self.steps = steps
         self.add_mcp_server(
             "firefox_devtools",
-            build_firefox_devtools_server(
-                firefox_path=firefox_path,
-                headless=task_config.headless,
-                enable_script=True,
-                enable_privileged_context=False,
-                profile_path=profile_path,
-            ),
+            firefox_server(firefox, headless=task_config.headless),
             DEVTOOLS_TOOLS,
         )
 
@@ -343,20 +321,18 @@ class ChromeMaskReproduction(Task):
         self,
         task_config: TaskConfig,
         run_tracker: RunTracker,
-        firefox_path: Path,
-        profile_path: Path,
+        firefox: Browser,
         steps: str,
     ) -> None:
         super().__init__(task_config, run_tracker)
         self.steps = steps
         self.add_mcp_server(
             "firefox_devtools",
-            build_firefox_devtools_server(
-                firefox_path=firefox_path,
+            firefox_server(
+                firefox,
                 headless=task_config.headless,
-                enable_script=True,
-                enable_privileged_context=True,
-                profile_path=profile_path,
+                privileged=True,
+                extensions=["chrome-mask"],
             ),
             DEVTOOLS_TOOLS,
         )
@@ -578,7 +554,6 @@ async def run_autowebcompat_repro(
             config: TaskConfig = default_config,
         ) -> None:
             browser = getattr(firefox_browser, channel.value)
-            profile = setup_profile(browser)
             logger.info(
                 "Trying reproduction in %s%s",
                 channel,
@@ -591,7 +566,6 @@ async def run_autowebcompat_repro(
                     config,
                     tracker,
                     browser,
-                    profile,
                     input_data,
                     bugzilla_mcp_server,
                     screenshots_dir,
@@ -614,7 +588,6 @@ async def run_autowebcompat_repro(
                     config,
                     tracker,
                     browser,
-                    profile,
                     initial_repro.steps,
                 )
             repro_results.set_result(channel, extra, await task.run())
@@ -660,13 +633,11 @@ async def run_autowebcompat_repro(
         if repro_results.initial_repro is not None:
             channel = repro_results.initial_repro.channel
             browser = getattr(firefox_browser, channel.value)
-            profile = setup_profile(browser, extensions=["chrome-mask"])
 
             task = ChromeMaskReproduction(
                 default_config,
                 tracker,
                 browser,
-                profile,
                 repro_results.initial_repro.steps,
             )
             repro_results.set_result(channel, "chrome-mask", await task.run())

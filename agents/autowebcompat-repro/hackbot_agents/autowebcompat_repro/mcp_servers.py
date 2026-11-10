@@ -16,6 +16,8 @@ from autowebcompat_tools.android_browser import (
 )
 from claude_agent_sdk.types import McpStdioServerConfig
 
+from .setup_profile import setup_profile
+
 
 def resolve_bin(bin_name: str) -> str:
     """Resolve an installed MCP server binary to an absolute path."""
@@ -161,3 +163,38 @@ def build_android_chrome_devtools_server(
             "--performanceCrux=false",
         ],
     )
+
+
+Browser = Path | AndroidBrowser
+
+
+def browser_bin(browser: Browser) -> str:
+    """BROWSER_BIN for repro scripts: an executable, or an Android debug endpoint."""
+    return browser.endpoint if isinstance(browser, AndroidBrowser) else str(browser)
+
+
+def firefox_server(
+    browser: Browser,
+    *,
+    headless: bool,
+    privileged: bool = False,
+    extensions: Sequence[str] = (),
+) -> McpStdioServerConfig:
+    """Firefox DevTools MCP for a desktop binary or an Android browser."""
+    if isinstance(browser, AndroidBrowser):
+        return build_android_firefox_devtools_server(
+            browser, enable_privileged_context=privileged, extensions=extensions
+        )
+    return build_firefox_devtools_server(
+        browser,
+        headless=headless,
+        enable_privileged_context=privileged,
+        profile_path=setup_profile(browser, extensions),
+    )
+
+
+def chrome_server(browser: Browser, *, headless: bool) -> McpStdioServerConfig:
+    """Chrome DevTools MCP for a desktop binary or an Android browser."""
+    if isinstance(browser, AndroidBrowser):
+        return build_android_chrome_devtools_server(browser)
+    return build_chrome_devtools_server(browser, headless=headless)
