@@ -8,6 +8,7 @@ GCS/Cloud Run collaborators are monkeypatched and the DB session is the shared
 `FakeSession`, so no GCP or Postgres is needed.
 """
 
+import json
 import uuid
 from types import SimpleNamespace
 
@@ -142,3 +143,83 @@ def test_an_unusable_dedupe_key_is_rejected(client, db, raw):
     # name.
     assert _create_keyed(client, key=raw).status_code == 422
     assert db.added is None
+
+
+# --- chained runs ---
+
+
+def _parent(**fields):
+    defaults = {
+        "agent": "test-repair",
+        "status": RunStatus.succeeded.value,
+        "artifacts": [],
+    }
+    return SimpleNamespace(run_id=uuid.uuid4(), **{**defaults, **fields})
+
+
+def _chain(client, db, monkeypatch, parent):
+    async def get(model, key):
+        return parent if parent and key == parent.run_id else None
+
+    async def fake_urls(run_id, names, expiration_seconds):
+        return {name: f"https://get.example/{run_id}/{name}" for name in names}
+
+    envs = []
+
+    async def fake_trigger(job_name, env):
+        envs.append(env)
+        return "projects/p/locations/l/jobs/j/executions/e"
+
+    monkeypatch.setattr(db, "get", get)
+    monkeypatch.setattr(gcs, "generate_artifact_download_urls", fake_urls)
+    monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
+    parent_run_id = parent.run_id if parent else uuid.uuid4()
+    resp = client.post(
+        "/agents/test-repair-fix/runs", json={"parent_run_id": str(parent_run_id)}
+    )
+    return resp, envs
+
+
+def test_a_chained_run_gets_signed_urls_for_its_parents_artifacts(
+    client, db, monkeypatch
+):
+    parent = _parent(artifacts=[{"name": "verdict.json"}])
+
+    resp, envs = _chain(client, db, monkeypatch, parent)
+
+    assert resp.status_code == 201, resp.text
+    assert envs[0]["PARENT_RUN_ID"] == str(parent.run_id)
+    assert json.loads(envs[0]["PARENT_ARTIFACTS"]) == {
+        "verdict.json": f"https://get.example/{parent.run_id}/verdict.json"
+    }
+
+
+def test_a_chained_run_needs_a_succeeded_parent(client, db, monkeypatch):
+    resp, envs = _chain(
+        client, db, monkeypatch, _parent(status=RunStatus.running.value)
+    )
+
+    assert resp.status_code == 422
+    assert "has not succeeded" in resp.text
+    assert envs == []
+
+
+def test_a_chained_run_needs_an_existing_parent(client, db, monkeypatch):
+    resp, envs = _chain(client, db, monkeypatch, None)
+
+    assert resp.status_code == 422
+    assert "Unknown parent run" in resp.text
+    assert db.added is None
+    assert envs == []
+
+
+def test_an_unchained_run_gets_no_parent_artifacts(client, db, monkeypatch):
+    envs = []
+
+    async def fake_trigger(job_name, env):
+        envs.append(env)
+        return "projects/p/locations/l/jobs/j/executions/e"
+
+    monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
+    _create(client)
+    assert "PARENT_ARTIFACTS" not in envs[0]

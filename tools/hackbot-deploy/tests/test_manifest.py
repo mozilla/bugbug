@@ -12,7 +12,6 @@ from hackbot_deploy.manifest import (
 )
 from hackbot_deploy.schema import DeployConfig
 
-REPO_ROOT = Path(__file__).parents[3]
 # The hand-written agents.json that webservices-infra started from.
 FIXTURE = Path(__file__).parent / "fixtures" / "agents.json"
 
@@ -23,11 +22,26 @@ def config(**fields: object) -> DeployConfig:
     return DeployConfig.model_validate({**JOB, **fields})
 
 
+def fixture_configs() -> dict[str, DeployConfig]:
+    # The [deploy] tables the fixture was written for, kept here so adding or
+    # retuning an agent under agents/ doesn't break the byte-for-byte check.
+    broker = {"cpu": "1", "memory": "512Mi"}
+    return {
+        "autowebcompat-diagnosis": config(timeout_seconds=7200, broker=broker),
+        "autowebcompat-repro": config(timeout_seconds=7200, broker=broker),
+        "bug-fix": config(
+            timeout_seconds=7200, workspace={"size": "40Gi"}, broker=broker
+        ),
+        "build-repair": config(timeout_seconds=7200, broker=broker),
+        "frontend-triage": config(timeout_seconds=7200, broker=broker),
+        "test-plan-generator": config(timeout_seconds=7200),
+        "test-repair": config(timeout_seconds=7200),
+    }
+
+
 def test_reproduces_the_infra_manifest_byte_for_byte() -> None:
     previous = json.loads(FIXTURE.read_text())
-    generated, changes = build_manifest(
-        manifest.load_configs(REPO_ROOT / "agents"), previous
-    )
+    generated, changes = build_manifest(fixture_configs(), previous)
 
     expected = FIXTURE.read_text().replace(
         '"generator": "manual"', f'"generator": "{manifest.GENERATOR}"'

@@ -5,11 +5,11 @@ description = "Cloud Run Job image that runs the test-repair agent for hackbot-a
 requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk,phabricator]",
-    "agent-tools[bugzilla,firefox]",
+    "agent-tools[bugzilla]",
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
     "requests",
-    "mozci~=2.4.8",
+    "mozci~=2.4.10",
     # mozci imports zstandard eagerly (default cache serializer) but only declares
     # it under its optional `cache` extra, so pull it in explicitly.
     "zstandard~=0.25.0",

@@ -76,8 +76,7 @@ class ReviewRequest(Base):
     general_comment: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
-    comments: Mapped[list["GeneratedComment"]] = relationship(
-        "GeneratedComment",
+    comments: Mapped[list[GeneratedComment]] = relationship(
         back_populates="review_request",
         cascade="all, delete-orphan",
     )
@@ -150,11 +149,9 @@ class GeneratedComment(Base):
     details: Mapped[dict | None] = mapped_column(JSONB)
 
     # Relationships
-    review_request: Mapped[ReviewRequest] = relationship(
-        "ReviewRequest", back_populates="comments"
-    )
-    feedback_items: Mapped[list["Feedback"]] = relationship(
-        "Feedback", back_populates="generated_comment"
+    review_request: Mapped[ReviewRequest] = relationship(back_populates="comments")
+    feedback_items: Mapped[list[Feedback]] = relationship(
+        back_populates="generated_comment"
     )
 
     __table_args__ = (
@@ -197,7 +194,7 @@ class Feedback(Base):
 
     # Relationships
     generated_comment: Mapped[GeneratedComment | None] = relationship(
-        "GeneratedComment", back_populates="feedback_items"
+        back_populates="feedback_items"
     )
 
     __table_args__ = (

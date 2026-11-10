@@ -637,7 +637,7 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_directory: str) -> "Model":
+    def load(model_directory: str) -> Model:
         model_path = path.join(model_directory, "model.pkl")
 
         if not path.exists(model_path):
@@ -658,7 +658,7 @@ class Model:
         return model
 
     @staticmethod
-    def _registered_class(model_directory: str) -> "type[Model] | None":
+    def _registered_class(model_directory: str) -> type[Model] | None:
         """Return the model class registered for a `{model_name}model` directory."""
         # Imported here to avoid a circular import (bugbug.models imports us).
         from bugbug.models import get_model_class

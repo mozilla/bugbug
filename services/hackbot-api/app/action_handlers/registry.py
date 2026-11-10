@@ -1,3 +1,4 @@
+from app.action_handlers.agents_handler import StartRunHandler
 from app.action_handlers.base import ActionHandler
 from app.action_handlers.bugzilla_handler import (
     AddAttachmentHandler,
@@ -6,6 +7,7 @@ from app.action_handlers.bugzilla_handler import (
     UpdateBugHandler,
 )
 from app.action_handlers.email_handler import SendEmailHandler
+from app.action_handlers.feedback_handler import ReportProblemHandler
 from app.action_handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
@@ -35,6 +37,8 @@ HANDLERS: dict[str, ActionHandler] = {
     "slack.post_message": PostMessageHandler(),
     "email.send": SendEmailHandler(),
     "try_server.push": PushHandler(),
+    "feedback.report_problem": ReportProblemHandler(),
+    "agents.start_run": StartRunHandler(),
 }
 
 

@@ -34,14 +34,6 @@ async def test_post_message_rejects_blank_arguments(channel, text):
     assert rec.actions == []
 
 
-def test_record_message_supports_a_ref_for_later_reference():
-    rec = ActionsRecorder()
-    action = slack.record_message(rec, "sheriffs", "backout recommended", ref="notice")
-    assert action["ref"] == "notice"
-    assert action["params"]["channel"] == "sheriffs"
-    assert rec.actions[0]["ref"] == "notice"
-
-
 def test_tools_are_exposed_under_the_slack_namespace():
     assert [t.dotted for t in slack.TOOLS] == ["slack.post_message"]
 

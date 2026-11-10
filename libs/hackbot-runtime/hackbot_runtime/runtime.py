@@ -83,7 +83,7 @@ def _ok_payload(ctx: HackbotContext, findings: dict) -> dict:
         "status": "ok",
         "error": None,
         "findings": findings,
-        "actions": ctx.actions.actions,
+        "actions": ctx.actions.list_actions(),
     }
 
 
@@ -94,7 +94,7 @@ def _error_payload(
         "status": "error",
         "error": error,
         "findings": {"traceback": traceback_str} if traceback_str else {},
-        "actions": ctx.actions.actions,
+        "actions": ctx.actions.list_actions(),
     }
 
 
@@ -220,6 +220,8 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
+        if ctx.parent_run_id:
+            ctx.fetch_parent_artifacts()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = entrypoint(ctx)
     except Exception as exc:
@@ -239,6 +241,8 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
 
     try:
         _configure_auth()
+        if ctx.parent_run_id:
+            ctx.fetch_parent_artifacts()
         with trace_agent(entrypoint, ctx.run_id):
             outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:

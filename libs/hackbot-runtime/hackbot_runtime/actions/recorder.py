@@ -9,7 +9,7 @@ from hackbot_runtime.artifacts import publish_file
 from hackbot_runtime.uploader import SignedPolicyUploader
 
 # Callback run on an action of one type before it is recorded. It receives the
-# action dict (``type``/``params``/``reasoning``, plus ``ref`` when given) and
+# action dict (``type``/``params``/``reasoning``) and
 # may mutate it in place; the return value is ignored. Raising aborts the
 # recording (nothing is appended and no attachment is published), so a hook
 # doubles as a validation gate: raise ``ToolError`` to report the reason back to
@@ -69,7 +69,6 @@ class ActionsRecorder:
         *,
         reasoning: str | None = None,
         attachments: dict[str, Path] | None = None,
-        ref: str | None = None,
     ) -> dict:
         """Record an action and return a detached copy with its ID.
 
@@ -83,12 +82,11 @@ class ActionsRecorder:
         The recorded action references it by that key; the original local path
         is not persisted (it disappears with the container).
 
-        ``ref`` optionally labels this action so a *later* action in the same
-        run can reference its apply-time result (e.g. a Bugzilla comment's
-        text containing ``{{actions.patch.url}}`` after a
-        ``phabricator.submit_patch`` action recorded with ``ref="patch"``).
-        Resolved by the apply step, since the result doesn't exist yet at
-        record time.
+        ``params`` may reference an earlier action's apply-time result by its
+        action ID (e.g. a Bugzilla comment's text containing
+        ``{{actions.<action_id>.url}}`` after a ``phabricator.submit_patch``
+        action). Resolved by the apply step, since the result doesn't exist yet
+        at record time.
 
         Any hooks registered for ``action_type`` run on the action, in
         registration order, and may still change it (see :data:`ActionHook`). A
@@ -97,14 +95,12 @@ class ActionsRecorder:
         recording leaves nothing behind: the action the hooks see carries no
         ``attachments`` key yet.
         """
-        action_id = f"action-{uuid.uuid4().hex}"
+        action_id = uuid.uuid4().hex
         action: dict = {
             "type": action_type,
             "params": params,
             "reasoning": reasoning,
         }
-        if ref is not None:
-            action["ref"] = ref
 
         for hook in self._hooks.get(action_type, ()):
             hook(action)

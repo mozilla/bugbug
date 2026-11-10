@@ -392,3 +392,51 @@ def test_source_changed_is_false_when_the_agent_changed_nothing(tmp_path, monkey
         "hackbot_runtime.context.changes.has_changes", lambda repo, base: False
     )
     assert hb.source_changed is False
+
+
+def test_a_run_without_a_parent_has_no_parent_artifacts(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    with pytest.raises(RuntimeError, match="not started by another run"):
+        _ = hb.parent_artifacts_dir
+
+
+def test_local_parent_artifacts_are_read_in_place(tmp_path):
+    hb = HackbotContext(
+        run_id="child", parent_run_id="parent", artifacts_dir=tmp_path / "artifacts"
+    )
+    hb.fetch_parent_artifacts()
+    assert hb.parent_artifacts_dir == tmp_path / "artifacts" / "parent"
+
+
+def test_parent_artifacts_are_downloaded_by_key(tmp_path, monkeypatch):
+    fetched = {}
+
+    def fake_download(urls, dest):
+        fetched.update(urls)
+        (dest / "verdict.json").write_text("{}")
+
+    monkeypatch.setattr("hackbot_runtime.context.artifacts.download_all", fake_download)
+    monkeypatch.setenv("PARENT_RUN_ID", "parent")
+    monkeypatch.setenv("PARENT_ARTIFACTS", json.dumps({"verdict.json": "https://u"}))
+    hb = HackbotContext(run_id="child", artifacts_dir=tmp_path / "artifacts")
+
+    hb.fetch_parent_artifacts()
+
+    assert fetched == {"verdict.json": "https://u"}
+    assert (hb.parent_artifacts_dir / "verdict.json").read_text() == "{}"
+
+
+def test_a_parent_with_no_artifacts_is_not_mistaken_for_a_local_run(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "hackbot_runtime.context.artifacts.download_all", lambda urls, dest: None
+    )
+    hb = HackbotContext(
+        run_id="child",
+        parent_run_id="parent",
+        parent_artifacts={},
+        artifacts_dir=tmp_path / "artifacts",
+    )
+    hb.fetch_parent_artifacts()
+    assert hb.parent_artifacts_dir != tmp_path / "artifacts" / "parent"

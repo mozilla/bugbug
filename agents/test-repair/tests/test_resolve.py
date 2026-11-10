@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from hackbot_agents.test_repair import resolve
 from hackbot_agents.test_repair.resolve import FailingGroup
@@ -90,6 +92,7 @@ def test_resolve_investigation_assembles_context(monkeypatch):
         "tags": {
             "project": "autoland",
             "test-suite": "mochitest-browser-chrome",
+            "tests_grouped": "1",
             "test-platform": "linux1804-64-qr/debug",
         },
         "payload": {"env": {"GECKO_HEAD_REV": "hghead"}},
@@ -233,3 +236,20 @@ def test_sheriff_classification_survives_a_treeherder_error(monkeypatch):
 
     monkeypatch.setattr(resolve, "_get_json", boom)
     assert resolve.sheriff_classification("autoland", "TASK") is None
+
+
+def test_an_investigation_survives_the_hand_off():
+    investigation = resolve.Investigation(
+        project="autoland",
+        hg_revision="hgrev",
+        harness="mochitest",
+        platform="linux1804-64/opt",
+        failing_groups=[FailingGroup("a/mochitest.toml", ["a/test_a.js"])],
+        commit_range=resolve.CommitRange(head="h" * 40, span=3),
+        label="test-linux1804-64/opt-mochitest-1",
+        known_intermittent_bugs=[42],
+    )
+    restored = resolve.Investigation.from_dict(
+        json.loads(json.dumps(investigation.to_dict()))
+    )
+    assert restored == investigation

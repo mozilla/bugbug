@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 from typing import Callable
 
 import hglib
@@ -16,6 +17,8 @@ from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
 
+from .conftest import MOCK_KNOWN_TASKS, MockModelCache
+
 
 @pytest.mark.parametrize(
     "labels_to_choose, groups_to_choose, reduced_labels, config_groups",
@@ -25,35 +28,35 @@ from bugbug_http import models
             {"test-linux1804-64-opt-label1": 0.9},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # one from label, none from group
         (
             {"test-linux1804-64-opt-label1": 0.9},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # none from label, one from group
         (
             {},
             {"test-group1": 0.9},
             {},
-            {"test-group1": ["test-linux1804-64/opt", "test-windows10/debug"]},
+            {"test-group1": ["test-linux1804-64/opt-*"]},
         ),
         # two from label, one from group
         (
             {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.5},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
-            {"test-group2": ["test-linux1804-64/opt"]},
+            {"test-group2": ["test-linux1804-64/opt-*"]},
         ),
         # two redundant from label, one from group
         (
             {"test-linux1804-64/opt": 0.9, "test-windows10/opt": 0.8},
             {"test-group1": 0.9},
             {"test-linux1804-64/opt": 0.9},
-            {"test-group1": ["test-linux1804-64/opt", "test-windows10/debug"]},
+            {"test-group1": ["test-linux1804-64/opt-*"]},
         ),
     ],
 )
@@ -107,7 +110,7 @@ def test_simple_schedule(
     assert result["groups"] == groups_to_choose
     assert result["reduced_tasks"] == reduced_labels
     assert result["reduced_tasks_higher"] == reduced_labels
-    assert result["known_tasks"] == ["prova"]
+    assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
     assert {k: set(v) for k, v in result["config_groups"].items()} == {
@@ -376,13 +379,8 @@ def test_schedule_backout(
     # The recently failing tasks are not reduced, even if they are redundant.
     assert result["reduced_tasks"] == result["tasks"]
     assert result["reduced_tasks_higher"] == result["tasks"]
-    assert {k: set(v) for k, v in result["config_groups"].items()} == {
-        "test-group1": {
-            "test-linux1804-64/opt",
-            "test-windows10/debug",
-            "test-windows10/opt",
-        }
-    }
+    # The recently failing manifests run on all configs.
+    assert result["config_groups"] == {"test-group1": ["*"]}
 
 
 def test_schedule_backout_try(
@@ -449,3 +447,125 @@ def test_schedule_backout_treeherder_failure(
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
     assert result["tasks"] == {}
     assert result["groups"] == {}
+
+
+@pytest.mark.parametrize(
+    "calibrated, very_high", [(True, None), (False, None), (True, 0.6)]
+)
+def test_schedule_config_selection_risk(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+    calibrated: bool,
+    very_high: float | None,
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify({}, {"test-group1": 0.99, "test-group2": 0.6})
+
+    class ModelCache(MockModelCache):
+        def get(self, model_name):
+            model = super().get(model_name)
+            if model_name == "testgroupselect" and calibrated:
+                # Confidences 0.5 -> 0.01, 1 -> 0.21.
+                model.calibration = ([0.5, 1.0], [0.01, 0.21])
+            if model_name == "testgroupselect" and very_high is not None:
+                model.confidence_thresholds = {
+                    "low": 0.5,
+                    "medium": 0.6,
+                    "high": 0.7,
+                    "very_high": very_high,
+                }
+            return model
+
+    monkeypatch.setattr(models, "MODEL_CACHE", ModelCache())
+    risks: dict[str, float] = {}
+    very_likely: list[str] = []
+
+    def select_configs(groups, modified_paths, very_likely_groups):
+        risks.update(groups)
+        very_likely.extend(very_likely_groups)
+        return {group: ["*"] for group in groups}
+
+    monkeypatch.setattr(models, "select_configs", select_configs)
+    # The manifests including the modified tests are certain to run.
+    monkeypatch.setattr(
+        models.test_scheduling,
+        "find_manifests_for_paths",
+        lambda repo_dir, paths: ["test-group3"],
+    )
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    # Groups are selected by confidence, configs weighted by the calibrated probabilities (the
+    # confidences, if the group model isn't calibrated).
+    if calibrated:
+        assert risks == pytest.approx(
+            {"test-group1": 0.206, "test-group2": 0.05, "test-group3": 1.0}
+        )
+    else:
+        assert risks == {"test-group1": 0.99, "test-group2": 0.6, "test-group3": 1.0}
+    # The manifests including the modified tests, and the groups selected with at least the model's
+    # "very_high" confidence, run on every OS family.
+    if very_high is None:
+        assert very_likely == ["test-group3"]
+    else:
+        assert sorted(very_likely) == ["test-group1", "test-group2", "test-group3"]
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["groups"] == {
+        "test-group1": 0.99,
+        "test-group2": 0.6,
+        "test-group3": 1.0,
+    }
+
+
+def test_select_configs_never_vetoes_groups(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(models, "MODEL_CACHE", MockModelCache())
+
+    # The cheapest config of the current task graph; a group that no current task runs is not
+    # restricted (the taskgraph would otherwise remove all of its tasks).
+    assert models.select_configs(
+        {"test-group2": 0.9, "unknown-group": 0.9}, ["dom/foo.cpp"]
+    ) == {"test-group2": ["test-linux1804-64/opt-*"], "unknown-group": ["*"]}
+
+    # If the selection fails, no group is restricted.
+    def fail(*args, **kwargs):
+        raise Exception("model missing")
+
+    monkeypatch.setattr(models, "get_live_config_candidates", fail)
+    assert models.select_configs({"test-group2": 0.9}, ["dom/foo.cpp"]) == {
+        "test-group2": ["*"]
+    }
+
+
+def test_select_configs_very_likely_and_build_platforms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(models, "MODEL_CACHE", MockModelCache())
+
+    # Very likely regressions (e.g. the manifests including the modified tests) run on every OS family,
+    # whatever their risk.
+    assert models.select_configs(
+        {"test-group1": 0.01}, ["dom/foo.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}
+
+    # A patch only touching files built on Windows only runs groups on Windows configs.
+    built = {"windows": ["widget/windows/a.cpp", "dom/foo.cpp"]}
+    for platform in ("android", "linux", "macosx"):
+        built[platform] = ["dom/foo.cpp"]
+    with open("build_platforms.json", "w") as f:
+        json.dump(built, f)
+    models.get_build_platforms.cache_clear()
+    assert models.select_configs(
+        {"test-group1": 1.0}, ["widget/windows/a.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-windows10/opt-*"]}
+    assert models.select_configs(
+        {"test-group1": 1.0}, ["dom/foo.cpp"], ["test-group1"]
+    ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}
