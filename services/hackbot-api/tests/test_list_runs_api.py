@@ -162,6 +162,6 @@ async def test_list_runs_filters_by_bug_id():
         bug_id=1846789,
         db=db,
     )
-    assert "runs.inputs @>" in _sql(db.stmt)
+    assert "runs.bug_id =" in _sql(db.stmt)
     params = db.stmt.compile(dialect=postgresql.dialect()).params
-    assert {"bug_id": 1846789} in params.values()
+    assert 1846789 in params.values()
