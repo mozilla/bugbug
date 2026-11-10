@@ -2889,6 +2889,9 @@ claude-sdk = [
     { name = "agent-tools", extra = ["claude-sdk"] },
     { name = "claude-agent-sdk" },
 ]
+codex-sdk = [
+    { name = "openai-codex" },
+]
 phabricator = [
     { name = "mozphab" },
 ]
@@ -2901,6 +2904,7 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
+    { name = "openai-codex", marker = "extra == 'codex-sdk'", specifier = ">=0.163.0" },
     { name = "phabricator-client", editable = "libs/phabricator-client" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "requests", specifier = ">=2.32.0" },
@@ -2908,7 +2912,7 @@ requires-dist = [
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "weave", specifier = ">=0.53.12" },
 ]
-provides-extras = ["claude-sdk", "phabricator"]
+provides-extras = ["claude-sdk", "codex-sdk", "phabricator"]
 
 [[package]]
 name = "hf-xet"
