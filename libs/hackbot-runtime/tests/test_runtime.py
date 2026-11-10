@@ -8,6 +8,7 @@ from hackbot_runtime import (
     AgentError,
     HackbotAgentResult,
     HackbotContext,
+    context,
     run_async,
     runtime,
 )
@@ -231,7 +232,7 @@ def test_run_async_exits_zero_and_writes_summary(tmp_path, monkeypatch):
 def test_run_async_records_agent_version(tmp_path, monkeypatch):
     _run_env(tmp_path, monkeypatch)
     versions = {"hackbot-agent-tests": "1.2.3"}
-    monkeypatch.setattr(runtime.metadata, "version", versions.__getitem__)
+    monkeypatch.setattr(context.metadata, "version", versions.__getitem__)
 
     async def main(ctx):
         return HackbotAgentResult(num_turns=1)

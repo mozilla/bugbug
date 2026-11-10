@@ -5,7 +5,6 @@ import os
 import sys
 import traceback
 from collections.abc import Awaitable, Callable
-from importlib import metadata
 from pathlib import Path
 from typing import NoReturn
 
@@ -58,14 +57,6 @@ def _configure_sentry(entrypoint: Callable) -> None:
         return
     sentry_sdk.init(dsn=dsn)
     sentry_sdk.set_tag("agent", resolve_agent_name(entrypoint))
-
-
-def _agent_version(agent_name: str) -> str | None:
-    """The version in the agent's pyproject.toml, or None when it isn't installed."""
-    try:
-        return metadata.version(f"hackbot-agent-{agent_name}")
-    except metadata.PackageNotFoundError:
-        return None
 
 
 def _configure_logging() -> None:
@@ -140,11 +131,9 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
     the entry point's module), falling back to an empty config when there's none.
     """
     parsed = _resolve_config(entrypoint, config)
-    agent_name = resolve_agent_name(entrypoint)
+    parsed.agent_name = resolve_agent_name(entrypoint)
     try:
-        return HackbotContext.from_config_obj(
-            parsed, agent_name=agent_name, agent_version=_agent_version(agent_name)
-        )
+        return HackbotContext.from_config_obj(parsed)
     except ValidationError as exc:
         log.error(
             "Failed to load HackbotContext from env; no summary can be written.\n%s",

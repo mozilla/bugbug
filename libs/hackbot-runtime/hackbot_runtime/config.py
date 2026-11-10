@@ -42,6 +42,8 @@ class HackbotConfig(BaseModel):
 
     source: SourceConfig | None = None
     firefox: FirefoxConfig | None = None
+    # Set by the runtime from the entry point, not read from the toml.
+    agent_name: str | None = None
 
 
 def load_config(path: Path) -> HackbotConfig:

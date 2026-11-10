@@ -16,6 +16,7 @@ import os
 import tempfile
 import uuid
 from functools import cached_property
+from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -91,9 +92,6 @@ class HackbotContext(BaseSettings):
     # Capability declarations from hackbot.toml (not env); attached after
     # construction via from_config()/from_config_obj().
     _config: HackbotConfig = PrivateAttr(default_factory=HackbotConfig)
-    # Which agent is running and its package version, set by the runtime.
-    _agent_name: str | None = PrivateAttr(default=None)
-    _agent_version: str | None = PrivateAttr(default=None)
     # The commit the source checkout started from, recorded when source_repo is
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
@@ -116,30 +114,25 @@ class HackbotContext(BaseSettings):
         return cls.from_config_obj(load_config(config_path))
 
     @classmethod
-    def from_config_obj(
-        cls,
-        config: HackbotConfig,
-        agent_name: str | None = None,
-        agent_version: str | None = None,
-    ) -> HackbotContext:
+    def from_config_obj(cls, config: HackbotConfig) -> HackbotContext:
         """Build from an already-parsed config plus env-derived fields."""
         obj = cls()
         obj._config = config
-        obj._agent_name = agent_name
-        obj._agent_version = agent_version
         return obj
 
     @property
     def config(self) -> HackbotConfig:
         return self._config
 
-    @property
-    def agent_name(self) -> str | None:
-        return self._agent_name
-
-    @property
+    @cached_property
     def agent_version(self) -> str | None:
-        return self._agent_version
+        """The version in the agent's pyproject.toml, or None when it isn't installed."""
+        if self._config.agent_name is None:
+            return None
+        try:
+            return metadata.version(f"hackbot-agent-{self._config.agent_name}")
+        except metadata.PackageNotFoundError:
+            return None
 
     # --- Platform capabilities (declared in hackbot.toml) ------------- #
 
