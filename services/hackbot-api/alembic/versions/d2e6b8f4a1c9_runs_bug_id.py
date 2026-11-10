@@ -1,7 +1,7 @@
 """Store the bug a run is for, so runs can be listed by bug id.
 
 Revision ID: d2e6b8f4a1c9
-Revises: 78015b96b6db
+Revises: d4e7b2a9c1f3
 Create Date: 2026-11-10 00:00:00.000000
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d2e6b8f4a1c9"
-down_revision: Union[str, Sequence[str], None] = "78015b96b6db"
+down_revision: Union[str, Sequence[str], None] = "d4e7b2a9c1f3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
