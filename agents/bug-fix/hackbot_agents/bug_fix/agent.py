@@ -171,6 +171,7 @@ async def run_bug_fix(
     # derives fx_ctx from the prepared source checkout and the agent's
     # hackbot.toml. Provision the config before the session can call build tools.
     _write_mozconfig(fx_ctx)
+    fx_ctx.bootstrap_before_build = True
     firefox_server = build_sdk_server("firefox", fx_ctx, firefox.TOOLS)
 
     user_prompt = select_workflow(
