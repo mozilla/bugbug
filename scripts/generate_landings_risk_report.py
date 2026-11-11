@@ -334,7 +334,7 @@ class LandingsRiskReportGenerator(object):
             )
 
     def get_landed_and_filed_since(self, days: int) -> list[int]:
-        since = datetime.now(timezone.utc) - timedelta(days=days)
+        since = datetime.utcnow() - timedelta(days=days)
 
         commits = []
         last_commit_by_bug: dict[int, datetime] = {}
@@ -385,7 +385,7 @@ class LandingsRiskReportGenerator(object):
         db.download(TEST_INFOS_DB)
 
         dates = [
-            datetime.now(timezone.utc) - timedelta(days=day)
+            datetime.utcnow() - timedelta(days=day)
             for day in reversed(range(min(days, 90)))
         ]
 
@@ -399,9 +399,7 @@ class LandingsRiskReportGenerator(object):
             date_str = date.strftime("%Y-%m-%d")
 
             # Gather the latest three days again, as the data might have changed.
-            if date_str in test_infos and date < datetime.now(timezone.utc) - timedelta(
-                days=3
-            ):
+            if date_str in test_infos and date < datetime.utcnow() - timedelta(days=3):
                 prev_skips = test_infos[date_str]["skips"]
                 continue
 
@@ -945,9 +943,7 @@ def notification(days: int) -> None:
             if "bugs" not in data:
                 continue
 
-            if dateutil.parser.parse(day) < datetime.now(timezone.utc) - relativedelta(
-                weeks=1
-            ):
+            if dateutil.parser.parse(day) < datetime.utcnow() - relativedelta(weeks=1):
                 continue
 
             all_intermittent_failure_bugs.update(bug["id"] for bug in data["bugs"])
@@ -1049,12 +1045,12 @@ def notification(days: int) -> None:
                     (revision["pending_review_time"], revision["id"])
                 )
 
-        if fix_date is not None and fix_date > datetime.now(
-            timezone.utc
-        ) - relativedelta(months=1):
+        if fix_date is not None and fix_date > datetime.utcnow() - relativedelta(
+            months=1
+        ):
             cur_team_data["month_changes"] += 1
 
-            if fix_date > datetime.now(timezone.utc) - relativedelta(weeks=1):
+            if fix_date > datetime.utcnow() - relativedelta(weeks=1):
                 cur_team_data["fix_times"].append(
                     (fix_date - creation_date).total_seconds() / 86400
                 )
@@ -1067,13 +1063,9 @@ def notification(days: int) -> None:
                     cur_team_data["low_risk_changes"] += 1
 
                 if bug["regression"]:
-                    if creation_date > datetime.now(timezone.utc) - relativedelta(
-                        weeks=1
-                    ):
+                    if creation_date > datetime.utcnow() - relativedelta(weeks=1):
                         cur_team_data["week_old_fixed_regressions"] += 1
-                    elif creation_date > datetime.now(timezone.utc) - relativedelta(
-                        months=1
-                    ):
+                    elif creation_date > datetime.utcnow() - relativedelta(months=1):
                         cur_team_data["month_old_fixed_regressions"] += 1
                     else:
                         cur_team_data["more_than_month_old_fixed_regressions"] += 1
@@ -1089,9 +1081,9 @@ def notification(days: int) -> None:
                         continue
 
                     # We don't care about old commits associated to newly fixed bugs (e.g. a tentative fix from a year ago).
-                    if dateutil.parser.parse(commit["date"]) < datetime.now(
-                        timezone.utc
-                    ) - relativedelta(weeks=1):
+                    if dateutil.parser.parse(
+                        commit["date"]
+                    ) < datetime.utcnow() - relativedelta(weeks=1):
                         continue
 
                     lines_added = 0
@@ -1109,7 +1101,7 @@ def notification(days: int) -> None:
                             (lines_covered / lines_added, commit["rev_id"])
                         )
 
-            elif fix_date > datetime.now(timezone.utc) - relativedelta(weeks=2):
+            elif fix_date > datetime.utcnow() - relativedelta(weeks=2):
                 cur_team_data["prev_fix_times"].append(
                     (fix_date - creation_date).total_seconds() / 86400
                 )
@@ -1123,9 +1115,9 @@ def notification(days: int) -> None:
                     if revision["first_review_time"] is not None
                 ]
 
-        if bug["regression"] and creation_date > datetime.now(
-            timezone.utc
-        ) - relativedelta(weeks=2):
+        if bug["regression"] and creation_date > datetime.utcnow() - relativedelta(
+            weeks=2
+        ):
             cur_team_data["new_regressions"] += 1
             if bug["team"] == "Compiler and Development Tools":
                 print("New regression: {}".format(bug["id"]))
@@ -1138,7 +1130,7 @@ def notification(days: int) -> None:
                 cur_team_data["unassigned_new_regressions"] += 1
 
         if (
-            creation_date > datetime.now(timezone.utc) - relativedelta(weeks=2)
+            creation_date > datetime.utcnow() - relativedelta(weeks=2)
             and bug["regression"]
             and not bug["fixed"]
         ):
@@ -1147,7 +1139,7 @@ def notification(days: int) -> None:
             cur_team_data["unfixed_regressions"].append(bug)
 
         if (
-            creation_date > datetime.now(timezone.utc) - relativedelta(days=days)
+            creation_date > datetime.utcnow() - relativedelta(days=days)
             and bug["regression"]
             and not bug["fixed"]
         ):
@@ -1198,18 +1190,14 @@ def notification(days: int) -> None:
             if "bugs" not in data:
                 continue
 
-            if dateutil.parser.parse(day) < datetime.now(timezone.utc) - relativedelta(
-                weeks=1
-            ):
+            if dateutil.parser.parse(day) < datetime.utcnow() - relativedelta(weeks=1):
                 continue
 
             for bug in data["bugs"]:
                 cur_team_data["intermittent_failures"][bug["id"]] += bug["count"]
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        two_weeks_ago = (datetime.now(timezone.utc) - timedelta(days=14)).strftime(
-            "%Y-%m-%d"
-        )
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
         skips = 0
         prev_skips = 0
         for day, data in day_to_data.items():
@@ -1813,10 +1801,10 @@ List of revisions that have been waiting for a review for longer than 3 days:
                 period: relativedelta,
                 team: str = team,
             ) -> dict[str, dict]:
-                start_date = datetime.now(timezone.utc) - period
+                start_date = datetime.utcnow() - period
                 me_teams = super_teams.get(team, [team])
                 return bugzilla.calculate_maintenance_effectiveness_indicator(
-                    me_teams, start_date, datetime.now(timezone.utc)
+                    me_teams, start_date, datetime.utcnow()
                 )
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
