@@ -81,7 +81,7 @@ perf-simulation = [
 
 [dependency-groups]
 test = [
-    "coverage==7.16.2",
+    "coverage==7.17.1",
     "hypothesis==6.170.15",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
