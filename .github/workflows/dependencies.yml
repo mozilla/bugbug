@@ -19,7 +19,7 @@ jobs:
         if: >-
           (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
            steps.metadata.outputs.update-type == 'version-update:semver-patch')
-        run: >-
+        run: |
           gh pr edit "$PR_URL" --remove-reviewer @mozilla/ai4dev
           gh pr merge --auto --squash "$PR_URL"
         env:
