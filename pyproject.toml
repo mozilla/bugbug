@@ -72,7 +72,7 @@ nlp = [
 ]
 nn = []
 perf-regression-predictor = [
-    "torch==2.14.1",
+    "torch==2.15.0",
     "transformers==5.22.1",
 ]
 perf-simulation = [
