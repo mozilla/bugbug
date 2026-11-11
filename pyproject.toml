@@ -73,7 +73,7 @@ nlp = [
 nn = []
 perf-regression-predictor = [
     "torch==2.14.1",
-    "transformers==5.20.1",
+    "transformers==5.22.1",
 ]
 perf-simulation = [
     "optuna>=5.0.0",
