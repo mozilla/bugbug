@@ -68,23 +68,26 @@ dependencies = [
 
 [project.optional-dependencies]
 nlp = [
-    "spacy==3.8.16",
+    "spacy==3.8.18",
 ]
 nn = []
 perf-regression-predictor = [
     "torch==2.14.1",
     "transformers==5.20.1",
 ]
+perf-simulation = [
+    "optuna>=5.0.0",
+]
 
 [dependency-groups]
 test = [
     "coverage==7.16.2",
-    "hypothesis==6.170.1",
+    "hypothesis==6.170.15",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
     "pre-commit==4.7.0",
     "pytest==9.1.1",
-    "pytest-asyncio==1.4.0",
+    "pytest-asyncio==1.4.1.post1",
     "pytest-cov==7.1.0",
     "pytest-responses==0.6.0",
     "responses==0.26.3",
@@ -121,6 +124,9 @@ bugbug-fixed-comments = "scripts.inline_comments_data_collection:main"
 bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
+bugbug-data-perf-alerts = "scripts.perf_alerts_retriever:main"
+bugbug-data-perf-commit-risk = "scripts.perf_commit_risk_scorer:main"
+bugbug-perf-scheduling-simulator = "scripts.perf_scheduling_simulator:main"
 bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]

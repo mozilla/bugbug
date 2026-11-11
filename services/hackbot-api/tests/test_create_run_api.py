@@ -14,15 +14,16 @@ from types import SimpleNamespace
 
 import pytest
 from app import gcs, jobs
+from app.auth import require_api_key
 from app.schemas import RunStatus
 
 
 @pytest.fixture(autouse=True)
 def _stub_gcp(monkeypatch):
-    async def fake_policy(run_id):
+    async def fake_policy(run_id, timeout_seconds):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         return "projects/p/locations/l/jobs/j/executions/e"
 
     monkeypatch.setattr(gcs, "run_prefix", lambda run_id: f"results/{run_id}/")
@@ -47,6 +48,14 @@ def test_create_run_normalizes_requested_by_case_and_whitespace(client, db):
     # Stored lowercased/stripped so the list_runs filter can match exactly.
     _create(client, {"X-On-Behalf-Of": "  Someone@Mozilla.COM  "})
     assert db.added.requested_by == "someone@mozilla.com"
+
+
+def test_create_run_records_requested_via_from_caller(client, db):
+    client.app.dependency_overrides[require_api_key] = lambda: (
+        "listener@example.iam.gserviceaccount.com"
+    )
+    _create(client)
+    assert db.added.requested_via == "listener@example.iam.gserviceaccount.com"
 
 
 @pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])
@@ -166,7 +175,7 @@ def _chain(client, db, monkeypatch, parent):
 
     envs = []
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 
@@ -223,7 +232,7 @@ def test_a_chained_run_needs_an_existing_parent(client, db, monkeypatch):
 def test_an_unchained_run_gets_no_parent_artifacts(client, db, monkeypatch):
     envs = []
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 

@@ -10,6 +10,7 @@ from app.schemas import (
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
+    DatasetEvalInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
@@ -48,6 +49,8 @@ class AgentSpec:
     # For an agent started by another run: which of the parent's artifacts it
     # downloads, as fnmatch patterns (`*` also matches `/`). None means all of them.
     parent_artifacts: tuple[str, ...] | None = None
+    # How long an execution may run; the API-wide default when unset.
+    execution_timeout_seconds: int | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -189,5 +192,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-autowebcompat-intervention",
         input_schema=AutowebcompatInterventionInputs,
         auto_apply_actions=True,
+    ),
+    "dataset-eval": AgentSpec(
+        name="dataset-eval",
+        description=(
+            "Run an agent over an eval dataset, grade every example, and log the "
+            "evaluation to Weave."
+        ),
+        job_name="hackbot-agent-dataset-eval",
+        input_schema=DatasetEvalInputs,
+        execution_timeout_seconds=48 * 60 * 60,
     ),
 }

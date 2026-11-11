@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from bugbug import repository
 from bugbug.models.perf_regression_predictor import (
     CommitMessageCleaner,
     DiffStructurer,
@@ -311,6 +312,27 @@ diff -r def -r abc widget.py
     )
 
 
+def test_extract_commit_message_matches_the_training_parser() -> None:
+    # Inference and the training set export read the same parser, so a message
+    # paragraph starting with "#" after the header survives in both.
+    patch = """\
+# HG changeset patch
+# User Developer <developer@example.com>
+# Date 123456 0
+# Node ID abc
+# Parent  def
+Bug 1 - Speed up rendering
+
+# Rationale
+The hot path did redundant work.
+
+diff --git a/widget.py b/widget.py
+"""
+    message = extract_commit_message_from_patch(patch)
+    assert message == repository.parse_hg_export(patch).message
+    assert "# Rationale" in message
+
+
 # Tokenizers without a declared limit report this sentinel instead of a size.
 _NO_TOKENIZER_LIMIT = int(1e30)
 
@@ -408,3 +430,12 @@ def test_build_prompt_drops_text_beyond_the_token_window() -> None:
     assert model._build_prompt({"commit_message": None, "diff": small}) == (
         model.build_model_input(None, small)
     )
+
+
+def test_model_version_falls_back_to_the_artifact_name() -> None:
+    from bugbug.models.perf_regression_predictor import PerfRegressionPredictorModel
+
+    model = PerfRegressionPredictorModel()
+    assert model.version == "perf-regression-predictor-v1"
+    model.model_metadata = {"model_version": "2026-10-01"}
+    assert model.version == "2026-10-01"
