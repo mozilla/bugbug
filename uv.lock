@@ -5038,14 +5038,14 @@ wheels = [
 
 [[package]]
 name = "prefpicker"
-version = "2.25.0"
+version = "2.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/9a/8714dfe24cec24943fcc46845cc065e9b55efec399be5583c6624e9bb273/prefpicker-2.25.0.tar.gz", hash = "sha256:6852109464a9a39c0dff6e072b4829b303afb9cd26626590556828b7c70d2a2d", size = 27438, upload-time = "2026-07-20T17:45:15.393Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/e0/0d35af9518f2060a04f11c3df87588e09f7491ada5d2aaf9aa9eb6f60984/prefpicker-2.28.0.tar.gz", hash = "sha256:7f178a17c29a06b7f4af5216b0110dc99e081ba2b3162d37ef76da136f2c006d", size = 27673, upload-time = "2026-10-29T13:38:17.285Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/ae/934d75056ece7adb19798d17b4ec9a09b24ef832d3142a688a79f2809a0d/prefpicker-2.25.0-py3-none-any.whl", hash = "sha256:121bc3136aaa6ffb4ce9e3b8c8b7bc5110065717b2d0a640f67ad0b46ad5d5a8", size = 25122, upload-time = "2026-07-20T17:45:13.996Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/9e/97607cc24b61d496d64714a9996519a43d1c8d354e4ddf681b5ed201372f/prefpicker-2.28.0-py3-none-any.whl", hash = "sha256:dfb04bd236296c2914e945e8b91875756d48511b983978b34389f800f2c36a26", size = 25160, upload-time = "2026-10-29T13:38:16.001Z" },
 ]
 
 [[package]]
