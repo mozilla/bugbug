@@ -31,7 +31,11 @@ services:
       - ARTIFACTS_DIR=/artifacts
     volumes:
       - workspace:/workspace
-      - ${HOME}/hackbot/artifacts:/artifacts
+      - type: bind
+        source: ${HOME}/hackbot/artifacts
+        target: /artifacts
+        bind:
+          create_host_path: false
     depends_on:
       bug-fix-broker:
         condition: service_started

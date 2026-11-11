@@ -85,6 +85,7 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    `bug-fix` agent requires:
 
    ```sh
+   mkdir -p ~/hackbot/artifacts
    BUG_ID=1234567 docker compose up bug-fix-agent --build
    ```
 
