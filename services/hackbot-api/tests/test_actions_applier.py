@@ -80,7 +80,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     summary: dict | None = None
-    inputs: dict = field(default_factory=dict)
+    inputs: dict = field(default_factory=lambda: {"require_review": False})
 
 
 def _spec(*, auto=True, consent=False, always=frozenset(), never=frozenset()):
@@ -103,17 +103,19 @@ def _auto_applies(spec, run):
     return actions_applier._auto_apply_blocker(spec, run) is None
 
 
-def _action_auto_applies(spec, run, action_type):
-    run_level_auto_apply = actions_applier._auto_apply_blocker(spec, run) is None
+def _action_auto_applies(spec, run, action_type, require_review=False):
     return actions_applier._should_auto_apply(
-        spec, action_type, run_level_auto_apply=run_level_auto_apply
+        spec,
+        action_type,
+        require_review=require_review,
+        run_level_auto_apply=_auto_applies(spec, run),
     )
 
 
 def _run_with_findings(**findings):
     return _FakeRun(
         status=RunStatus.succeeded.value,
-        inputs={"bug_id": 2014702},
+        inputs={"bug_id": 2014702, "require_review": False},
         summary={"findings": findings, "actions": []},
     )
 
@@ -135,6 +137,11 @@ def test_an_agent_that_needs_no_consent_applies_unconditionally():
     spec = _spec()
     assert _auto_applies(spec, _FakeRun(status=RunStatus.succeeded.value))
     assert _auto_applies(spec, _run_with_findings(auto_apply=False))
+
+
+def test_review_request_holds_actions_even_when_agent_auto_applies():
+    run = _run_with_findings(auto_apply=True)
+    assert not _action_auto_applies(_spec(), run, "bugzilla.add_comment", True)
 
 
 def test_always_apply_action_overrides_agent_default():
@@ -161,6 +168,12 @@ def test_action_without_override_uses_agent_default():
         always=frozenset({"slack.post_message"}),
     )
     assert not _action_auto_applies(spec, _run_with_findings(), "bugzilla.add_comment")
+
+
+def test_review_request_holds_always_apply_actions():
+    action_type = "email.send"
+    spec = _spec(auto=False, always=frozenset({action_type}))
+    assert not _action_auto_applies(spec, _run_with_findings(), action_type, True)
 
 
 # --- the run's own verdict ----------------------------------------------- #
@@ -337,6 +350,15 @@ async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
     await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), _CLIENT)
     assert calls == {"ensured": True, "applied": True}
     assert db.commits >= 1
+
+
+async def test_succeeded_run_with_review_required_records_but_does_not_apply(
+    monkeypatch,
+):
+    calls = _patch_applier(monkeypatch, auto=True)
+    run = _FakeRun(status=RunStatus.succeeded.value, inputs={"require_review": True})
+    await on_run_completed(_FakeDB(), run, _CLIENT)
+    assert calls == {"ensured": True, "applied": False}
 
 
 async def test_succeeded_non_opted_agent_records_but_does_not_apply(monkeypatch):
