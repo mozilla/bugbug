@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import xgboost
 from dateutil.relativedelta import relativedelta
@@ -94,7 +94,7 @@ class AccessibilityModel(BugModel):
 
         This function provides an option to extend the dataset used for model training by including older bugs.
         """
-        lookup_start_date = datetime.utcnow() - relativedelta(months=months)
+        lookup_start_date = datetime.now(timezone.utc) - relativedelta(months=months)
         params = {
             "f1": "creation_ts",
             "o1": "greaterthan",
