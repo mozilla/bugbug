@@ -166,7 +166,7 @@ def _parent(**fields):
     return SimpleNamespace(run_id=uuid.uuid4(), **{**defaults, **fields})
 
 
-def _chain(client, db, monkeypatch, parent):
+def _chain(client, db, monkeypatch, parent, **inputs):
     async def get(model, key):
         return parent if parent and key == parent.run_id else None
 
@@ -184,12 +184,13 @@ def _chain(client, db, monkeypatch, parent):
     monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
     parent_run_id = parent.run_id if parent else uuid.uuid4()
     resp = client.post(
-        "/agents/test-repair-fix/runs", json={"parent_run_id": str(parent_run_id)}
+        "/agents/test-repair-fix/runs",
+        json={"parent_run_id": str(parent_run_id), **inputs},
     )
     return resp, envs
 
 
-def test_a_chained_run_gets_signed_urls_for_the_parent_artifacts_it_needs(
+def test_a_chained_run_gets_signed_urls_for_the_parent_artifacts_it_asks_for(
     client, db, monkeypatch
 ):
     parent = _parent(
@@ -200,7 +201,13 @@ def test_a_chained_run_gets_signed_urls_for_the_parent_artifacts_it_needs(
         ]
     )
 
-    resp, envs = _chain(client, db, monkeypatch, parent)
+    resp, envs = _chain(
+        client,
+        db,
+        monkeypatch,
+        parent,
+        artifacts=["verdict.json", "logs/task/live_backing_log.txt"],
+    )
 
     assert resp.status_code == 201, resp.text
     assert envs[0]["PARENT_RUN_ID"] == str(parent.run_id)

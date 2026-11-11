@@ -180,6 +180,8 @@ class TestRepairFixInputs(BaseModel):
     # The test-repair run to continue from; the investigation, verdict and failure
     # logs come from its artifacts.
     parent_run_id: UUID
+    # Names of the parent's artifacts to pass on; all of them when unset.
+    artifacts: list[str] | None = None
     skip_firefox_build: bool | None = None
     model: str | None = None
     max_turns: int | None = None

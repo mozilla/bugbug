@@ -2,7 +2,6 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from fnmatch import fnmatch
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -143,6 +142,13 @@ async def create_run(
                 status_code=422,
                 detail=f"Parent run {parent.run_id} has not succeeded",
             )
+        published = {artifact["name"] for artifact in parent.artifacts or []}
+        missing = set(getattr(inputs, "artifacts", None) or []) - published
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Parent run {parent.run_id} has no {sorted(missing)}",
+            )
 
     run_id = uuid.uuid4()
     results_prefix = gcs.run_prefix(str(run_id))
@@ -203,7 +209,7 @@ async def create_run(
             "RESULTS_POLICY_FIELDS": json.dumps(policy["fields"]),
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
-            **(await _parent_artifacts_env(parent, agent)),
+            **(await _parent_artifacts_env(parent, getattr(inputs, "artifacts", None))),
         }
         execution_name = await jobs.trigger_execution(
             agent.job_name, env_overrides, timeout
@@ -224,17 +230,14 @@ async def create_run(
     return RunRef.model_validate(run)
 
 
-async def _parent_artifacts_env(parent: Run | None, agent: AgentSpec) -> dict[str, str]:
-    """Signed download URLs for the parent run's artifacts the agent receives."""
+async def _parent_artifacts_env(
+    parent: Run | None, names: list[str] | None
+) -> dict[str, str]:
+    """Signed download URLs for the parent run's artifacts, for the runtime."""
     if parent is None:
         return {}
-    names = [artifact["name"] for artifact in parent.artifacts or []]
-    if agent.parent_artifacts is not None:
-        names = [
-            name
-            for name in names
-            if any(fnmatch(name, pattern) for pattern in agent.parent_artifacts)
-        ]
+    if names is None:
+        names = [artifact["name"] for artifact in parent.artifacts or []]
     urls = await gcs.generate_artifact_download_urls(
         str(parent.run_id),
         names,

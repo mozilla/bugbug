@@ -46,7 +46,7 @@ from .prompts import (
     MAX_TESTS_PER_GROUP,
     SYSTEM_PROMPT_APPEND,
 )
-from .resolve import CommitRange, Investigation
+from .resolve import INVESTIGATION_ARTIFACT, CommitRange, Investigation
 
 _CLASSIFICATIONS = ("regression", "intermittent")
 _RECOMMENDATIONS = ("backout", "do_not_backout", "rerun")
@@ -303,11 +303,16 @@ def failing_tests(investigation: Investigation) -> str:
 
 def _publish_handoff(
     scratch_out: Path, publish_file: Callable[[str, Path, str | None], str]
-) -> None:
-    """Publish the verdict and the failure logs the fix agent works from."""
+) -> list[str]:
+    """Publish the verdict and the failure logs; return their names."""
     publish_file("verdict.json", scratch_out / "verdict.json", "application/json")
-    for path in sorted((scratch_out / "logs").glob("**/*live_backing_log*")):
-        publish_file(str(path.relative_to(scratch_out)), path, "text/plain")
+    logs = [
+        str(path.relative_to(scratch_out))
+        for path in sorted((scratch_out / "logs").glob("**/*live_backing_log*"))
+    ]
+    for key in logs:
+        publish_file(key, scratch_out / key, "text/plain")
+    return ["verdict.json", *logs]
 
 
 def _fix_requests(recorder: ActionsRecorder) -> list[dict]:
@@ -424,5 +429,18 @@ async def run_test_repair(
             actions_recorder.remove_action(action["action_id"])
         fix_requests = []
     if fix_requests and publish_file is not None:
-        _publish_handoff(scratch_out, publish_file)
+        handoff = _publish_handoff(scratch_out, publish_file)
+        docs = [
+            name
+            for name in ("summary.md", "analysis.md")
+            if (scratch_out / name).exists()
+        ]
+        artifacts = ["summary.json", INVESTIGATION_ARTIFACT, *docs, *handoff]
+        for action in fix_requests:
+            actions_recorder.remove_action(action["action_id"])
+            actions_recorder.record(
+                START_RUN_ACTION_TYPE,
+                {**action["params"], "artifacts": artifacts},
+                reasoning=action["reasoning"],
+            )
     return result

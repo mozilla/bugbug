@@ -34,9 +34,13 @@ async def test_the_chained_run_is_keyed_by_its_parent():
         hackbot_client=_FakeHackbotClient(calls, child),
     )
 
-    result = await agents_handler.StartRunHandler().apply({"agent": "next-agent"}, ctx)
+    result = await agents_handler.StartRunHandler().apply(
+        {"agent": "next-agent", "artifacts": ["a.md"]}, ctx
+    )
 
-    assert calls == [("next-agent", {"parent_run_id": "p-1"}, "parent-p-1")]
+    assert calls == [
+        ("next-agent", {"parent_run_id": "p-1", "artifacts": ["a.md"]}, "parent-p-1")
+    ]
     assert result.status == "applied"
     assert result.result["run_id"] == str(child)
     assert result.result["url"].endswith(f"/runs/{child}")

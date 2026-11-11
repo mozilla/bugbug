@@ -46,9 +46,6 @@ class AgentSpec:
     # reported as an error. Agents that may legitimately finish without acting (or
     # without Phabricator submission tools) must not set it.
     expects_actions: bool = False
-    # For an agent started by another run: which of the parent's artifacts it
-    # downloads, as fnmatch patterns (`*` also matches `/`). None means all of them.
-    parent_artifacts: tuple[str, ...] | None = None
     # How long an execution may run; the API-wide default when unset.
     execution_timeout_seconds: int | None = None
 
@@ -152,14 +149,6 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-test-repair-fix",
         input_schema=TestRepairFixInputs,
         auto_apply_actions=False,
-        parent_artifacts=(
-            "summary.json",
-            "investigation.json",
-            "summary.md",
-            "analysis.md",
-            "verdict.json",
-            "logs/*live_backing_log*",
-        ),
         always_apply_actions=frozenset({"email.send"}),
     ),
     "test-plan-generator": AgentSpec(
