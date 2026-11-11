@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import mozci.errors
 import mozci.push
 from dateutil.relativedelta import relativedelta
-from mozci.task import get_configuration
+from mozci.task import get_configuration as mozci_get_configuration
 from pandas import DataFrame, DatetimeIndex, Series
 from tqdm import tqdm
 
@@ -30,7 +30,7 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    5,
+    6,
 )
 
 # Maximum number of pushes being analyzed at the same time. Shadow scheduler
@@ -45,13 +45,59 @@ PUSH_MEMOIZED_ATTRIBUTES = (
 )
 
 
+def get_configuration(task: dict) -> str:
+    # mozci reads the test variants from "test-settings", but the task graph
+    # calls it "test-setting", so variants (e.g. "-swr") would be lost.
+    extra = task["task"]["extra"]
+    if "test-setting" in extra and "test-settings" not in extra:
+        task = {
+            **task,
+            "task": {
+                **task["task"],
+                "extra": {**extra, "test-settings": extra["test-setting"]},
+            },
+        }
+    return mozci_get_configuration(task)
+
+
+# Granularities at which tasks, rather than groups, are evaluated:
+# - "non_group": test tasks which don't run test groups (e.g. gtest);
+# - "build": builds.
+TASK_GRANULARITIES = ("non_group", "build")
+
+
+def get_task_granularity(task: dict) -> str | None:
+    """Return the task granularity at which the task is evaluated, if any.
+
+    Tasks are classified by the strategy optimizing them, so that e.g. performance
+    tasks (which have their own strategies) are excluded.
+    """
+    if task["attributes"].get("test_manifests"):
+        return None
+
+    strategies = (task.get("optimization") or {}).keys()
+    if "test" in strategies:
+        return "non_group"
+    elif "build" in strategies:
+        return "build"
+
+    return None
+
+
+def get_push_data_db(granularity: str) -> str:
+    if granularity == "label" or granularity in TASK_GRANULARITIES:
+        return test_scheduling.PUSH_DATA_LABEL_DB
+    elif granularity == "group":
+        return test_scheduling.PUSH_DATA_GROUP_DB
+    elif granularity == "config_group":
+        return test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
+
+    raise ValueError(f"Unknown granularity {granularity}")
+
+
 def get_push_data_regressions(granularity: str, revs: set[str]) -> dict[str, set[Any]]:
     """Return the possible and likely regressions of the given pushes, indexed by revision."""
-    push_data_db = (
-        test_scheduling.PUSH_DATA_GROUP_DB
-        if granularity == "group"
-        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
-    )
+    push_data_db = get_push_data_db(granularity)
     assert db.download(push_data_db)
 
     regressions_by_rev = {}
@@ -72,15 +118,21 @@ def analyze_shadow_schedulers(
     push: mozci.push.Push,
     group_candidates: set[str],
     config_group_candidates: set[tuple[str, str]],
+    label_candidates: set[str],
 ) -> dict[str, Any]:
     """Analyze what the shadow schedulers would have scheduled on a push.
 
     Storing everything the shadow schedulers scheduled is not feasible (a single
     push can have hundreds of thousands of config/groups across all schedulers),
-    so we only store how many groups and config/groups were scheduled and which
-    of the given candidate regressions were scheduled.
+    so we only store how many groups, config/groups and tasks which don't run
+    groups were scheduled and which of the given candidate regressions were scheduled.
     """
     schedulers = []
+    # Candidate regressions at each task granularity, according to the tasks
+    # scheduled by any of the schedulers.
+    regression_labels: dict[str, set[str]] = {
+        granularity: set() for granularity in TASK_GRANULARITIES
+    }
 
     try:
         try:
@@ -107,9 +159,18 @@ def analyze_shadow_schedulers(
                 for task in tasks
                 for group in task["attributes"].get("test_manifests", [])
             }
+            labels: dict[str, set[str]] = {
+                granularity: set() for granularity in TASK_GRANULARITIES
+            }
+            for task in tasks:
+                task_granularity = get_task_granularity(task)
+                if task_granularity is not None:
+                    labels[task_granularity].add(task["label"])
             del tasks
 
             groups = {group for config, group in config_groups}
+            for granularity in TASK_GRANULARITIES:
+                regression_labels[granularity] |= labels[granularity] & label_candidates
 
             schedulers.append(
                 {
@@ -120,6 +181,17 @@ def analyze_shadow_schedulers(
                     "scheduled_regression_config_groups": sorted(
                         config_groups & config_group_candidates
                     ),
+                    **{
+                        key: value
+                        for granularity in TASK_GRANULARITIES
+                        for key, value in (
+                            (f"num_{granularity}s", len(labels[granularity])),
+                            (
+                                f"scheduled_regression_{granularity}s",
+                                sorted(labels[granularity] & label_candidates),
+                            ),
+                        )
+                    },
                 }
             )
     finally:
@@ -130,6 +202,10 @@ def analyze_shadow_schedulers(
         "id": push.rev,
         "date": push.date,
         "schedulers": schedulers,
+        **{
+            f"{granularity}_regressions": sorted(regression_labels[granularity])
+            for granularity in TASK_GRANULARITIES
+        },
     }
 
 
@@ -205,6 +281,7 @@ def go(months: int) -> None:
     revs = {push.rev for push in pushes}
     group_regressions = get_push_data_regressions("group", revs)
     config_group_regressions = get_push_data_regressions("config_group", revs)
+    label_regressions = get_push_data_regressions("label", revs)
     del revs
 
     # Pushes which are more recent than the most recent push with push data are
@@ -245,6 +322,7 @@ def go(months: int) -> None:
                     push,
                     group_regressions.get(push.rev, set()),
                     config_group_regressions.get(push.rev, set()),
+                    label_regressions.get(push.rev, set()),
                 )
                 for push in pushes
             ),
@@ -284,10 +362,19 @@ def translate_group(group):
 
 
 def get_regressions(granularity, regressions):
-    if granularity == "group":
+    if granularity == "label" or granularity in TASK_GRANULARITIES:
+        return set(regressions)
+    elif granularity == "group":
         return set(translate_group(group) for group in regressions)
     else:
         return set((config, translate_group(group)) for config, group in regressions)
+
+
+def get_unit(granularity: str) -> str:
+    """Return how the scheduled runnables of the given granularity are called in reports."""
+    return {"non_group": "non-group test task", "build": "build"}.get(
+        granularity, granularity
+    )
 
 
 def get_num_scheduled(granularity, scheduler):
@@ -295,24 +382,44 @@ def get_num_scheduled(granularity, scheduler):
 
 
 def get_scheduled_regressions(granularity, scheduler):
-    if granularity == "group":
+    if granularity in TASK_GRANULARITIES:
+        return set(scheduler[f"scheduled_regression_{granularity}s"])
+    elif granularity == "group":
         return set(scheduler["scheduled_regression_groups"])
     else:
         return set(tuple(s) for s in scheduler["scheduled_regression_config_groups"])
 
 
 def get_likely_regressions_by_rev(granularity: str) -> dict[str, set[Any]]:
-    push_data_db = (
-        test_scheduling.PUSH_DATA_GROUP_DB
-        if granularity == "group"
-        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
-    )
+    """Return the likely regressions of each push, indexed by revision.
+
+    At task granularities, only the tasks of the granularity are considered (e.g.
+    test tasks running groups are already measured at the group and config/group
+    levels).
+    """
+    push_data_db = get_push_data_db(granularity)
     assert db.download(push_data_db)
 
-    return {
+    regressions_by_rev = {
         revisions[0]: get_regressions(granularity, likely_regressions)
         for revisions, _, _, _, likely_regressions in db.read(push_data_db)
     }
+
+    if granularity in TASK_GRANULARITIES:
+        labels_by_rev = {
+            scheduler_stat["id"]: set(scheduler_stat[f"{granularity}_regressions"])
+            for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
+        }
+        # Regressions which no scheduler scheduled on their push can be classified
+        # using other pushes.
+        labels = set().union(*labels_by_rev.values())
+        regressions_by_rev = {
+            rev: regressions & (labels_by_rev[rev] | labels)
+            for rev, regressions in regressions_by_rev.items()
+            if rev in labels_by_rev
+        }
+
+    return regressions_by_rev
 
 
 # Schedulers with this prefix only change how performance tests are scheduled,
@@ -327,6 +434,21 @@ TEXT_COLOR = "#52514e"
 
 def is_perf_scheduler(name: str) -> bool:
     return name.startswith(PERF_SCHEDULER_PREFIX)
+
+
+# Schedulers which select tasks rather than groups. They are not supposed to pick
+# tasks which run groups, so they are only evaluated at task granularities.
+TASK_SCHEDULERS = {
+    "bugbug_reduced",
+    "bugbug_reduced_high",
+    "bugbug_tasks_high",
+    "bugbug_tasks_medium",
+}
+
+
+def is_evaluated(granularity: str, name: str) -> bool:
+    """Whether the scheduler is evaluated at the given granularity."""
+    return granularity in TASK_GRANULARITIES or name not in TASK_SCHEDULERS
 
 
 def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series]:
@@ -349,13 +471,18 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
             continue
 
         regressions = regressions_by_rev[scheduler_stat["id"]]
+        schedulers = [
+            scheduler
+            for scheduler in scheduler_stat["schedulers"]
+            if is_evaluated(granularity, scheduler["name"])
+        ]
 
         dates.append(datetime.utcfromtimestamp(scheduler_stat["date"]))
         num_regressions.append(len(regressions))
         scheduled_data.append(
             {
                 scheduler["name"]: get_num_scheduled(granularity, scheduler)
-                for scheduler in scheduler_stat["schedulers"]
+                for scheduler in schedulers
             }
         )
         caught_data.append(
@@ -363,7 +490,7 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
                 scheduler["name"]: len(
                     regressions & get_scheduled_regressions(granularity, scheduler)
                 )
-                for scheduler in scheduler_stat["schedulers"]
+                for scheduler in schedulers
             }
         )
 
@@ -411,12 +538,13 @@ def write_summary_table(
 ) -> None:
     perf = summary.index.map(is_perf_scheduler)
 
-    content = f"""# Shadow schedulers at the {granularity} level
+    unit = get_unit(granularity)
+    content = f"""# Shadow schedulers at the {unit} level
 
 Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions are considered.
 
-- **avg scheduled**: average number of {granularity}s scheduled per push;
-- **median scheduled**: median number of {granularity}s scheduled per push;
+- **avg scheduled**: average number of {unit}s scheduled per push;
+- **median scheduled**: median number of {unit}s scheduled per push;
 - **% regressing pushes caught**: percentage of pushes with regressions where at least one of them was scheduled;
 - **% regressions caught**: percentage of all regressions which were scheduled.
 
@@ -429,7 +557,7 @@ Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions 
         content += f"""
 ## Performance schedulers
 
-These only change the scheduling of performance tests, so they run (almost) all test {granularity}s.
+These only change the scheduling of performance tests, so they run (almost) all {unit}s.
 
 {format_summary(summary[perf])}
 """
@@ -495,7 +623,7 @@ def plot_tradeoff(granularity: str, summary: DataFrame, title: str) -> None:
         )
 
     ax.set_title(title, loc="left")
-    ax.set_xlabel(f"Average number of scheduled {granularity}s per push")
+    ax.set_xlabel(f"Average number of scheduled {get_unit(granularity)}s per push")
     ax.set_ylabel("% of regressions caught")
     ax.set_xlim(0, max_x * 1.05)
     ax.set_ylim(0, y_max)
@@ -555,7 +683,9 @@ def plot_weekly_trend(
         ax.set_visible(False)
 
     fig.suptitle(
-        f"Weekly % of regressions caught at the {granularity} level", x=0.01, ha="left"
+        f"Weekly % of regressions caught at the {get_unit(granularity)} level",
+        x=0.01,
+        ha="left",
     )
     fig.autofmt_xdate()
     plt.tight_layout()
@@ -588,7 +718,7 @@ def report(granularity: str, weeks: int) -> None:
     plot_tradeoff(
         granularity,
         summary.loc[test_selection],
-        f"Scheduled {granularity}s vs regressions caught "
+        f"Scheduled {get_unit(granularity)}s vs regressions caught "
         f"({from_date:%Y-%m-%d} to {to_date:%Y-%m-%d})",
     )
 
@@ -678,6 +808,8 @@ def main() -> None:
     go(args.months)
     report("group", args.weeks)
     report("config_group", args.weeks)
+    for granularity in TASK_GRANULARITIES:
+        report(granularity, args.weeks)
     if args.scheduler1:
         print_uncaught("group", args.scheduler1, args.scheduler2)
 
