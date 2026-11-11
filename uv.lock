@@ -7440,7 +7440,7 @@ wheels = [
 
 [[package]]
 name = "weave"
-version = "0.53.13"
+version = "0.54.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -7461,9 +7461,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/a9/e6bccb5c964900d3f0cbb736e498296404773fb49f6e76685192877dc769/weave-0.53.13.tar.gz", hash = "sha256:5db2ed6638b52463f5177bfdb156ae3747a10c16263343e99a2b218721ba38c8", size = 805093, upload-time = "2026-10-22T22:57:46.397Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/b3/c52793f9fd40a1d14b1c23f07dc3974836ceee5997f84b09941c2fb444f8/weave-0.54.0.tar.gz", hash = "sha256:0199a8af7a8f50db4f6fc10f12e2a127c3bcf2147b37fe9abf0eb471deff8206", size = 716418, upload-time = "2026-10-23T17:08:46.786Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/d5/c7b820b334c31eeb21564028fc979219415f75d6279d4af7c23e0a29ef5c/weave-0.53.13-py3-none-any.whl", hash = "sha256:baf7f1dfdee8d5c28dc554fa905eaf0ff81a4b4dee257d054c9778c3b042ab19", size = 1177125, upload-time = "2026-10-22T22:57:44.297Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/9d/782bef4f570b9f1db12720397d5edbe4f61cbf3cd64a4e08f63742834e74/weave-0.54.0-py3-none-any.whl", hash = "sha256:b47ae432e58fd2de9467a3cf451b49787b00eb27f67a69aa4823640214942451", size = 1054003, upload-time = "2026-10-23T17:08:44.431Z" },
 ]
 
 [[package]]
