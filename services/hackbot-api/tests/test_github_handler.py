@@ -3,19 +3,76 @@
 import json
 from datetime import UTC, datetime, timedelta
 from functools import partial
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from app.action_handlers import github_handler
 from app.action_handlers.base import ApplyContext
 from app.action_handlers.registry import get_handler
+from app.actions_applier import _apply_pending_rows
 from app.config import GitHubAppSettings
 from app.github import GitHubApp
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 INSTALLATION_ID = 99
-CTX = ApplyContext(run_id="run-1", agent="test-agent", download_artifact=None)
+CTX = ApplyContext(
+    run_id="run-1", agent="test-agent", download_artifact=None, hackbot_client=None
+)
+
+
+async def test_general_and_inline_actions_send_one_github_review(fake):
+    rows = [
+        (
+            SimpleNamespace(
+                id=1,
+                idx=0,
+                type="github.add_comment",
+                status="pending",
+                ref=None,
+                params={"repo": "o/r", "pull_number": 7, "text": "Overall feedback."},
+            ),
+            [],
+        ),
+        (
+            SimpleNamespace(
+                id=2,
+                idx=1,
+                type="github.add_inline_comments",
+                status="pending",
+                ref=None,
+                params={
+                    "repo": "o/r",
+                    "pull_number": 7,
+                    "comments": [{"path": "a.py", "line": 3, "body": "Check this."}],
+                    "summary": "One thing.",
+                },
+            ),
+            [],
+        ),
+    ]
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalars=lambda: [1, 2])
+    await _apply_pending_rows(
+        db, SimpleNamespace(run_id="run-1", agent="test-agent"), rows, None
+    )
+    posts = [
+        r
+        for r in fake.requests
+        if r.method == "POST" and r.url.path.startswith("/repos/")
+    ]
+    assert len(posts) == 1
+    assert posts[0].url.path == "/repos/o/r/pulls/7/reviews"
+    assert json.loads(posts[0].content) == {
+        "event": "COMMENT",
+        "body": "Overall feedback.\n\nOne thing.",
+        "comments": [
+            {"path": "a.py", "line": 3, "side": "RIGHT", "body": "Check this."}
+        ],
+    }
+    assert all(row.status == "applied" for row, _ in rows)
 
 
 @pytest.fixture(scope="module")
@@ -75,7 +132,7 @@ def fake(monkeypatch, pem):
     monkeypatch.setattr(
         github_handler.settings,
         "github",
-        GitHubAppSettings(app_id=123, private_key=pem),
+        GitHubAppSettings(app_id=123, private_key=pem, webhook_secret="test-secret"),
     )
     monkeypatch.setattr(
         github_handler,

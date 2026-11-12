@@ -23,6 +23,43 @@ log = logging.getLogger(__name__)
 _COMMENT_PERMISSIONS = MappingProxyType({"pull_requests": "write"})
 
 
+def plan_review_groups(actions: list[tuple[str, dict[str, Any]]]) -> list[list[int]]:
+    """Group same-PR actions only when both general and inline comments exist."""
+    by_pr: dict[tuple[str, int], list[int]] = {}
+    for idx, (action_type, params) in enumerate(actions):
+        if action_type in {"github.add_comment", "github.add_inline_comments"}:
+            repo, number = params.get("repo"), params.get("pull_number")
+            if not isinstance(repo, str) or not isinstance(number, int):
+                continue
+            key = (repo, number)
+            by_pr.setdefault(key, []).append(idx)
+    return [
+        indices
+        for indices in by_pr.values()
+        if len({actions[i][0] for i in indices}) == 2
+    ]
+
+
+def merge_review(entries: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Preserve comment order, using general comments as review summary text."""
+    first = entries[0][1]
+    comments = []
+    summaries = []
+    for action_type, params in entries:
+        if action_type == "github.add_comment":
+            summaries.append(params["text"])
+        else:
+            comments.extend(params["comments"])
+            if summary := params.get("summary"):
+                summaries.append(summary)
+    return {
+        "repo": first["repo"],
+        "pull_number": first["pull_number"],
+        "comments": comments,
+        "summary": "\n\n".join(summaries),
+    }
+
+
 class GitHubAppNotConfiguredError(Exception):
     pass
 

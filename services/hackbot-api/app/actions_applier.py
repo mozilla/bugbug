@@ -28,6 +28,7 @@ from app.action_handlers import (
     merge_resolved,
     plan_coalesced_groups,
 )
+from app.action_handlers.github_handler import merge_review, plan_review_groups
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
@@ -253,7 +254,8 @@ async def _apply_pending_rows(
     Same-bug Bugzilla field changes are coalesced with the closest comment into
     a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
     bugmail, one history entry); any other comments on that bug still apply
-    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
+    separately. General and inline GitHub comments on the same PR are submitted
+    together as one review when both are pending in this apply pass.
 
     Cross-action `{{actions.<action_id>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
@@ -274,7 +276,7 @@ async def _apply_pending_rows(
 
     pending = [(row, att) for row, att in rows if row.status != "applied"]
 
-    # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
+    # Plan which pending rows share one API request (indices into `pending`).
     # Drop any group with a member another pending action references: a group
     # applies at its last member, possibly after the action that needs the
     # result. Everything else applies one row at a time as before.
@@ -283,11 +285,10 @@ async def _apply_pending_rows(
         for row, _ in pending
         for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
     }
+    actions = [(row.type, row.params) for row, _ in pending]
     groups = [
         group
-        for group in plan_coalesced_groups(
-            [(row.type, row.params) for row, _ in pending]
-        )
+        for group in plan_coalesced_groups(actions) + plan_review_groups(actions)
         if all(pending[i][0].ref not in referenced for i in group)
     ]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
@@ -306,13 +307,22 @@ async def _apply_pending_rows(
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
-            outcome = await _dispatch(
-                run,
-                "bugzilla.update_bug",
-                merge_resolved(entries),
-                [],
-                hackbot_client,
-            )
+            if row.type.startswith("github."):
+                outcome = await _dispatch(
+                    run,
+                    "github.add_inline_comments",
+                    merge_review(entries),
+                    [],
+                    hackbot_client,
+                )
+            else:
+                outcome = await _dispatch(
+                    run,
+                    "bugzilla.update_bug",
+                    merge_resolved(entries),
+                    [],
+                    hackbot_client,
+                )
         else:
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
@@ -326,6 +336,17 @@ async def _apply_pending_rows(
         for member in member_rows:
             member.status = outcome.status
             member.result = outcome.result
+            if (
+                anchor is not None
+                and member.type == "github.add_comment"
+                and outcome.result is not None
+                and outcome.status == "applied"
+            ):
+                member.result = {
+                    "repo": outcome.result["repo"],
+                    "pull_number": outcome.result["pull_number"],
+                    "comment_url": outcome.result["review_url"],
+                }
             member.error = outcome.error
             if applied_at is not None:
                 member.applied_at = applied_at
@@ -334,7 +355,7 @@ async def _apply_pending_rows(
         if outcome.status == "applied" and outcome.result is not None:
             for member in member_rows:
                 if member.ref:
-                    results_by_ref[member.ref] = outcome.result
+                    results_by_ref[member.ref] = member.result
 
 
 async def on_run_completed(
