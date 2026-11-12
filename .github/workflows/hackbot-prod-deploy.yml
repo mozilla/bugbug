@@ -7,19 +7,14 @@
 # environment: the deploy tool maps one to the other, and no list of names is
 # kept here.
 #
-# Every stage deploy is offered automatically. When an agent's or service's
-# Cloud Build trigger (agent-<name> / service-<name>, in
-# moz-fx-hackbot-nonprod) reports success, `plan` compares what stage runs
-# with what prod runs. If they differ, it pins stage's digests and `promote`
-# waits for approval, then puts on exactly those, unless stage has moved on in
-# the meantime (superseded: the newer build's run asks for its own approval).
-# A build that didn't change stage, such as one waiting for infra, asks
-# nothing. Each run first cancels older runs of the same name still waiting
-# for approval, so there is at most one request per agent or service, always
-# for what stage runs now.
-#
 # From the Actions tab (anyone with write access):
-#   promote   the same, for one name, still behind the approval.
+#   promote   `plan` compares what stage runs with what prod runs. If they
+#             differ, it pins stage's digests and `promote` waits for
+#             approval, then puts on exactly those, unless stage has moved on
+#             in the meantime (superseded). Each run first cancels older runs
+#             of the same name still waiting for approval, so there is at most
+#             one request per agent or service. A service's promote also marks
+#             its Sentry release (<service>@<version>) deployed to production.
 #   rollback  step prod back to its previous recorded deployment, in the
 #             `hackbot-prod-rollback` environment.
 #
@@ -38,13 +33,12 @@
 #                limited to the default branch
 #   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
 #   vars.HACKBOT_PROD_DEPLOY_SA       the prod state's prod_deploy_service_account_email output
+#   secrets.SENTRY_AUTH_TOKEN         in `hackbot-prod-services`, to mark Sentry deploys (optional)
 # The workload identity provider is the platform's organization variable,
 # GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER, so it needs nothing here.
 name: Hackbot prod deploy
 run-name: >-
-  ${{ github.event_name == 'check_run'
-      && format('Offer {0} to prod', github.event.check_run.name)
-      || format('{0} {1} in prod{2}', inputs.action, inputs.name, inputs.dry_run && ' (dry run)' || '') }}
+  ${{ format('{0} {1} in prod{2}', inputs.action, inputs.name, inputs.dry_run && ' (dry run)' || '') }}
 
 on:
   workflow_dispatch:
@@ -82,14 +76,8 @@ on:
 jobs:
   plan:
     if: >-
-      (github.event_name == 'check_run' &&
-       github.event.check_run.app.slug == 'google-cloud-build' &&
-       github.event.check_run.conclusion == 'success' &&
-       (startsWith(github.event.check_run.name, 'agent-') || startsWith(github.event.check_run.name, 'service-')) &&
-       endsWith(github.event.check_run.name, ' (moz-fx-hackbot-nonprod)'))
-      ||
-      (github.event_name == 'workflow_dispatch' && inputs.action == 'promote' &&
-       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+      inputs.action == 'promote' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       actions: write # cancel older runs still waiting for approval
@@ -107,19 +95,8 @@ jobs:
       - name: Name
         id: name
         env:
-          CHECK_NAME: ${{ github.event.check_run.name }}
           INPUT_NAME: ${{ inputs.name }}
-        run: |
-          # The trigger is agent-<name> or service-<name> (Cloud Build names
-          # can't hold a slash); the deployable is agents/<name> or
-          # services/<name>.
-          if [ -n "$INPUT_NAME" ]; then
-            name="$INPUT_NAME"
-          else
-            trigger="${CHECK_NAME% (*}"
-            name="${trigger%%-*}s/${trigger#*-}"
-          fi
-          echo "name=$name" >> "$GITHUB_OUTPUT"
+        run: echo "name=$INPUT_NAME" >> "$GITHUB_OUTPUT"
 
       # They haven't started deploying (that only begins after approval), so
       # cancelling can't interrupt one. Matched by the promote job's name.
@@ -236,6 +213,32 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+      # The stage build made the release (<service>@<version>, with its
+      # commits); a promote puts that same release in production.
+      - name: Mark the Sentry release deployed to production
+        if: startsWith(needs.plan.outputs.name, 'services/')
+        env:
+          NAME: ${{ needs.plan.outputs.name }}
+          PROMOTION: ${{ needs.plan.outputs.promotion }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: mozilla
+        run: |
+          if ! grep -q ": deployed" "$RUNNER_TEMP/out.txt"; then
+            echo "Nothing was deployed; no Sentry deploy to mark."
+            exit 0
+          fi
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::warning::No SENTRY_AUTH_TOKEN secret in hackbot-prod-services; the production deploy isn't marked in Sentry."
+            exit 0
+          fi
+          version=$(jq -r '.version // empty' <<< "$PROMOTION")
+          if [ -z "$version" ]; then
+            echo "::warning::Stage's record has no version (deployed before versions were recorded); the production deploy isn't marked in Sentry."
+            exit 0
+          fi
+          service="${NAME#services/}"
+          SENTRY_PROJECT="$service" npx --yes @sentry/cli@2 deploys new --release "$service@$version" -e production
 
   rollback:
     if: >-
