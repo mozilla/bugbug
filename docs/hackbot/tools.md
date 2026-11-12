@@ -39,11 +39,16 @@ Collect a module's tools with `tools_in(__name__)`, conventionally exported as `
 - **`hackbot_runtime.actions.claude_sdk.actions_server_for(recorder, types)`** — the shared
   `actions` server for write-actions. Namespace-prefixed (`bugzilla_update_bug`) because
   one server hosts every write domain.
+- **`agent_tools.codex_sdk.build_mcp_server(name, ctx, tools)`** and
+  **`hackbot_runtime.actions.codex_sdk.actions_server_for(recorder, types)`** — the same two
+  servers for Codex. Codex can't run tools in-process, so the agent serves each one on
+  loopback with `async with server.serve():` and passes `mcp_servers_config(*servers)`
+  as `thread_start(config=...)`.
 
 [claude_sdk.py](../../libs/agent-tools/agent_tools/claude_sdk.py) is the only module in the library that imports `claude-agent-sdk`, behind
-the `[claude-sdk]` extra. Adding LangChain support means adding one adapter, not touching
-any handler — `ToolDefinition.args_model` is already a plain pydantic model usable as an
-`args_schema`.
+the `[claude-sdk]` extra; [codex_sdk.py](../../libs/agent-tools/agent_tools/codex_sdk.py) is the Codex adapter, behind `[codex-sdk]`.
+Adding LangChain support means adding one adapter, not touching any handler —
+`ToolDefinition.args_model` is already a plain pydantic model usable as an `args_schema`.
 
 Handlers raise **`ToolError`** for expected failures; the adapter renders it as the
 framework's error signal, optionally with a structured payload the model can act on rather

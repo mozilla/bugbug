@@ -4,7 +4,8 @@
 runtime serialises into ``summary.json``. The action *declarations* live in
 domain modules (``bugzilla``, ...) and use the shared ``@tool`` decorator from
 agent-tools, so one mechanism backs both read tools and write-actions. The
-claude-sdk adapter is ``hackbot_runtime.actions.claude_sdk.actions_server_for``.
+framework adapters are ``hackbot_runtime.actions.claude_sdk.actions_server_for``
+and ``hackbot_runtime.actions.codex_sdk.actions_server_for``.
 """
 
 from hackbot_runtime.actions import (

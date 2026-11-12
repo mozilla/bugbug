@@ -78,6 +78,10 @@ bugzilla = [
 claude-sdk = [
     { name = "claude-agent-sdk" },
 ]
+codex-sdk = [
+    { name = "mcp" },
+    { name = "uvicorn" },
+]
 firefox = [
     { name = "grizzly-framework" },
     { name = "prefpicker" },
@@ -95,12 +99,14 @@ requires-dist = [
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "grizzly-framework", marker = "extra == 'firefox'" },
     { name = "httpx", marker = "extra == 'vcs'" },
+    { name = "mcp", marker = "extra == 'codex-sdk'", specifier = ">=1.30.0" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "searchfox", marker = "extra == 'searchfox'", specifier = ">=0.20.3" },
     { name = "six", marker = "extra == 'bugzilla'" },
+    { name = "uvicorn", marker = "extra == 'codex-sdk'" },
 ]
-provides-extras = ["bugzilla", "firefox", "claude-sdk", "searchfox", "vcs"]
+provides-extras = ["bugzilla", "firefox", "claude-sdk", "codex-sdk", "searchfox", "vcs"]
 
 [[package]]
 name = "aiofile"
@@ -2916,6 +2922,7 @@ claude-sdk = [
     { name = "claude-agent-sdk" },
 ]
 codex-sdk = [
+    { name = "agent-tools", extra = ["codex-sdk"] },
     { name = "openai-codex" },
 ]
 phabricator = [
@@ -2926,6 +2933,7 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["codex-sdk"], marker = "extra == 'codex-sdk'", editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
