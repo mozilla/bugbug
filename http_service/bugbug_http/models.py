@@ -671,6 +671,8 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     import mozci.data  # noqa: F401
     from mozci.task import Task, TestTask
 
+    utils.setup_mozci()
+
     # Retry only a few times, so that an unavailable Treeherder doesn't stall the
     # scheduling for long.
     session = requests.Session()

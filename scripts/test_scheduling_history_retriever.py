@@ -20,9 +20,11 @@ import mozci.push
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import commit_features, db, repository, test_scheduling
+from bugbug import commit_features, db, repository, test_scheduling, utils
 from bugbug.test_scheduling import PushResult
 from bugbug.utils import create_tar_zst, zstd_compress
+
+utils.setup_mozci()
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)

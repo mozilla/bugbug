@@ -598,6 +598,12 @@ def setup_libmozdata():
     os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
 
 
+def setup_mozci():
+    from mozci import config
+
+    config.set(user_agent=get_user_agent())
+
+
 @tenacity.retry(
     stop=tenacity.stop_after_attempt(7),
     wait=tenacity.wait_exponential(multiplier=2, min=2),

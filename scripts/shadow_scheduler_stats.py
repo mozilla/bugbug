@@ -22,6 +22,8 @@ from tqdm import tqdm
 
 from bugbug import db, test_scheduling, utils
 
+utils.setup_mozci()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
