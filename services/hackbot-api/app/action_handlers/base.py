@@ -34,9 +34,9 @@ class ArtifactDownloader(Protocol):
 class ApplyContext:
     """Everything an :class:`ActionHandler` needs from the run.
 
-    Scoped to a single action application (not the whole run), since only
-    ``attachments`` varies per action. Handlers never talk to GCS directly —
-    ``download_artifact`` is provided by the caller (hackbot-api's
+    Scoped to a single action application (not the whole run), since
+    ``attachments`` and ``action_id`` vary per action. Handlers never talk to GCS
+    directly — ``download_artifact`` is provided by the caller (hackbot-api's
     ``/internal/events/apply-run-actions`` route) — so this package stays free of
     a dependency on any particular storage backend. Async, matching
     hackbot-api's own GCS wrappers and ``ActionHandler.apply`` itself.
@@ -47,6 +47,10 @@ class ApplyContext:
     download_artifact: ArtifactDownloader
     hackbot_client: HackbotClient
     attachments: list[dict[str, str]] = field(default_factory=list)
+    # The `action_id` the runtime recorded for the action (`RunAction.ref`). None
+    # for summaries recorded before action IDs existed. When several actions are
+    # applied as one call, it is the one whose comment is posted.
+    action_id: str | None = None
 
     def artifact_key(self, name: str) -> str | None:
         """The uploaded key for an attachment recorded under ``name``, if any."""

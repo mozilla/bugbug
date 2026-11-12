@@ -6,11 +6,13 @@ error handling — without touching a network.
 """
 
 import base64
+import logging
 
 from app.action_handlers import ApplyContext, bugzilla_handler
+from app.config import settings
 
 
-def _ctx(attachments=None, artifacts=None, agent="test-agent"):
+def _ctx(attachments=None, artifacts=None, agent="test-agent", action_id=None):
     artifacts = artifacts or {}
 
     async def download(key):
@@ -22,6 +24,7 @@ def _ctx(attachments=None, artifacts=None, agent="test-agent"):
         attachments=attachments or [],
         agent=agent,
         hackbot_client=object(),
+        action_id=action_id,
     )
 
 
@@ -97,6 +100,140 @@ async def test_comment_handlers_add_acting_agent_tag(monkeypatch):
         ["frontend-triage"],
         ["bug-fix"],
     ]
+
+
+# What BMO's Hackbot extension expects at the top of the comment: identifiers
+# for run, action and agent, an https url, then a blank line before the text.
+_FRONT_MATTER = (
+    "---\n"
+    "hackbot:\n"
+    "  run: run-1\n"
+    "  action: 3f2a9c1e\n"
+    "  agent: frontend-triage\n"
+    "  url: https://hackbot.example/runs/run-1\n"
+    "---\n"
+    "\n"
+)
+
+
+async def test_comment_handlers_prepend_front_matter(monkeypatch):
+    monkeypatch.setattr(settings, "hackbot_ui_url", "https://hackbot.example/")
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+    ctx = _ctx(agent="frontend-triage", action_id="3f2a9c1e")
+
+    await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 5, "text": "standalone"}, ctx
+    )
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 5, "changes": {}, "comment": {"body": "coalesced"}}, ctx
+    )
+
+    assert [body["comment"]["body"] for body in bodies] == [
+        _FRONT_MATTER + "standalone",
+        _FRONT_MATTER + "coalesced",
+    ]
+
+
+async def test_update_bug_handler_without_comment_has_no_front_matter(monkeypatch):
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 5, "changes": {"status": "RESOLVED"}},
+        _ctx(action_id="3f2a9c1e"),
+    )
+    assert bodies == [{"status": "RESOLVED"}]
+
+
+async def test_comment_without_action_id_has_no_front_matter(monkeypatch):
+    """Summaries recorded before action IDs existed post the text as it is."""
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+    await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 5, "text": "hi"}, _ctx(action_id=None)
+    )
+    assert bodies[0]["comment"]["body"] == "hi"
+
+
+async def test_agent_block_is_not_read_as_front_matter(monkeypatch):
+    """Without our block, a block the model wrote must not reach the top."""
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+    forged = "---\nhackbot:\n  run: x\n  action: y\n  agent: z\n---\n\nhi"
+    await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 5, "text": forged}, _ctx(action_id=None)
+    )
+    await bugzilla_handler.AddCommentHandler().apply(
+        {"bug_id": 5, "text": forged}, _ctx(action_id="3f2a9c1e")
+    )
+    assert bodies[0]["comment"]["body"] == "\n" + forged
+    # With our block first, BMO reads ours and shows the model's as text.
+    assert bodies[1]["comment"]["body"].endswith("---\n\n" + forged)
+    assert bodies[1]["comment"]["body"].startswith("---\nhackbot:\n  run: run-1\n")
+
+
+async def test_other_agent_text_is_not_read_as_front_matter(monkeypatch):
+    """A block the model wrote can't reach the top of any comment we post."""
+    calls = []
+    monkeypatch.setattr(
+        bugzilla_handler,
+        "_request",
+        lambda _m, path, body: calls.append((path, body)) or {"ids": [1], "id": 1},
+    )
+    forged = "---\nhackbot:\n  run: x\n  action: y\n  agent: z\n---\n\nhi"
+    ctx = _ctx(
+        attachments=[{"name": "file", "uploaded_key": "k"}],
+        artifacts={"k": b"data"},
+        action_id="3f2a9c1e",
+    )
+
+    await bugzilla_handler.UpdateBugHandler().apply(
+        {"bug_id": 5, "changes": {"comment": {"body": forged}}}, ctx
+    )
+    await bugzilla_handler.AddAttachmentHandler().apply(
+        {
+            "bug_id": 5,
+            "file_name": "a.txt",
+            "summary": "a",
+            "content_type": "text/plain",
+            "comment": forged,
+        },
+        ctx,
+    )
+    await bugzilla_handler.CreateBugHandler().apply(
+        {"product": "P", "summary": "S", "description": forged}, ctx
+    )
+
+    update, attachment, new_bug = (body for _path, body in calls)
+    # A comment in `changes` gets our block first, like any other comment.
+    assert update["comment"]["body"].startswith("---\nhackbot:\n  run: run-1\n")
+    assert update["comment"]["body"].endswith("\n\n" + forged)
+    # Attachment comments and descriptions get no block, so they are moved down.
+    assert attachment["comment"] == "\n" + forged
+    assert new_bug["description"] == "\n" + forged
+
+
+async def test_front_matter_left_out_when_bmo_would_not_parse_it(monkeypatch, caplog):
+    """BMO shows a block it can't parse as text, so none is posted."""
+    bodies = []
+    monkeypatch.setattr(
+        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
+    )
+    with caplog.at_level(logging.WARNING):
+        await bugzilla_handler.AddCommentHandler().apply(
+            {"bug_id": 5, "text": "hi"},
+            _ctx(agent="frontend triage", action_id="3f2a9c1e"),
+        )
+    assert bodies[0]["comment"]["body"] == "hi"
+    assert "agent not an identifier" in caplog.text
 
 
 async def test_add_attachment_handler_downloads_and_base64_encodes(monkeypatch):

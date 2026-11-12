@@ -10,6 +10,7 @@ that shape, and a plain ``requests`` call is simpler to reason about and test.
 import base64
 import logging
 import os
+import re
 from functools import lru_cache
 from typing import Any
 
@@ -57,6 +58,52 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
     return response.json()
 
 
+# BMO's Hackbot extension reads this block off the top of comments from the
+# Hackbot account, hides it, and shows the agent and a link to the run in the
+# comment header instead. It reads only this shape: `run`, `action` and `agent`
+# must be identifiers and `url` an https URL. Anything else shows as plain text,
+# so a block that would not parse is left out rather than posted.
+_IDENTIFIER = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _front_matter(ctx: ApplyContext) -> str:
+    """The block that links a comment to the run and action that wrote it.
+
+    Added here rather than by the agent so a model can't write or change it.
+    Empty when the action has no ID (a summary recorded before action IDs).
+    """
+    if ctx.action_id is None:
+        return ""
+    fields = {"run": ctx.run_id, "action": ctx.action_id, "agent": ctx.agent}
+    invalid = [key for key, value in fields.items() if not _IDENTIFIER.fullmatch(value)]
+    if invalid:
+        log.warning(
+            "Posting the comment without front matter: %s not an identifier",
+            ", ".join(invalid),
+        )
+        return ""
+    url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
+    lines = [f"  {key}: {value}" for key, value in fields.items()]
+    return "\n".join(["---", "hackbot:", *lines, f"  url: {url}", "---", "", ""])
+
+
+def _unparsed(text: str) -> str:
+    """Agent text that BMO can't take for front matter.
+
+    BMO reads a block only at the very start of a comment, so text that starts
+    with a rule is moved down a line: a block the model wrote is then shown as
+    text rather than taken as the comment's metadata.
+    """
+    return "\n" + text if text.startswith("---") else text
+
+
+def _with_front_matter(comment: dict[str, Any], ctx: ApplyContext) -> dict[str, Any]:
+    """The comment with its front matter, or with none that BMO would read."""
+    front_matter = _front_matter(ctx)
+    body = comment["body"] if front_matter else _unparsed(comment["body"])
+    return {**comment, "body": front_matter + body}
+
+
 def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
     """Build the ``comment`` object for a PUT /bug/{id}.
 
@@ -81,8 +128,14 @@ class UpdateBugHandler:
         # comment (the coalescer hands us params built from other rows).
         body = dict(params.get("changes", {}))
         if params.get("comment"):
-            body["comment"] = params["comment"]
+            body["comment"] = _with_front_matter(params["comment"], ctx)
             body["comment_tags"] = [ctx.agent]
+        elif isinstance(body.get("comment"), dict) and isinstance(
+            body["comment"].get("body"), str
+        ):
+            # A comment the agent put in `changes` itself, which is also posted
+            # from the Hackbot account.
+            body["comment"] = _with_front_matter(body["comment"], ctx)
         try:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
@@ -94,7 +147,8 @@ class UpdateBugHandler:
 class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        body: dict[str, Any] = {"comment": _comment_body(params)}
+        comment = _with_front_matter(_comment_body(params), ctx)
+        body: dict[str, Any] = {"comment": comment}
         body["comment_tags"] = [ctx.agent]
         try:
             _request("PUT", f"bug/{bug_id}", body)
@@ -126,7 +180,7 @@ class AddAttachmentHandler:
             "is_patch": params.get("is_patch", False),
         }
         if params.get("comment"):
-            body["comment"] = params["comment"]
+            body["comment"] = _unparsed(params["comment"])
 
         try:
             data = _request("POST", f"bug/{bug_id}/attachment", body)
@@ -146,6 +200,9 @@ class AddAttachmentHandler:
 
 class CreateBugHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        # The description is comment 0, which gets no front matter.
+        if isinstance(params.get("description"), str):
+            params = {**params, "description": _unparsed(params["description"])}
         try:
             data = _request("POST", "bug", params)
         except Exception as exc:
