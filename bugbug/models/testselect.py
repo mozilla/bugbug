@@ -34,6 +34,7 @@ from bugbug import (
     utils,
 )
 from bugbug.model import Model
+from bugbug.model_calibration import fit_isotonic_breakpoints
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -409,13 +410,20 @@ TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth":
 
 # Number of runnables per push that the model should select at each confidence level used by the
 # Firefox taskgraph (e.g. bugbug-*-low/medium/high): roughly what the models selected at the fixed
-# 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale. Groups at the
-# "very_high" level run on a config of each OS family (see the HTTP service's config selection):
-# in offline evaluations, failing pushes caught at the same cost were ~2.3 points higher with one
-# such group per push, and about as high with 0.5 to 3.
+# 0.7/0.8/0.9 thresholds before the sample weighting and tuning changed their scale. The
+# "very_low" level, used by the taskgraph on expanded pushes, selects three times as many as "low".
+# Groups at the "very_high" level run on a config of each OS family (see the HTTP service's config
+# selection): in offline evaluations, failing pushes caught at the same cost were ~2.3 points
+# higher with one such group per push, and about as high with 0.5 to 3.
 CONFIDENCE_LEVEL_TARGETS = {
-    "label": {"low": 26.0, "medium": 15.0, "high": 5.5},
-    "group": {"low": 103.0, "medium": 36.0, "high": 11.0, "very_high": 1.0},
+    "label": {"very_low": 78.0, "low": 26.0, "medium": 15.0, "high": 5.5},
+    "group": {
+        "very_low": 309.0,
+        "low": 103.0,
+        "medium": 36.0,
+        "high": 11.0,
+        "very_high": 1.0,
+    },
 }
 
 # Minimum share of the failing test pushes where the model selects a failure at the "low"
@@ -434,19 +442,14 @@ def fit_calibration(
     runnables well: the regression maps them to probabilities without changing their order. Returns the
     regression's breakpoints, to interpolate, or None if there are no failures.
     """
-    from sklearn.isotonic import IsotonicRegression
-
     points = [(i / 100, n, f) for i, (n, f) in enumerate(zip(totals, failures)) if n]
     if not any(f for _, _, f in points):
         return None
-
-    regression = IsotonicRegression(y_min=0.0, y_max=1.0, out_of_bounds="clip")
-    regression.fit(
+    return fit_isotonic_breakpoints(
         [x for x, _, _ in points],
         [f / n for _, n, f in points],
-        sample_weight=[n for _, n, _ in points],
+        [n for _, n, _ in points],
     )
-    return list(regression.X_thresholds_), list(regression.y_thresholds_)
 
 
 def compute_confidence_thresholds(

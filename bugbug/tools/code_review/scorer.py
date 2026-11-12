@@ -4,6 +4,7 @@ from logging import getLogger
 import weave
 
 from bugbug.tools.comment_matching.agent import CommentMatchingTool
+from bugbug.tools.core.data_types import CommentSeverity
 from bugbug.tools.suggestion_filtering.agent import SuggestionFilteringTool
 
 logger = getLogger(__name__)
@@ -212,6 +213,12 @@ class LLMCommentMatchingScorer(weave.Scorer):
             "matched_valid_excluded": matched_valid_excluded,
             "matched_invalid_retained": matched_invalid_retained,
             "matched_invalid_excluded": matched_invalid_excluded,
+            # Severity breakdown
+            "severity_breakdown": build_severity_breakdown(
+                generated_comments,
+                matched_valid_retained + matched_valid_excluded,
+                matched_invalid_retained + matched_invalid_excluded,
+            ),
         }
 
     def summarize(self, score_rows: list[dict]) -> dict:
@@ -291,4 +298,55 @@ class LLMCommentMatchingScorer(weave.Scorer):
                 if total_matched_invalid > 0
                 else 0
             ),
+            **summarize_severity_breakdowns(score_rows),
         }
+
+
+def build_severity_breakdown(
+    generated_comments: list,
+    matched_valid: list[dict],
+    matched_invalid: list[dict],
+) -> dict[str, dict[str, int]]:
+    """Count generated and matched comments per severity for one example.
+
+    Comments without a severity, e.g. from runs before severities existed, are
+    left out of the breakdown.
+    """
+    breakdown = {
+        severity.value: {"generated": 0, "matched_valid": 0, "matched_invalid": 0}
+        for severity in CommentSeverity
+    }
+
+    def count(comment, key: str) -> None:
+        severity = getattr(comment, "severity", None)
+        if severity is not None:
+            breakdown[severity][key] += 1
+
+    for comment in generated_comments:
+        count(comment, "generated")
+    for match in matched_valid:
+        count(match["generated_comment"], "matched_valid")
+    for match in matched_invalid:
+        count(match["generated_comment"], "matched_invalid")
+
+    return breakdown
+
+
+def summarize_severity_breakdowns(score_rows: list[dict]) -> dict:
+    """Aggregate per-severity counts across examples into flat summary metrics."""
+    summary: dict[str, float] = {}
+    for severity in CommentSeverity:
+        totals = {"generated": 0, "matched_valid": 0, "matched_invalid": 0}
+        for row in score_rows:
+            row_counts = row.get("severity_breakdown", {}).get(severity.value, {})
+            for key in totals:
+                totals[key] += row_counts.get(key, 0)
+
+        summary[f"{severity}_generated"] = totals["generated"]
+        summary[f"{severity}_matched_valid"] = totals["matched_valid"]
+        summary[f"{severity}_matched_invalid"] = totals["matched_invalid"]
+        summary[f"{severity}_valid_match_rate"] = (
+            totals["matched_valid"] / totals["generated"] if totals["generated"] else 0
+        )
+
+    return summary

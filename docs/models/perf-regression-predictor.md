@@ -18,22 +18,34 @@ dozen characters per token can reach that window, the model drops the tail of
 a large diff (beyond `max_input_chars`) before structuring and tokenizing it,
 and the service exports one patch at a time.
 
-Some commits in a push are not meaningful to score and are skipped: backouts,
-merges, automated `wptsync` imports and commits marked `ignore-this-changeset`.
-They are still listed in the result with an `ignored_reason` and `null` scores.
-The rules live in `PERF_REGRESSION_IGNORED_COMMIT_RULES` in
-`http_service/bugbug_http/models.py`; to ignore another kind of commit, add an
-entry mapping the reason to a predicate over the hg.mozilla.org
-`automationrelevance` changeset. Rules are evaluated in order and the first
-match wins.
+Some commits in a push are not meaningful to score and are skipped: merges,
+automated `wptsync` imports and commits marked `ignore-this-changeset`. They
+are still listed in the result with an `ignored_reason` and `null` scores.
+Backouts are scored like any other commit, since a revert is a real code
+change that can regress a benchmark, and the training set treats them the same
+way. The rules live in `IGNORED_COMMIT_RULES` in `bugbug/perf/commit_risk.py`,
+shared with the training set export, so the model is never trained on a kind
+of commit it does not score, and with the batch scorer described below; to
+ignore another kind of commit, add an entry mapping the reason to a predicate
+over the hg.mozilla.org `automationrelevance` changeset. Rules are evaluated in
+order and the first match wins.
 
 Each scored commit gets its own `risk_score`; the push-level `risk_score` is
 the maximum across the scored commits, or `null` when every commit in the push
 was ignored.
 
-The `risk_score` is the uncalibrated softmax probability for positive class
-`1`. It must not be interpreted as a calibrated probability for operational
-decision-making.
+The model's own `risk_score` is the raw softmax probability of the positive
+class `1`: it ranks commits but is not the probability of a regression, since
+the checkpoint was trained on far more positives than autoland produces. The
+HTTP service maps it through the calibration the
+[data pipeline](../perf-alerts.md) fits for the model version, an isotonic
+mapping from raw scores to observed culprit rates, and returns the calibrated
+value as `risk_score` with the model's output as `raw_risk_score`;
+`extra_data.calibrated` says whether a calibration was applied and
+`calibration_fitted_at` when it was fitted. Without a published calibration
+for the model version, such as a new checkpoint with too few culprits yet,
+`risk_score` is the raw value and `calibrated` is `false`. The CLI and the
+batch scorer report raw scores.
 
 ## Local inference with the CLI
 
@@ -69,7 +81,7 @@ export formats. A raw diff without a detectable message is still accepted,
 with a warning.
 
 The command prints the predicted binary `class`, both class probabilities in
-`prob`, and the uncalibrated positive-class `risk_score`.
+`prob`, and the model's raw positive-class `risk_score`.
 
 ## HTTP service
 
@@ -100,13 +112,14 @@ Example result:
 {
   "branch": "integration/autoland",
   "rev": "76383a875678",
-  "risk_score": 0.75,
+  "risk_score": 0.12,
   "commits": [
     {
       "node": "76383a875678",
       "prob": [0.25, 0.75],
       "class": 1,
-      "risk_score": 0.75,
+      "risk_score": 0.12,
+      "raw_risk_score": 0.75,
       "ignored_reason": null
     },
     {
@@ -114,14 +127,16 @@ Example result:
       "prob": null,
       "class": null,
       "risk_score": null,
-      "ignored_reason": "backout"
+      "raw_risk_score": null,
+      "ignored_reason": "merge"
     }
   ],
   "extra_data": {
     "model_name": "Perf Regression Predictor",
-    "model_version": null,
+    "model_version": "perf-regression-predictor-v1",
     "max_length": 512,
-    "calibrated": false,
+    "calibrated": true,
+    "calibration_fitted_at": "2026-11-01T00:05:12+00:00",
     "commit_count": 2,
     "ignored_commit_count": 1
   }
@@ -129,10 +144,21 @@ Example result:
 ```
 
 The push-level `risk_score` is the maximum of the per-commit `risk_score`
-values of the scored commits in `commits`. Ignored commits have
-`ignored_reason` set and `null` for `prob`, `class` and `risk_score`; a `null`
-means "not scored", not "no risk". When every commit was ignored the push-level
-`risk_score` is `null` too.
+values of the scored commits in `commits`, calibrated when they are. Ignored
+commits have `ignored_reason` set and `null` for `prob`, `class`,
+`risk_score` and `raw_risk_score`; a `null` means "not scored", not "no
+risk". When every commit was ignored the push-level `risk_score` is `null`
+too.
+
+## Batch scoring
+
+Evaluations that replay scheduling strategies over autoland history need a
+score for every commit, and the endpoint scores one push at a time. The
+`bugbug-data-perf-commit-risk` command of the
+[performance alerts data pipeline](../perf-alerts.md) runs the same ignore
+rules and scoring over every commit of the pipeline's pushes snapshot, reading
+commit metadata and patches from a local clone, and publishes the scores as
+the `perf_commit_risk.json` dataset, one record per commit and model version.
 
 ## Model artifact
 

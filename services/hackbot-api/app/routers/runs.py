@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
+from hackbot_client import HackbotClient
 from pydantic import BeforeValidator, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,7 @@ from app.auth import require_api_key
 from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Run, RunAction
+from app.hackbot_client import get_hackbot_client
 from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
@@ -102,6 +104,7 @@ async def create_run(
     agent_name: str,
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
+    requested_via: Annotated[str | None, Depends(require_api_key)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
@@ -151,6 +154,7 @@ async def create_run(
             status=RunStatus.pending.value,
             inputs=inputs.model_dump(mode="json"),
             requested_by=on_behalf_of,
+            requested_via=requested_via,
             dedupe_key=dedupe_key,
             results_prefix=results_prefix,
             artifacts=[],
@@ -186,7 +190,10 @@ async def create_run(
     await db.commit()
 
     try:
-        policy = await gcs.generate_results_policy(str(run_id))
+        timeout = (
+            agent.execution_timeout_seconds or settings.job_execution_timeout_seconds
+        )
+        policy = await gcs.generate_results_policy(str(run_id), timeout)
         env_overrides: dict[str, str] = {
             "RUN_ID": str(run_id),
             "RESULTS_BUCKET": settings.results_bucket,
@@ -197,7 +204,9 @@ async def create_run(
             **(agent.build_env or model_to_env)(inputs),
             **(await _parent_artifacts_env(parent)),
         }
-        execution_name = await jobs.trigger_execution(agent.job_name, env_overrides)
+        execution_name = await jobs.trigger_execution(
+            agent.job_name, env_overrides, timeout
+        )
     except Exception as exc:
         log.exception("Failed to start execution for run %s", run_id)
         run.status = RunStatus.failed.value
@@ -325,7 +334,9 @@ async def list_run_actions(
 
 @router.post("/runs/{run_id}/actions/apply")
 async def apply_run_actions(
-    run_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]
+    run_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hackbot_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> list[RunActionDoc]:
     """Manually apply all of a run's pending actions (apply-all).
 
@@ -335,7 +346,7 @@ async def apply_run_actions(
     run = await db.get(Run, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    await apply_all_pending(db, run)
+    await apply_all_pending(db, run, hackbot_client)
     return await _list_actions(db, run_id)
 
 

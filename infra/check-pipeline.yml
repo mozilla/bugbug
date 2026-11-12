@@ -35,23 +35,41 @@ tasks:
         - "7"
 
       artifacts:
-        public/average_group_scheduled.svg:
-          path: /average_group_scheduled.svg
+        public/shadow_schedulers_group.md:
+          path: /shadow_schedulers_group.md
           type: file
-        public/percentage_group_caught_at_least_one.svg:
-          path: /percentage_group_caught_at_least_one.svg
+        public/shadow_schedulers_group_tradeoff.svg:
+          path: /shadow_schedulers_group_tradeoff.svg
           type: file
-        public/percentage_group_caught.svg:
-          path: /percentage_group_caught.svg
+        public/shadow_schedulers_group_weekly.svg:
+          path: /shadow_schedulers_group_weekly.svg
           type: file
-        public/average_config_group_scheduled.svg:
-          path: /average_config_group_scheduled.svg
+        public/shadow_schedulers_config_group.md:
+          path: /shadow_schedulers_config_group.md
           type: file
-        public/percentage_config_group_caught_at_least_one.svg:
-          path: /percentage_config_group_caught_at_least_one.svg
+        public/shadow_schedulers_config_group_tradeoff.svg:
+          path: /shadow_schedulers_config_group_tradeoff.svg
           type: file
-        public/percentage_config_group_caught.svg:
-          path: /percentage_config_group_caught.svg
+        public/shadow_schedulers_config_group_weekly.svg:
+          path: /shadow_schedulers_config_group_weekly.svg
+          type: file
+        public/shadow_schedulers_non_group.md:
+          path: /shadow_schedulers_non_group.md
+          type: file
+        public/shadow_schedulers_non_group_tradeoff.svg:
+          path: /shadow_schedulers_non_group_tradeoff.svg
+          type: file
+        public/shadow_schedulers_non_group_weekly.svg:
+          path: /shadow_schedulers_non_group_weekly.svg
+          type: file
+        public/shadow_schedulers_build.md:
+          path: /shadow_schedulers_build.md
+          type: file
+        public/shadow_schedulers_build_tradeoff.svg:
+          path: /shadow_schedulers_build_tradeoff.svg
+          type: file
+        public/shadow_schedulers_build_weekly.svg:
+          path: /shadow_schedulers_build_weekly.svg
           type: file
 
       features:
