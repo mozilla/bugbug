@@ -736,7 +736,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8,<3.12.0" },
     { name = "mercurial", specifier = "~=7.2" },
     { name = "microannotate", specifier = "~=0.0.24" },
-    { name = "mozci", specifier = "~=2.5.0" },
+    { name = "mozci", specifier = "~=2.6.0" },
     { name = "numpy", specifier = "~=2.4.3" },
     { name = "optuna", marker = "extra == 'perf-simulation'", specifier = ">=5.0.0" },
     { name = "orjson", specifier = ">=3.11.7,<3.14.0" },
@@ -2509,7 +2509,7 @@ requires-dist = [
     { name = "starlette", specifier = ">=0.36.0" },
     { name = "uvicorn", specifier = ">=0.27.0" },
 ]
-provides-extras = ["dev", "a11y"]
+provides-extras = ["a11y", "dev"]
 
 [[package]]
 name = "hackbot-agent-build-repair"
@@ -2649,7 +2649,7 @@ requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
     { name = "hackbot-runtime", extras = ["claude-sdk", "phabricator"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
-    { name = "mozci", specifier = "~=2.5.0" },
+    { name = "mozci", specifier = "~=2.6.0" },
     { name = "requests" },
     { name = "zstandard", specifier = "~=0.25.0" },
 ]
@@ -2872,7 +2872,7 @@ requires-dist = [
     { name = "cachetools", specifier = ">=5.3.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "kombu", specifier = ">=5.6,<6" },
-    { name = "mozci", specifier = "~=2.5.0" },
+    { name = "mozci", specifier = "~=2.6.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
@@ -4200,7 +4200,7 @@ wheels = [
 
 [[package]]
 name = "mozci"
-version = "2.5.0"
+version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appdirs" },
@@ -4220,9 +4220,9 @@ dependencies = [
     { name = "validx" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/bc/2f5beaa5dee8e9e0c41c067edcf4b6552fd0eafff27ff6c7d4c84cc918a7/mozci-2.5.0.tar.gz", hash = "sha256:025505cc72053889f25b676cf6128ce6ee288aea17d3f97dc9871144a6332330", size = 77747, upload-time = "2026-11-11T01:00:09.323Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/07/2eb0ccfff9853a0f88031c34729bca9fba4851d5bdc88018cfb016c32413/mozci-2.6.0.tar.gz", hash = "sha256:1c8146a51b839c71a3afc98141dc1230b8389988a8a3305b42e0a4a4a1a9b1eb", size = 77979, upload-time = "2026-11-12T13:25:05.405Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/b3/7f3887fded7e0f1461ac512f813190852fcbdbd29ce447749d65ab16c369/mozci-2.5.0-py3-none-any.whl", hash = "sha256:45f69602784d68e411ed55bc9e62d285f8488364611827a285ce5dea090c08e5", size = 91984, upload-time = "2026-11-11T01:00:10.838Z" },
+    { url = "https://files.pythonhosted.org/packages/53/8d/ba54e2499a2cf888d6afe532aa2bbbfc901a842e3ec0c748988b2cb484d3/mozci-2.6.0-py3-none-any.whl", hash = "sha256:c62097c8e0bf98c5655031f10bc123dfc0a00a60e0790faebfa3f3e4a8dfcf0b", size = 92183, upload-time = "2026-11-12T13:25:06.999Z" },
 ]
 
 [[package]]

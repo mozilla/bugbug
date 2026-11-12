@@ -9,7 +9,7 @@ dependencies = [
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
     "requests",
-    "mozci~=2.5.0",
+    "mozci~=2.6.0",
     # mozci imports zstandard eagerly (default cache serializer) but only declares
     # it under its optional `cache` extra, so pull it in explicitly.
     "zstandard~=0.25.0",
