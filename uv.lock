@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -23,6 +23,7 @@ members = [
     "hackbot-agent-bug-fix",
     "hackbot-agent-build-repair",
     "hackbot-agent-dataset-eval",
+    "hackbot-agent-example-codex",
     "hackbot-agent-frontend-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
@@ -2588,6 +2589,23 @@ requires-dist = [
     { name = "pygobject", marker = "extra == 'a11y'", specifier = ">=3.52" },
 ]
 provides-extras = ["a11y"]
+
+[[package]]
+name = "hackbot-agent-example-codex"
+version = "0.1.0"
+source = { editable = "agents/example-codex" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla", "codex-sdk"] },
+    { name = "bugsy" },
+    { name = "hackbot-runtime", extra = ["codex-sdk"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla", "codex-sdk"], editable = "libs/agent-tools" },
+    { name = "bugsy" },
+    { name = "hackbot-runtime", extras = ["codex-sdk"], editable = "libs/hackbot-runtime" },
+]
 
 [[package]]
 name = "hackbot-agent-frontend-triage"

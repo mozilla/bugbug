@@ -12,6 +12,7 @@ from app.schemas import (
     BugFixInputs,
     BuildRepairInputs,
     DatasetEvalInputs,
+    ExampleCodexInputs,
     FrontendTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
@@ -154,6 +155,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         input_schema=TestRepairFixInputs,
         auto_apply_actions=False,
         always_apply_actions=frozenset({"email.send"}),
+    ),
+    "example-codex": AgentSpec(
+        name="example-codex",
+        description=(
+            "Reference agent running on Codex: summarise a public bug and record "
+            "the summary as a comment on it."
+        ),
+        job_name="hackbot-agent-example-codex",
+        input_schema=ExampleCodexInputs,
     ),
     "test-plan-generator": AgentSpec(
         name="test-plan-generator",

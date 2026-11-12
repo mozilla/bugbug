@@ -62,6 +62,7 @@ on:
           - agents/bug-fix
           - agents/build-repair
           - agents/dataset-eval
+          - agents/example-codex
           - agents/frontend-triage
           - agents/test-plan-generator
           - agents/test-repair

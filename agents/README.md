@@ -154,12 +154,14 @@ async with server.serve():
     thread = await codex.thread_start(config=mcp_servers_config(server))
 ```
 
-Then use the `AsyncCodex` thread to send prompts and handle response.
+Then use the `AsyncCodex` thread to send prompts and handle response. For a small, runnable
+example, see **`example-codex/`**.
 
 ## Creating your own agent
 
-1. **Copy `bug-fix/`** as your starting point. Rename the folder, the distribution name in
-   `pyproject.toml`, and the commands in `Dockerfile`/`compose.yml` (`python -m hackbot_agents.<name>`).
+1. **Copy `bug-fix/`** (or `example-codex/` for a Codex agent) as your starting point. Rename
+   the folder, the distribution name in `pyproject.toml`, and the commands in
+   `Dockerfile`/`compose.yml` (`python -m hackbot_agents.<name>`).
 2. **Trim `hackbot.toml`** to just the `[source]`/`[firefox]` tables you need.
 3. **Write your two modules:** `__main__.py` (`AgentInputs` + `main`) and `agent.py` (your logic
    plus a `HackbotAgentResult` subclass). Keep `<name_snake>/__init__.py` empty.
