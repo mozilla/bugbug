@@ -17,13 +17,14 @@
 # Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
 # build on unknown ones, so shell variables below are written `$$name`.
 steps:
-  # Builds of one trigger deploy to one environment: take turns.
+  # Builds of one trigger deploy to one environment: take turns. The wait
+  # allows for an older build's own work; the timeout is that plus this one's.
   - id: Wait
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
-      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy wait-turn "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION"
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy wait-turn "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION" --timeout 7200
 
   # /workspace/plan.txt: one "name version previous-commit config-hash broker"
   # line per agent to release.
@@ -90,7 +91,7 @@ substitutions:
   _AGENTS: ""
   _PUSHER: ""
 
-timeout: 7200s
+timeout: 14400s
 
 options:
   substitutionOption: MUST_MATCH

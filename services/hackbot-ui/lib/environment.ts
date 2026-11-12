@@ -1,9 +1,18 @@
 const PRODUCTION_HOSTNAME = "hackbot.moz.tools";
-const PRODUCTION_URL = `https://${PRODUCTION_HOSTNAME}`;
 
+// The Sentry environment the Console runs in, from its hostname or URL. The
+// names match the API's and the deploys the build pipeline records:
+// production, staging (stage.<nonprod domain>), and development otherwise.
 export function resolveEnvironment(hostnameOrUrl = ""): string {
-  return hostnameOrUrl === PRODUCTION_HOSTNAME ||
-    hostnameOrUrl.startsWith(PRODUCTION_URL)
-    ? "production"
-    : "development";
+  let hostname = hostnameOrUrl;
+  if (hostnameOrUrl.includes("://")) {
+    try {
+      hostname = new URL(hostnameOrUrl).hostname;
+    } catch {
+      return "development";
+    }
+  }
+  if (hostname === PRODUCTION_HOSTNAME) return "production";
+  if (hostname.startsWith("stage.")) return "staging";
+  return "development";
 }
