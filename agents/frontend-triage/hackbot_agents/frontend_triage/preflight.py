@@ -21,7 +21,7 @@ from mcp.client.streamable_http import streamablehttp_client
 # dotted so Bugzilla leaves `data` out -- a bare `attachments` returns every
 # attachment's base64 body.
 BUG_FIELDS = (
-    "id,product,component,"
+    "id,product,component,creator,"
     "attachments.id,attachments.content_type,attachments.is_obsolete"
 )
 

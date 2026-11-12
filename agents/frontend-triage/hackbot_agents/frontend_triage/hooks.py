@@ -15,6 +15,10 @@ The action **type** needs no check, and there is no field-change hook.
 has no way to record a ``bugzilla.update_bug``, a ``bugzilla.create_bug`` or a
 Phabricator action in the first place -- ``severity`` is a suggestion in the comment
 now, which is what left that tool with no caller.
+
+The one write these hooks do not see is ``bugzilla.request_info``, which code records
+after the run (``agent.record_reporter_question``) with the bug's reporter as the only
+possible requestee.
 """
 
 import re
