@@ -292,6 +292,41 @@ def test_build_github_commits_reports_a_rename_as_delete_and_add(tmp_path):
     )
 
 
+def test_build_github_commits_pairs_each_path_with_its_own_entry(tmp_path):
+    # Paths with spaces, next to plain ones, land on the right header: each
+    # path gets its own content and mode, not a neighbour's.
+    base = _init_repo(tmp_path)
+    (tmp_path / "a file.txt").write_text("spaced\n")
+    (tmp_path / "plain.txt").write_text("plain\n")
+    nested = tmp_path / "some dir" / "two  spaces.sh"
+    nested.parent.mkdir()
+    nested.write_text("#!/bin/sh\n")
+    nested.chmod(0o755)
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    (commit,) = payload["commits"]
+    assert [
+        (c["path"], c["mode"], base64.b64decode(c["content"]))
+        for c in commit["changes"]
+    ] == [
+        ("a file.txt", "100644", b"spaced\n"),
+        ("plain.txt", "100644", b"plain\n"),
+        ("some dir/two  spaces.sh", "100755", b"#!/bin/sh\n"),
+    ]
+
+
+def test_build_github_commits_keeps_a_commit_that_changes_no_files(tmp_path):
+    base = _init_repo(tmp_path)
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "Empty")
+
+    payload = build_github_commits(tmp_path, base, _REPO_URL)
+
+    (commit,) = payload["commits"]
+    assert commit["message"] == "Empty"
+    assert commit["changes"] == []
+
+
 def test_build_github_commits_no_changes_returns_none(tmp_path):
     base = _init_repo(tmp_path)
 

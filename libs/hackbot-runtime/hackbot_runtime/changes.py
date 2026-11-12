@@ -13,6 +13,7 @@ and creating that commit is safe.
 
 import base64
 import contextlib
+import itertools
 import logging
 import os
 import re
@@ -351,11 +352,14 @@ def _github_file_changes(repo: Path, parent: str, commit: str) -> list[dict]:
         repo, "diff-tree", "-r", "-z", "--no-renames", "--no-commit-id", parent, commit
     )
     # -z output is ":<srcmode> <dstmode> <srcsha> <dstsha> <status>\0<path>\0" per
-    # entry, with paths unquoted. GitHub only takes UTF-8 paths, so any other
-    # path raises here rather than being pushed mangled.
-    fields = out.split(b"\0")
+    # entry, with paths unquoted. --no-renames keeps it to one path per entry (a
+    # rename or copy would carry two), and strict pairing raises if that ever
+    # stops holding. A commit that changes no files prints nothing at all. GitHub
+    # only takes UTF-8 paths, so any other path raises here rather than being
+    # pushed mangled.
+    fields = out.removesuffix(b"\0").split(b"\0") if out else []
     entries = []
-    for header, raw_path in zip(fields[::2], fields[1::2]):
+    for header, raw_path in itertools.batched(fields, 2, strict=True):
         src_mode, dst_mode, _src_sha, dst_sha, status = header.lstrip(b":").split()
         path = raw_path.decode("utf-8")
         if status == b"D":
