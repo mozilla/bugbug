@@ -1,8 +1,8 @@
 [project]
 name = "hackbot-agent-perf-triage"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cloud Run Job image that runs the perf-triage agent for hackbot-api"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "hackbot-runtime[claude-sdk]",
     "agent-tools[bugzilla]",
@@ -21,6 +21,10 @@ agent-tools = { workspace = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hackbot_agents"]
