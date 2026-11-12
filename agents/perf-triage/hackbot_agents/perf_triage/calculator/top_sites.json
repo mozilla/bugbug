@@ -13,28 +13,6 @@
  "desktop": {
   "total_pageload_events": 8022892,
   "unique_domains": 16645,
-  "tier_examples": {
-   "major": [
-    "google.com",
-    "pinduoduo.com",
-    "reddit.com",
-    "facebook.com",
-    "amazon.com",
-    "github.com",
-    "duckduckgo.com",
-    "amazon.de"
-   ],
-   "common": [
-    "x.com",
-    "e-hentai.org",
-    "wp.pl",
-    "gangsterparadise.co.uk",
-    "amazon.co.uk",
-    "mail.yahoo.com",
-    "orange.fr",
-    "up.gov.in"
-   ]
-  },
   "rank": {
    "google.com": 1,
    "pinduoduo.com": 2,
@@ -5041,28 +5019,6 @@
  "mobile": {
   "total_pageload_events": 1951531,
   "unique_domains": 254217,
-  "tier_examples": {
-   "major": [
-    "google.com",
-    "reddit.com",
-    "lioden.com",
-    "wikipedia.org",
-    "duckduckgo.com",
-    "rule34.xxx",
-    "pornhub.com",
-    "youtube.com"
-   ],
-   "common": [
-    "facebook.com",
-    "paypal.com",
-    "fmkorea.com",
-    "asurascans.com",
-    "theguardian.com",
-    "bbc.co.uk",
-    "imdb.com",
-    "kleinanzeigen.de"
-   ]
-  },
   "rank": {
    "google.com": 1,
    "reddit.com": 2,

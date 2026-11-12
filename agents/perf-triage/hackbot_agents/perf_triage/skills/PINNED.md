@@ -59,10 +59,10 @@ Bumping the pin is a deliberate, reviewable act, not something this task automat
 
 - Repo: `github.com/mozilla/performance-triage-calculator`
 - Path: `.claude/skills/triage-perf-bug/SKILL.md`
-- Pinned revision: `c78430d` (`main`)
-- Revision date: 2026-10-30
-- Revision subject: "triage-perf-bug: profile wins a component disagreement; fix garbled .json.gz sentence (#17)"
-- Vendored on: 2026-10-30
+- Pinned revision: `0674246` (`main`)
+- Revision date: 2026-11-12
+- Revision subject: "top_sites: drop tier_examples (#20)"
+- Vendored on: 2026-11-12
 - Branch at time of vendoring: `main`
 
 `SKILL.md`, `criteria.md`, `fetch_attachment.py` and `memory_report_summary.py`
@@ -72,6 +72,11 @@ about:memory reports with them. `fetch_attachment.py` fetches from
 bugzilla.mozilla.org directly, without credentials, so it reaches public
 attachments only and needs that egress from the agent container. Since `c78430d`
 agent-mode Step 5 validates its JSON with `jq`, which the Dockerfile installs.
+Since `39acdfa` Step 3 loads the profile with `--session triage-<bug>` and stops it
+afterwards, so the skill no longer shares profiler-cli's default session with
+another run. `ec4f454` only adds a symlink note to Step 0 (moot here:
+`PERF_TRIAGE_PATH` is set). `0674246` drops the unused `tier_examples` block from
+`top_sites.json`; the calculator reads only `rank`.
 `criteria.md` is new in `478e3d3`: Step 2 of `SKILL.md` now
 reads its attribute rules from it, so the skill is broken without it. The
 Dockerfile copies the whole directory, so it ships with the skill.
