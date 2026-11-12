@@ -21,6 +21,7 @@ def _ctx(attachments=None, artifacts=None, agent="test-agent"):
         download_artifact=download,
         attachments=attachments or [],
         agent=agent,
+        hackbot_client=object(),
     )
 
 

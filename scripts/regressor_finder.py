@@ -82,6 +82,22 @@ def get_deleted_lines(patch: bytes) -> dict[str, list[int]]:
     return deleted_lines
 
 
+def annotate_path(
+    hg: hglib.client.hgclient, rev: str, path: str, skip: str | None
+) -> bytes:
+    """Return the node that last touched each line of path, as of the parent of rev."""
+    return hg.rawcommand(
+        hglib.util.cmdbuilder(
+            b"annotate",
+            b"path:" + path.encode("utf-8"),
+            r=f"p1({rev})",
+            w=True,
+            skip=skip,
+            T="{lines % '{node}\\n'}",
+        )
+    )
+
+
 def find_bug_introducing_revs(
     hg: hglib.client.hgclient,
     rev: str,
@@ -107,16 +123,29 @@ def find_bug_introducing_revs(
             continue
 
         skip = " + ".join(ignored_revs_by_path.get(path, [])) or None
-        annotate = hg.rawcommand(
-            hglib.util.cmdbuilder(
-                b"annotate",
-                b"path:" + path.encode("utf-8"),
-                r=f"p1({rev})",
-                w=True,
-                skip=skip,
-                T="{lines % '{node}\\n'}",
+
+        try:
+            annotate = annotate_path(hg, rev, path, skip)
+        except hglib.error.ServerError:
+            # Mercurial can crash while annotating (e.g. IndexError in
+            # dag_util._annotatepair when skipping revisions). The command
+            # server is dead at this point, so restart it and retry without
+            # skipping revisions, which is the code path that crashes.
+            # Remove this workaround once Mercurial fixes the bug:
+            # https://foss.heptapod.net/mercurial/mercurial-devel/-/work_items/10162
+            logger.exception(
+                "hg annotate crashed for %s at %s, retrying without --skip", path, rev
             )
-        )
+            hg.open()
+            if skip is None:
+                continue
+            try:
+                annotate = annotate_path(hg, rev, path, None)
+            except hglib.error.ServerError:
+                logger.exception("hg annotate crashed again for %s at %s", path, rev)
+                hg.open()
+                continue
+
         line_revs = annotate.decode("ascii").splitlines()
         bug_introducing_revs.update(
             line_revs[lineno - 1] for lineno in linenos if lineno <= len(line_revs)

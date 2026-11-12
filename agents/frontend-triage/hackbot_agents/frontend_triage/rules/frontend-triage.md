@@ -71,90 +71,61 @@ Core, DevTools-internals, or build-system bug, and say which area it looks like.
 
 ## Comment
 
-**Four to five sentences in total.** That is the whole comment, counting the severity
-rationale and counting each numbered fix step as a sentence. The footer the runtime
-appends does not count. Treat this as a hard budget: an earlier version of this file
-asked for "a few sentences" and every run produced twelve to seventeen.
+### Who reads it
 
-The budget is affordable because the comment is not the handoff. `root_cause`,
+The comment is read by an engineer who works on this component. They know its files, its
+architecture, its prefs and the platform machinery under it. Write the note you would leave
+for a teammate who owns the code, not an explanation for a newcomer:
+
+- **Do not explain what a file, class, module or function is for.** Name it and say what
+  it does wrong. `Crossword.jsx` needs no "the component that renders the crossword widget".
+- **Do not explain how the component is layered** or how data flows through it, beyond the
+  one hop that is broken.
+- **Do not explain platform concepts**: preloading, docShells, actors, Redux, Fluent,
+  NSIS, Gecko lifecycle, Android lifecycle. The reader knows them.
+- **Do not justify the evidence chain.** One link to the line that is wrong is enough; the
+  reader will open it.
+
+**Two to four sentences in total**, counting the severity sentence and counting each fix
+step as a sentence. The footer the runtime appends does not count. `root_cause`,
 `proposed_fix`, `target_files` and `relevant_tests` in the structured output carry the
-detail for the executor and have no length limit. The comment exists so a human
-scanning the bug learns, in one screenful, what is broken and what to do about it. Put
-the depth in the JSON and keep the comment to its conclusion.
+detail for the executor and have no length limit, so put depth there.
 
-A comment that fits is roughly one or two sentences naming the file and the mechanism,
-then a new paragraph opening with a bold `Fix:` label and one or two sentences on the
-fix, then the closing severity sentence. Keep those three as separate paragraphs and
-keep the `Fix:` label bold: the budget is a limit on length, not an instruction to run
-everything together. Anything else has to earn its sentence by displacing one of those.
+The shape: one or two sentences naming the file and what is wrong, then a new paragraph
+opening with a bold `**Fix:**` label and one sentence on the fix, then the closing severity
+sentence. Keep those as separate paragraphs.
 
 ### Worked example
 
-From a different bug, in another area, to show the shape. The paths and line numbers
-below are that bug's, not yours. Do not reuse them.
+From a different bug, to show the shape. The paths and line numbers are that bug's, not
+yours.
 
 ```
 [nsUpdateService.sys.mjs]({{searchfox.permalink}}/toolkit/mozapps/update/nsUpdateService.sys.mjs#3410-3428)
-gives up on the update when a partial patch fails verification, because
-`#handlePatchFailure` is reached from the apply path and not from the download path,
-so the complete-patch fallback at
-[#3502]({{searchfox.permalink}}/toolkit/mozapps/update/nsUpdateService.sys.mjs#3502-3515)
-never runs and the update stays pending across restarts.
+only reaches `#handlePatchFailure` from the apply path, so a partial that fails
+verification during download never falls back to the complete patch
+([#3502]({{searchfox.permalink}}/toolkit/mozapps/update/nsUpdateService.sys.mjs#3502-3515)).
 
-**Fix:** Route the download failure through the same handler, and extend
-[test_0113_general.js]({{searchfox.permalink}}/toolkit/mozapps/update/tests/unit_service_updater/test_0113_general.js)
-with a partial-patch verification failure asserting the complete patch is fetched.
+**Fix:** Route the download failure through `#handlePatchFailure` and cover it in
+[test_0113_general.js]({{searchfox.permalink}}/toolkit/mozapps/update/tests/unit_service_updater/test_0113_general.js).
 
-Suggested severity: S2. A user on the release channel stops receiving updates entirely
-after one corrupt partial, with no in-product workaround and nothing telling them
-anything is wrong.
+Suggested severity: S2. Release users stop receiving updates after one corrupt partial, with no workaround.
 ```
-
-Three sentences and a severity sentence, in three short paragraphs. It names two files,
-a private method, two line anchors and a test, and it never narrates the investigation
-that found them. The three paragraphs are the whole structure: what is broken, then
-**Fix:** on its own line, then the severity. A budgeted comment run together as one
-block is technically within the limit and still hard to skim, and the bolded label is
-what a reader scanning the bug looks for first.
 
 ### How the comment reads
 
-Engineers have told us these comments are hard to follow: correct, but written like
-an essay about an investigation rather than a note from one engineer to another.
-"Be brief" did not fix it, so here are the specific habits to drop. Each one is
-checkable against your draft before you record it.
+- **Open on the mechanism.** No framing sentence.
+- **Do not rule out alternatives.** What you eliminated goes in `reasoning`.
+- **Report the finding, not the search.**
+- **Say the thing once.** The fix and the severity do not restate the cause.
+- **No em dashes**, no one-line paragraphs used as a beat, no parenthetical longer than
+  about five words.
+- **Recommend once.** No trailing "worth auditing X too".
+- **A bug is `bug 1234567`, not a link.**
+- **American English.**
 
-- **Open on the mechanism, not on a frame.** The first sentence names the file or
-  function and says what it does wrong. Cut openers that tell the reader how to
-  read what follows: "Two different mechanisms are in play here, and only one of
-  them is actually broken", "Unlike every other widget", "The interesting case is".
-- **Do not rule out the alternatives you considered.** "Pref-backed state is not at
-  risk", "Redux widgets are unaffected", "the preloading machinery is fine" answer
-  questions the reader did not ask, and they are the single largest source of length
-  in these comments. What you eliminated goes in `reasoning`, not in the comment.
-- **No em dashes.** Every one is a sentence that has not decided where it ends. Use
-  a period, a comma, or a colon.
-- **No one-line paragraph used as a beat.** "The crossword does not." on its own
-  line is rhetoric. Fold it into the sentence carrying the evidence.
-- **A parenthetical longer than about five words is a sentence.** Promote it or cut
-  it. Do not nest one inside another.
-- **Recommend once.** A "worth auditing the other widgets too" or "worth confirming
-  with the vendor" bolted onto the end of a fix plan is a second, unranked proposal
-  competing with the first. Either it is a numbered step or it is not in the
-  comment.
-- **Report the finding, not the search.** What you read and which tools you reached
-  for belong in `reasoning`.
-- **Say the thing once.** If the root cause is in the first sentence, the fix does
-  not restate it and the severity rationale does not restate it again.
-- **A bug is `bug 1234567`, not a link.** Bugzilla links it itself and shows the
-  bug's status and summary on hover. A Markdown link to `show_bug.cgi` loses both.
-- **American English.** "behavior", "initialize", "generalize", "license", never
-  "behaviour", "initialise", "generalise", "licence".
-
-None of this is license to drop substance. Every file name, function name, line
-anchor and Searchfox link that carried weight in the long version carries it in the
-short one. The target is the same findings in fewer, flatter sentences, not fewer
-findings.
+Keep every file, function, line anchor and link that the finding depends on. Shorter
+means less explanation, not fewer findings.
 
 ## Confidence
 

@@ -8,22 +8,199 @@ from collections import Counter
 from datetime import datetime, timezone
 
 import dateutil.parser
-import xgboost
+import numpy as np
 from dateutil.relativedelta import relativedelta
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.svm import LinearSVC
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
-from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class ComponentModel(BugModel):
+GENERIC_COMPONENTS = {"General", "Untriaged"}
+
+
+def get_initial_component(bug):
+    for history in bug["history"]:
+        for change in history["changes"]:
+            if change["field_name"] == "component":
+                return change["removed"]
+
+    return bug["component"]
+
+
+class BaseComponentModel(BugModel):
+    """Pipeline and evaluation shared by the models that classify bugs into components."""
+
+    def __init__(self, lemmatization=False):
+        BugModel.__init__(self, lemmatization)
+
+        self.cross_validation_enabled = False
+        self.calculate_importance = False
+        # The test set is made of the most recent bugs (see train_test_split), so
+        # retrain on all bugs after the evaluation.
+        self.entire_dataset_training = True
+
+        feature_extractors = [
+            bug_features.HasSTR(),
+            bug_features.Severity(),
+            bug_features.Keywords(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
+            bug_features.BugReporter(),
+            # Bugs are rolled back to their creation, so this is the product the bug
+            # was filed in.
+            bug_features.Product(),
+            bug_features.OpSys(),
+            bug_features.Platform(),
+            bug_features.MentionedPathsComponents(),
+        ]
+
+        cleanup_functions = [
+            feature_cleanup.fileref(),
+            feature_cleanup.url(),
+            feature_cleanup.synonyms(),
+        ]
+
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(
+                        feature_extractors, cleanup_functions, rollback=True
+                    ),
+                ),
+            ]
+        )
+
+        # A linear model on sparse n-gram features is more accurate (and faster
+        # to train) than gradient boosted trees for this task. The L1 penalty
+        # keeps the weights sparse, so the model stays small despite the large
+        # vocabulary. Probabilities are calibrated on out-of-fold predictions.
+        estimator = CalibratedClassifierCV(
+            LinearSVC(penalty="l1", dual=False),
+            method="isotonic",
+            cv=3,
+            ensemble=False,
+            n_jobs=3,
+        )
+
+        self.clf = Pipeline(
+            [
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            (
+                                "title",
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=30000,
+                                ),
+                                "title",
+                            ),
+                            (
+                                "title_char",
+                                TfidfVectorizer(
+                                    min_df=3,
+                                    analyzer="char_wb",
+                                    ngram_range=(2, 5),
+                                    sublinear_tf=True,
+                                    max_features=30000,
+                                ),
+                                "title",
+                            ),
+                            (
+                                "comments",
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=80000,
+                                ),
+                                "comments",
+                            ),
+                        ]
+                    ),
+                ),
+                (
+                    "estimator",
+                    estimator,
+                ),
+            ]
+        )
+
+    def items_gen(self, classes):
+        # Remember when each bug was filed and in which component, for the evaluation.
+        self.items_metadata = []
+        for bug, label in super().items_gen(classes):
+            self.items_metadata.append(
+                (bug["creation_time"], get_initial_component(bug) in GENERIC_COMPONENTS)
+            )
+            yield bug, label
+
+    def train_test_split(self, X, y):
+        # Test on the most recent bugs, as the model is used to classify new bugs.
+        # A random split overestimates the accuracy, e.g. it ignores the drift in the
+        # bugs that are filed and the creation of new components.
+        creation_times, filed_in_generic = zip(*self.items_metadata[: len(y)])
+        order = np.argsort(creation_times, kind="stable")
+        train_size = int(len(y) * 0.9)
+
+        # Make sure every component has at least 3 examples in the training set, by
+        # moving the oldest test bugs of recently created components to it.
+        train_idx = list(order[:train_size])
+        test_idx = []
+        counts = Counter(y[train_idx])
+        for i in order[train_size:]:
+            if counts[y[i]] < 3:
+                counts[y[i]] += 1
+                train_idx.append(i)
+            else:
+                test_idx.append(i)
+
+        # Bugs filed in a General/Untriaged component are the ones the model is mostly
+        # used for, i.e. the ones that need to be moved to the right component.
+        self.test_subsets = {
+            "Bugs filed in General/Untriaged": np.array(filed_in_generic)[test_idx]
+        }
+
+        return X.iloc[train_idx], X.iloc[test_idx], y[train_idx], y[test_idx]
+
+    def get_test_subsets(self):
+        return self.test_subsets
+
+    def fit_classifier(self, X, y):
+        super().fit_classifier(X, y)
+
+        # Most weights are zero thanks to the L1 penalty, store them as a sparse
+        # matrix to reduce the model size.
+        for calibrated_classifier in self.clf.named_steps[
+            "estimator"
+        ].calibrated_classifiers_:
+            calibrated_classifier.estimator.sparsify()
+
+    def get_feature_names(self):
+        return self.clf.named_steps["union"].get_feature_names_out()
+
+
+class ComponentModel(BaseComponentModel):
     PRODUCTS = {
         "Core",
         "External Software Affecting Firefox",
@@ -68,70 +245,8 @@ class ComponentModel(BugModel):
         "Firefox for Android": "Firefox for Android::General",
     }
 
-    def __init__(self, calibration=True, lemmatization=False):
-        BugModel.__init__(self, lemmatization)
-
-        self.cross_validation_enabled = False
-        self.calculate_importance = False
-
-        feature_extractors = [
-            bug_features.HasSTR(),
-            bug_features.Severity(),
-            bug_features.Keywords(),
-            bug_features.HasCrashSignature(),
-            bug_features.HasURL(),
-            bug_features.HasW3CURL(),
-            bug_features.HasGithubURL(),
-            bug_features.Whiteboard(),
-            bug_features.Patches(),
-            bug_features.Landings(),
-        ]
-
-        cleanup_functions = [
-            feature_cleanup.fileref(),
-            feature_cleanup.url(),
-            feature_cleanup.synonyms(),
-        ]
-
-        self.extraction_pipeline = Pipeline(
-            [
-                (
-                    "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
-                    ),
-                ),
-            ]
-        )
-
-        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        if calibration:
-            estimator = IsotonicRegressionCalibrator(estimator)
-            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
-            self.calculate_importance = False
-
-        self.clf = Pipeline(
-            [
-                (
-                    "union",
-                    ColumnTransformer(
-                        [
-                            ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
-                            (
-                                "comments",
-                                self.text_vectorizer(min_df=0.0001),
-                                "comments",
-                            ),
-                        ]
-                    ),
-                ),
-                (
-                    "estimator",
-                    estimator,
-                ),
-            ]
-        )
+    def __init__(self, lemmatization=False):
+        super().__init__(lemmatization)
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
@@ -248,9 +363,6 @@ class ComponentModel(BugModel):
             for product_component, count in product_component_counts
             if count > threshold and product_component in active_product_components
         )
-
-    def get_feature_names(self):
-        return self.clf.named_steps["union"].get_feature_names_out()
 
     def check(self):
         success = super().check()

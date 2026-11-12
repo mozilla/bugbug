@@ -85,8 +85,10 @@ in the same update, so the infrastructure and the image never disagree, not
 even in prod before a promotion. Apply the PR one environment at a time (dev,
 check, then stage, then prod) to control when each moves.
 
-The manifest sync workflow fills them in once the build for a commit has
-finished:
+Pins are optional, and set by hand: a shape change without them keeps each
+environment's running image (an expand fits it; for a contract, ship the code
+that stops needing what's removed first). To move a contract and its image
+together, pin the build's images when generating the infra PR:
 
 ```sh
 hackbot-deploy resolve-images bug-fix --tag <commit> \
@@ -138,9 +140,9 @@ What an agent deploy checks, in order:
 3. **The gate.** A forward deploy needs that hash to equal the shape applied in
    the environment (`applied.json` in its registry bucket). A rollback needs it
    in `compatible`.
-4. An older build doesn't replace a newer one (`--force` to override). A build
-   stops if an older build of its trigger is still running (`check-build`), but
-   a manual deploy can still race one, so this matters.
+4. An older build doesn't replace a newer one (`--force` to override; dev
+   deploys always pass it). A build waits for older builds of its trigger
+   (`wait-turn`), but a manual deploy can still race one, so this matters.
 5. The Job's containers match the images given, and its config-hash label
    agrees with `applied.json` (catching an incomplete apply).
 
@@ -151,38 +153,70 @@ in which case Cloud Run keeps serving the old one.
 
 Then it updates the Job or service, reads it back, and writes
 `deployments/<id>.json` (`deployments/agents/bug-fix.json`) with the images,
-commit, build time and a
-deployment history. The write is conditioned on the record's generation, so
+version, commit, build time and a deployment history. The write is conditioned on the record's generation, so
 two concurrent deploys can't silently overwrite each other. A rollback steps
 back through that history one deployment at a time.
 
-Exit codes: `0` done or nothing to do, `1` failed, `3` waiting for infra. A
-pipeline should treat `3` as "stop here", not as a failure;
-`agents/cloudbuild.yaml` does.
+Exit codes: `0` done or nothing to do, `1` failed, `3` waiting for infra (the
+image's shape isn't applied in that environment). The build configs treat `3`
+as a failure: apply the infra PR, then rerun.
 
 The environment names (projects, the `-dev`/`-stage` suffix, bucket names)
 mirror the Terraform in webservices-infra. Change one, change both.
 
 ## Prod
 
-Prod is never deployed by a build, and never without an approval. The
-**Hackbot prod deploy** workflow offers every stage deploy to prod, one agent
-or service at a time: once a build's check run succeeds, it compares stage with
-prod (`promotion`), and if they differ, waits for a reviewer in the GitHub
-environment for its kind: `hackbot-prod-agents` or `hackbot-prod-services`. On approval it runs `promote --expect`, which puts on exactly
-the digests that were planned, or reports `superseded` if stage has moved on
-(the newer build's run asks for its own approval). The approver is recorded as
-`deployed_by`.
+Prod is never deployed by a build, and never without an approval. From the
+Actions tab, the **Hackbot prod deploy** workflow's `promote` compares stage
+with prod for one agent or service (`promotion`), and if they differ, waits for
+a reviewer in the GitHub environment for its kind: `hackbot-prod-agents` or
+`hackbot-prod-services`. On approval it runs `promote --expect`, which puts on
+exactly the digests that were planned, or reports `superseded` if stage has
+moved on. The approver is recorded as `deployed_by`. For a service, it also
+marks its Sentry release (`<service>@<version>`) deployed to production, with
+the `SENTRY_AUTH_TOKEN` secret of `hackbot-prod-services`.
 
-From the Actions tab, `promote` does the same for one name, and `rollback`
-steps prod back through its history in the `hackbot-prod-rollback`
+`rollback` steps prod back through its history in the `hackbot-prod-rollback`
 environment. The prod deploy account is bound to those three environments, so no workflow can
 deploy prod without passing their protection. A shape change reaches prod by
 applying the infra PR's prod directory instead, which puts on the images pinned
 for it.
 
-## Building
+## Building and releasing
 
-`agents/cloudbuild.yaml` builds an agent's images with the hash label, and
-`services/<service>/cloudbuild.yaml` builds the API and UI. Each then deploys
-to dev and then stage. Their triggers are created in webservices-infra.
+A release is a version bump: the `VERSION` file of an agent
+(`agents/<agent>/VERSION`) or a service (`services/<service>/VERSION`), which
+its package also reads. Images are tagged with their commit and labelled with
+their version (`org.opencontainers.image.version`).
+Six Cloud Build triggers, created in webservices-infra, run the build configs:
+
+| trigger                                 | runs on                                                         | deploys                                                                         |
+| --------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `stage-agents`                          | the default branch, touching `agents/*/VERSION`                 | to stage, every agent whose version isn't the one stage runs, one after another |
+| `stage-hackbot-api`, `stage-hackbot-ui` | the default branch, touching `services/<service>/VERSION`       | to stage, if its version isn't the one stage runs                               |
+| `dev-agents`                            | `dev/agents/<agent>` or `dev/agents/<agent>/<anything>`         | that agent to dev, always                                                       |
+| `dev-hackbot-api`, `dev-hackbot-ui`     | `dev/services/<service>` or `dev/services/<service>/<anything>` | the service to dev, always                                                      |
+
+```sh
+git push -f upstream HEAD:dev/agents/bug-fix               # try a branch in dev
+git push -f upstream HEAD:dev/services/hackbot-api/my-fix  # a suffix keeps branches apart
+```
+
+Dev is a shared sandbox: the last push wins. The branches have to be in
+mozilla/bugbug, not a fork.
+
+A stage trigger run by hand deploys regardless of version: `stage-agents`
+releases every agent, or just those in `_AGENTS=bug-fix,test-repair`, and a
+service's trigger redeploys the service. A newer build waits for older builds
+of the same trigger (`wait-turn`).
+
+The tool makes every decision; the build configs only build images and call
+it. `release-plan` writes what to release (in dev, what the branch names;
+otherwise each agent's, or the named service's, package version against the
+environment's record, or everything on a run by hand), one `name version
+previous-commit config-hash broker` line each. `release` deploys those whose
+images built, one after another: one failing doesn't stop the others, and it
+fails at the end, naming them; a rerun only redoes those. The services' builds
+also make the Sentry release `<service>@<version>` (dev builds add
+`+<commit>`), with the commits since what the environment ran before, and mark
+its deploy there.

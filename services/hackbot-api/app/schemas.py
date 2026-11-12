@@ -14,6 +14,12 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class AgentInputs(BaseModel):
+    """Run-level inputs shared by every agent."""
+
+    require_review: bool = False
+
+
 class ArtifactRef(BaseModel):
     name: str
     size: int
@@ -66,6 +72,7 @@ class RunDoc(BaseModel):
     status: RunStatus
     inputs: dict[str, Any]
     requested_by: str | None = None
+    requested_via: str | None = None
     dedupe_key: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -79,7 +86,7 @@ class RunDoc(BaseModel):
 # --- Per-agent input schemas ---
 
 
-class BugFixInputs(BaseModel):
+class BugFixInputs(AgentInputs):
     bug_id: int
     # When following up on an existing Phabricator revision (e.g. triggered by a
     # webhook), the revision to update and the comment that mentioned Hackbot.
@@ -113,7 +120,7 @@ class BugFixInputs(BaseModel):
         return self
 
 
-class AutowebcompatInputs(BaseModel):
+class AutowebcompatInputs(AgentInputs):
     """Inputs shared by the autowebcompat agents: a bug and Claude settings."""
 
     bug_data: str | None = None
@@ -155,7 +162,7 @@ class AutowebcompatInterventionInputs(AutowebcompatInputs):
         return self
 
 
-class BuildRepairInputs(BaseModel):
+class BuildRepairInputs(AgentInputs):
     # Failing Taskcluster build tasks {task_name: task_id}; the agent resolves the
     # push commits from them. git_commit / bug_id are optional overrides.
     failure_tasks: dict[str, str]
@@ -166,7 +173,7 @@ class BuildRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
-class TestRepairInputs(BaseModel):
+class TestRepairInputs(AgentInputs):
     # Failing Taskcluster test tasks {task_name: task_id}. The agent resolves the
     # push, the last-green revision and the candidate commit range itself from the
     # task id (the listener only filters which failures are worth investigating).
@@ -175,7 +182,7 @@ class TestRepairInputs(BaseModel):
     max_turns: int | None = None
 
 
-class TestRepairFixInputs(BaseModel):
+class TestRepairFixInputs(AgentInputs):
     # The test-repair run to continue from; the investigation, verdict and failure
     # logs come from its artifacts.
     parent_run_id: UUID
@@ -184,14 +191,14 @@ class TestRepairFixInputs(BaseModel):
     max_turns: int | None = None
 
 
-class FrontendTriageInputs(BaseModel):
+class FrontendTriageInputs(AgentInputs):
     bug_id: int
     model: str | None = None
     max_turns: int | None = None
     effort: str | None = None
 
 
-class TestPlanGeneratorInputs(BaseModel):
+class TestPlanGeneratorInputs(AgentInputs):
     feature_name: str
     feature_description: str
     test_scope: str
@@ -245,7 +252,29 @@ UpliftSource = Annotated[
 ]
 
 
-class UpliftInputs(BaseModel):
+class DatasetEvalInputs(AgentInputs):
+    """Inputs for dataset-eval: one experiment over an eval dataset."""
+
+    # Weave dataset ref, pinned by version (`name:digest`).
+    dataset: str
+    agent: Literal["prompt-executor"] = "prompt-executor"
+    harness: Literal["claude_code", "codex"] = "claude_code"
+    model: str | None = None
+    effort: str | None = None
+    reps: Annotated[int, Field(ge=1)] = 1
+    # Row ids to run; all when empty.
+    tasks: list[str] = []
+    example_timeout_min: Annotated[int, Field(ge=1)] = 30
+    judge_model: str | None = None
+    # Weave prompt ref with the judge's rubric.
+    judge_rubric: str
+    # Appended to the experiment's name, for what its configuration doesn't show.
+    label: Annotated[str | None, Field(max_length=64)] = None
+    # Where the evaluation and traces are logged.
+    weave_project: str = "moz-bugbug/hackbot-evals"
+
+
+class UpliftInputs(AgentInputs):
     """Inputs for the uplift conflict-resolution agent."""
 
     # The stable branch ref to uplift onto, e.g. `release`, `beta`, `esr128`.

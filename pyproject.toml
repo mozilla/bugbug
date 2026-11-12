@@ -25,22 +25,22 @@ dependencies = [
     "langchain-anthropic>=1.3.4,<1.8.0",
     "langchain-classic~=1.0.3",
     "langchain-community~=0.4.1",
-    "langchain-google-genai>=4.2.1,<4.4.0",
+    "langchain-google-genai>=4.2.1,<4.5.0",
     "langchain-mistralai~=1.1.2",
     "langchain-openai>=1.1.14,<1.8.0",
     "langgraph>=1.2.5",
     "libmozdata>=0.2.20",
-    "lmdb>=1.8.1,<2.4.0",
+    "lmdb>=1.8.1,<3.1.0",
     "lxml-html-clean~=0.4.4",
     "markdown2~=2.5.5",
     "matplotlib>=3.10.8,<3.12.0",
     "mercurial~=7.2",
     "microannotate~=0.0.24",
-    "mozci~=2.4.10",
+    "mozci~=2.6.0",
     "numpy~=2.4.3",
     "orjson>=3.11.7,<3.14.0",
     "ortools~=9.15.6755",
-    "pandas~=3.0.1",
+    "pandas>=3.0.1,<3.2.0",
     "psutil~=7.2.2",
     "pyOpenSSL>=0.14",
     "python-dateutil~=2.9.0.post0",
@@ -54,9 +54,9 @@ dependencies = [
     "scikit-learn~=1.7.2",
     "scipy>=1.17.1,<1.19.0",
     "sendgrid~=6.12.5",
-    "shap[plots]>=0.51,<0.53",
+    "shap[plots]>=0.51,<0.55",
     "tabulate~=0.10.0",
-    "taskcluster~=114.0",
+    "taskcluster~=116.0",
     "tenacity~=9.1.4",
     "tqdm>=4.67.3,<4.71.0",
     "unidiff>=0.7.5,<1.1.0",
@@ -68,23 +68,26 @@ dependencies = [
 
 [project.optional-dependencies]
 nlp = [
-    "spacy==3.8.16",
+    "spacy==3.8.18",
 ]
 nn = []
 perf-regression-predictor = [
     "torch==2.14.1",
-    "transformers==5.20.1",
+    "transformers==5.22.1",
+]
+perf-simulation = [
+    "optuna>=5.0.0",
 ]
 
 [dependency-groups]
 test = [
-    "coverage==7.16.2",
-    "hypothesis==6.170.1",
+    "coverage==7.17.1",
+    "hypothesis==6.170.15",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
     "pre-commit==4.7.0",
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.0",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1.post1",
     "pytest-cov==7.1.0",
     "pytest-responses==0.6.0",
     "responses==0.26.3",
@@ -93,7 +96,7 @@ spawn-pipeline = [
     "json-e==4.8.4",
     "pyyaml==6.0.3",
     "requests==2.34.2",
-    "taskcluster==114.0.0",
+    "taskcluster==116.0",
 ]
 
 [project.scripts]
@@ -122,6 +125,8 @@ bugbug-ci-failures-retriever = "scripts.retrieve_ci_failures:main"
 bugbug-try-pushes-retriever = "scripts.retrieve_try_pushes:main"
 bugbug-validate-review-context = "bugbug.tools.code_review.review_context_schema:main"
 bugbug-data-perf-alerts = "scripts.perf_alerts_retriever:main"
+bugbug-data-perf-commit-risk = "scripts.perf_commit_risk_scorer:main"
+bugbug-perf-scheduling-simulator = "scripts.perf_scheduling_simulator:main"
 bugbug-predict-perf-regression = "scripts.perf_regression_predictor:main"
 
 [tool.hatch.version]

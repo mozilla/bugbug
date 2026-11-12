@@ -1,0 +1,14 @@
+FROM mozilla/bugbug-commit-retrieval:latest
+
+# The perf commit risk scorer needs the Mercurial clone tooling of the
+# commit-retrieval image and the perf regression predictor's inference
+# dependencies (PyTorch and Transformers), which no other pipeline image ships.
+RUN --mount=type=bind,source=pyproject.toml,target=/tmp/bugbug/pyproject.toml \
+	--mount=type=bind,source=uv.lock,target=/tmp/bugbug/uv.lock \
+	--mount=type=bind,source=VERSION,target=/tmp/bugbug/VERSION \
+	cd /tmp/bugbug && uv sync --frozen --package bugbug --no-dev --extra perf-regression-predictor --no-install-workspace
+
+RUN --mount=type=bind,target=/tmp/bugbug,rw \
+	cd /tmp/bugbug && uv sync --locked --package bugbug --no-dev --extra perf-regression-predictor --no-editable
+
+CMD bugbug-data-perf-commit-risk --repo-dir /cache/mozilla-central --refresh-repo

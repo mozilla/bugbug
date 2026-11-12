@@ -275,3 +275,19 @@ def _regenerate_with(
 ) -> tuple[dict, Change]:
     generated, changes = build_manifest({"a": cfg}, previous, **kw)  # type: ignore[arg-type]
     return generated["agents"]["a"], changes["a"]
+
+
+def test_package_versions(tmp_path: Path) -> None:
+    for name, content in (("agents/a", "0.3.1\n"), ("services/ui", "1.2.0")):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "VERSION").write_text(content)
+    (tmp_path / "services" / "none").mkdir(parents=True)
+    (tmp_path / "services" / "two").mkdir(parents=True)
+    (tmp_path / "services" / "two" / "VERSION").write_text("1.0\n2.0\n")
+
+    assert manifest.package_version(tmp_path, "agents/a") == "0.3.1"
+    assert manifest.package_version(tmp_path, "services/ui") == "1.2.0"
+    with pytest.raises(manifest.ManifestError, match="no VERSION file"):
+        manifest.package_version(tmp_path, "services/none")
+    with pytest.raises(manifest.ManifestError, match="one version"):
+        manifest.package_version(tmp_path, "services/two")
