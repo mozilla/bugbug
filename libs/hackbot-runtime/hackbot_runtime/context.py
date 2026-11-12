@@ -16,7 +16,6 @@ import os
 import tempfile
 import uuid
 from functools import cached_property
-from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -123,16 +122,6 @@ class HackbotContext(BaseSettings):
     @property
     def config(self) -> HackbotConfig:
         return self._config
-
-    @cached_property
-    def agent_version(self) -> str | None:
-        """The version in the agent's pyproject.toml, or None when it isn't installed."""
-        if self._config.agent_name is None:
-            return None
-        try:
-            return metadata.version(f"hackbot-agent-{self._config.agent_name}")
-        except metadata.PackageNotFoundError:
-            return None
 
     # --- Platform capabilities (declared in hackbot.toml) ------------- #
 

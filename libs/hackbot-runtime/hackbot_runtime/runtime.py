@@ -170,7 +170,7 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
-    payload["agent_version"] = ctx.agent_version
+    payload["agent_version"] = ctx.config.agent_version
 
     try:
         _publish_log(ctx)
