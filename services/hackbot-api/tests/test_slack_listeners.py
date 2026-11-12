@@ -436,14 +436,31 @@ class TestStartAgentRun:
         self.fake_ack.assert_awaited_once()
         assert "Slack said no" in caplog.text
 
-    async def test_a_button_outside_an_actions_block_is_logged_and_left(self, caplog):
-        # A button can also be a section's accessory, which is not supported yet.
+    async def test_a_section_accessory_button_is_replaced_with_the_note(self):
+        section = {
+            "type": "section",
+            "block_id": BLOCK_ID,
+            "text": {"type": "mrkdwn", "text": "Bug 1234"},
+            "accessory": _action(),
+        }
+        self.body["message"]["blocks"] = [section]
+
+        await self._call()
+
+        blocks = self._updated_blocks()
+        assert blocks[0] == {k: v for k, v in section.items() if k != "accessory"}
+        assert blocks[1]["type"] == "context"
+        assert "<@U0CLICKER>" in blocks[1]["elements"][0]["text"]
+        assert RUN_ID in blocks[1]["elements"][0]["text"]
+
+    async def test_a_section_whose_accessory_is_another_button_is_left(self, caplog):
+        other = {"type": "button", "action_id": "something_else", "value": "x"}
         self.body["message"]["blocks"] = [
             {
                 "type": "section",
                 "block_id": BLOCK_ID,
                 "text": {"type": "mrkdwn", "text": "Bug 1234"},
-                "accessory": _action(),
+                "accessory": other,
             }
         ]
 
@@ -451,7 +468,19 @@ class TestStartAgentRun:
             await self._call()
 
         assert self._edits() == []
-        assert "'section' block" in caplog.text
+        assert "not its section's accessory" in caplog.text
+        self.fake_ack.assert_awaited_once()
+
+    async def test_a_button_in_an_unsupported_block_is_logged_and_left(self, caplog):
+        self.body["message"]["blocks"] = [
+            {"type": "input", "block_id": BLOCK_ID, "element": _action()}
+        ]
+
+        with caplog.at_level(logging.ERROR):
+            await self._call()
+
+        assert self._edits() == []
+        assert "'input' block" in caplog.text
         self.fake_ack.assert_awaited_once()
 
     async def test_a_message_without_the_button_is_left_alone(self):
