@@ -14,20 +14,20 @@ from urllib.parse import urlparse
 import orjson
 import requests
 import zstandard
-from redis import Redis
-from urllib3.util.retry import Retry
-
-from bugbug import bugzilla, build_platforms, db, repository, test_scheduling, utils
+from bugbug import (bugzilla, build_platforms, db, repository, test_scheduling,
+                    utils)
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testconfigselect, testselect
-from bugbug.models.perf_regression_predictor import (
-    MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR,
-)
+from bugbug.models.perf_regression_predictor import \
+    MODEL_IDENTIFIER as PERF_REGRESSION_PREDICTOR
 from bugbug.perf.calibration import Calibration, load_calibrations
 from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
 from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
+from redis import Redis
+from urllib3.util.retry import Retry
+
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +40,7 @@ MODELS_NAMES = [
     "invalidcompatibilityreport",
     "needsdiagnosis",
     "regression",
+    "regressor",
     "stepstoreproduce",
     "spambug",
     "testlabelselect",
