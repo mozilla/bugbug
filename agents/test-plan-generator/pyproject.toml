@@ -1,6 +1,6 @@
 [project]
 name = "hackbot-agent-test-plan-generator"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cloud Run Job image that generates and runs Firefox QA test plans"
 requires-python = ">=3.14"
 dependencies = [
@@ -17,6 +17,10 @@ hackbot-runtime = { workspace = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hackbot_agents"]
