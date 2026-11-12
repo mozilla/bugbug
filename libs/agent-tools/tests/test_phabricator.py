@@ -32,6 +32,7 @@ def _inline(
     is_done=False,
     reply_to=None,
     author="PHID-USER-1",
+    suggestion=None,
 ) -> dict:
     """A transaction.search 'inline' transaction, shaped as Conduit returns it."""
     return {
@@ -57,6 +58,8 @@ def _inline(
             "length": length,
             "isDone": is_done,
             "replyToCommentPHID": reply_to,
+            "hasSuggestion": suggestion is not None,
+            "suggestionText": suggestion or "",
         },
     }
 
@@ -257,6 +260,18 @@ async def test_inline_length_floors_at_one_line():
         "comments"
     ][0]["position"]
     assert (position["start_line"], position["end_line"]) == (10, 10)
+
+
+async def test_inline_comment_carries_its_suggested_edit():
+    ctx = _ctx(
+        search_revision_by_id=_revision(),
+        search_transactions=[_inline(suggestion="let x = 1;")],
+        search_users={},
+    )
+    comment = (await phabricator.get_revision_comments(ctx, revision_id=42))[
+        "comments"
+    ][0]
+    assert comment["suggestion"] == "let x = 1;"
 
 
 async def test_inline_comment_on_older_diff_is_flagged():

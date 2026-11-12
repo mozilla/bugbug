@@ -47,6 +47,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
 | `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
 | `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| `feedback.report_problem`   | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
 | `agents.start_run`          | Start another agent on this run's output   | `agent`                                                         |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
@@ -97,7 +98,10 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    `run_actions` row (`pending`), keyed `(run_id, idx)`. This happens for _all_ succeeded
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
-   pending rows are applied immediately. Otherwise they wait for a human to click apply.
+   pending rows are applied immediately, once any agent-specific consent check passes.
+   Otherwise they wait for a human to click apply. The agent's `always_apply_actions`
+   and `never_apply_actions` override this per action type. `require_review=true` on
+   the run holds every action, including `always_apply_actions`.
 3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
    handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
    without knowing GCS is behind it.
@@ -118,7 +122,8 @@ Agents stay small and single-purpose; one hands its work on to the next by recor
 only among the agents its code declared with `allow_agents(recorder, [...])`; any other
 name is refused as a tool error, and a run that declared none can start nothing. Nothing
 starts until the run has succeeded and the action is applied, so the parent agent lists it
-in `always_apply_actions`.
+in `always_apply_actions`. On a run with `require_review=true`, the next agent starts only
+once someone applies the action.
 
 The handler starts the named agent with `{"parent_run_id": <this run>}`
 ([agents_handler.py](../../services/hackbot-api/app/action_handlers/agents_handler.py)). An

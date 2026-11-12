@@ -16,11 +16,12 @@ RUN_ID = "d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6"
 
 
 def _client(**kwargs) -> HackbotClient:
-    return HackbotClient(
-        base_url=kwargs.pop("base_url", "https://hackbot.example"),
-        api_key=kwargs.pop("api_key", "secret"),
-        **kwargs,
-    )
+    defaults = {
+        "base_url": "https://hackbot.example",
+        "api_key": "secret",
+    }
+    defaults.update(kwargs)
+    return HackbotClient(**defaults)
 
 
 def _capture_post(monkeypatch, response: httpx.Response) -> dict:
@@ -30,12 +31,10 @@ def _capture_post(monkeypatch, response: httpx.Response) -> dict:
     class _FakeAsyncClient:
         def __init__(self, timeout=None):
             captured["timeout"] = timeout
+            captured["instances"] = captured.get("instances", 0) + 1
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
+        async def aclose(self):
+            captured["closed"] = True
 
         async def post(self, url, json=None, headers=None, params=None):
             captured.update(url=url, json=json, headers=headers, params=params)
@@ -85,6 +84,7 @@ async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch)
     assert run.is_new is True
     assert captured == {
         "timeout": 30.0,
+        "instances": 1,
         "url": "https://hackbot.example/agents/bug-fix/runs",
         "json": {"bug_id": 1234},
         "headers": {
@@ -180,6 +180,18 @@ async def test_trigger_run_sends_the_dedupe_key_as_a_query_parameter(monkeypatch
     )
 
     assert captured["params"] == {"dedupe_key": "push:autoland:abc123"}
+
+
+async def test_one_client_reuses_a_single_http_client(monkeypatch):
+    captured = _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    client = _client()
+    await client.apply_actions(RUN_ID)
+    await client.apply_actions(RUN_ID)
+    await client.close()
+
+    assert captured["instances"] == 1
+    assert captured["closed"] is True
 
 
 async def test_apply_actions_posts_to_the_runs_apply_endpoint(monkeypatch):
@@ -295,3 +307,43 @@ async def test_apply_actions_rejects_a_success_response_that_is_not_json(monkeyp
 
     with pytest.raises(HackbotInvalidResponseError, match="not JSON"):
         await _client().apply_actions(RUN_ID)
+
+
+async def test_trigger_run_with_service_account_auth(monkeypatch):
+    """Client mints a Bearer token from the key file, audience is base_url."""
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    class _FakeCredentials:
+        token = None
+
+        @property
+        def token_state(self):
+            if self.token is None:
+                return client_module.credentials.TokenState.INVALID
+            return client_module.credentials.TokenState.FRESH
+
+        def refresh(self, request):
+            self.token = "fake.jwt.token"
+
+    def mock_from_service_account_file(filename, target_audience):
+        captured.update(filename=filename, audience=target_audience)
+        return _FakeCredentials()
+
+    monkeypatch.setattr(
+        client_module.service_account.IDTokenCredentials,
+        "from_service_account_file",
+        mock_from_service_account_file,
+    )
+
+    client = _client(api_key="", key_file="/path/key.json")
+    await client.trigger_run("bug-fix", {"bug_id": 1234})
+
+    assert captured["filename"] == "/path/key.json"
+    assert captured["audience"] == "https://hackbot.example"
+    assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}

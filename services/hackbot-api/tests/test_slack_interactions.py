@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 from app.config import settings
+from app.hackbot_client import get_hackbot_client
 from app.main import app
 from app.routers import webhooks
 from app.slack.app import build_request_handler
@@ -97,7 +98,7 @@ def client(monkeypatch, hackbot_client):
     # and no state carries over; `app.state` would otherwise hand every test
     # whichever handler the first one happened to build.
     app.dependency_overrides[webhooks.get_slack_handler] = build_request_handler
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: hackbot_client
+    app.dependency_overrides[get_hackbot_client] = lambda: hackbot_client
     try:
         yield TestClient(app, raise_server_exceptions=False)
     finally:

@@ -30,6 +30,7 @@ class Run(Base):
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
     requested_by: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    requested_via: Mapped[str | None] = mapped_column(String, nullable=True)
     dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -78,4 +79,9 @@ class RunAction(Base):
     )
     applied_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )

@@ -20,9 +20,11 @@ import mozci.push
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import commit_features, db, repository, test_scheduling
+from bugbug import commit_features, db, repository, test_scheduling, utils
 from bugbug.test_scheduling import PushResult
 from bugbug.utils import create_tar_zst, zstd_compress
+
+utils.setup_mozci()
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -141,16 +143,31 @@ class Retriever(object):
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
 
-        first_push_id = mozci.push.make_push_objects(
+        # Use a three-day window, as there might be days without any push
+        # (e.g. weekends or holidays).
+        first_window_end = from_date + relativedelta(days=3)
+        first_pushes = mozci.push.make_push_objects(
             from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=(from_date + relativedelta(days=1)).strftime("%Y-%m-%d"),
+            to_date=first_window_end.strftime("%Y-%m-%d"),
             branch="autoland",
-        )[0].id
-        last_push_id = mozci.push.make_push_objects(
-            from_date=(to_date - relativedelta(days=1)).strftime("%Y-%m-%d"),
+        )
+        if not first_pushes:
+            raise Exception(
+                f"No autoland pushes found between {from_date:%Y-%m-%d} and {first_window_end:%Y-%m-%d}"
+            )
+        first_push_id = first_pushes[0].id
+
+        last_window_start = to_date - relativedelta(days=3)
+        last_pushes = mozci.push.make_push_objects(
+            from_date=last_window_start.strftime("%Y-%m-%d"),
             to_date=to_date.strftime("%Y-%m-%d"),
             branch="autoland",
-        )[-1].id
+        )
+        if not last_pushes:
+            raise Exception(
+                f"No autoland pushes found between {last_window_start:%Y-%m-%d} and {to_date:%Y-%m-%d}"
+            )
+        last_push_id = last_pushes[-1].id
 
         total_pushes = last_push_id - first_push_id + 1
 
@@ -250,7 +267,9 @@ class Retriever(object):
             # To add runnables that didn't run on a push as (verified) negatives, we need to know on
             # which pushes each runnable ran, and when each push was backed out.
             if non_run_negatives:
-                runs, rev_to_push = test_scheduling.index_runs(push_data_iter())
+                runs, rev_to_push, regressions = test_scheduling.index_runs(
+                    push_data_iter()
+                )
                 backout_push: dict[int, int] = {}
                 for node, commit_data in commit_map.items():
                     backedoutby = commit_data["backedoutby"]
@@ -355,6 +374,7 @@ class Retriever(object):
                             runs,
                             non_run_negatives,
                             random.Random(i),
+                            regressions,
                         )
                     )
                     runnables_to_consider += sorted(non_run)

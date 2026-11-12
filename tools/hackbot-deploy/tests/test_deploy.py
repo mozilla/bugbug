@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 import pytest
-from hackbot_deploy import cli, deploy
+from hackbot_deploy import cli, deploy, release
 from hackbot_deploy.deploy import (
     ENVIRONMENTS,
     DeployError,
@@ -77,12 +77,17 @@ class FakeCloud:
         }
 
     def build(
-        self, ref: str, config_hash: str, created: str = "2026-10-09T10:00:00Z"
+        self,
+        ref: str,
+        config_hash: str,
+        created: str = "2026-10-09T10:00:00Z",
+        version: str = "1.0.0",
     ) -> str:
         self.labels[ref] = {
             deploy.LABEL_CONFIG_HASH: config_hash,
             deploy.LABEL_CREATED: created,
             deploy.LABEL_REVISION: "abc123",
+            deploy.LABEL_VERSION: version,
         }
         return ref
 
@@ -789,3 +794,197 @@ def test_a_service_promotion_waits_in_the_services_environment(
     planned = deploy.promotion(services, "services/hackbot-api", DEV, STAGE)
     assert planned is not None
     assert planned["environment"] == "hackbot-prod-services"
+
+
+def test_the_record_carries_the_version(cloud: FakeCloud) -> None:
+    ship(cloud, 1)
+    assert cloud.record(DEV, "agents/bug-fix")["version"] == "1.0.0"
+
+
+def test_a_release_is_a_version_new_to_the_environment(cloud: FakeCloud) -> None:
+    assert deploy.release_needed(cloud, DEV, "agents/bug-fix", "1.0.0") == (True, None)
+    ship(cloud, 1)
+    assert deploy.release_needed(cloud, DEV, "agents/bug-fix", "1.0.0") == (
+        False,
+        "abc123",
+    )
+    assert deploy.release_needed(cloud, DEV, "agents/bug-fix", "1.1.0") == (
+        True,
+        "abc123",
+    )
+
+
+def test_a_build_waits_for_older_builds_of_its_trigger() -> None:
+    fake = FakeCloud()
+    fake.builds = [
+        build("older", "2026-10-10T13:00:00Z"),
+        build("this", "2026-10-10T13:25:40Z"),
+    ]
+    waited: list[list[str]] = []
+
+    def older_finishes(seconds: float) -> None:
+        fake.builds[0]["status"] = "SUCCESS"
+
+    deploy.wait_for_older_builds(
+        fake,
+        "p",
+        "us-west1",
+        "this",
+        timeout_seconds=60,
+        on_wait=waited.append,
+        sleep=older_finishes,
+    )
+    assert waited == [["older"]]
+
+
+def test_waiting_gives_up_after_the_timeout() -> None:
+    fake = FakeCloud()
+    fake.builds = [
+        build("older", "2026-10-10T13:00:00Z"),
+        build("this", "2026-10-10T13:25:40Z"),
+    ]
+    now = iter([0.0, 30.0, 61.0])
+    with pytest.raises(DeployError, match="still running after 60s"):
+        deploy.wait_for_older_builds(
+            fake,
+            "p",
+            "us-west1",
+            "this",
+            timeout_seconds=60,
+            sleep=lambda seconds: None,
+            clock=lambda: next(now),
+        )
+
+
+def write_agent(root, agent: str, version: str, broker: bool = False) -> None:
+    (root / "agents" / agent).mkdir(parents=True)
+    (root / "agents" / agent / "VERSION").write_text(f"{version}\n")
+    table = '[deploy]\nruntime = "cloud_run_job"\ncpu = "1"\nmemory = "1Gi"\n'
+    if broker:
+        table += "[deploy.broker]\n"
+    (root / "agents" / agent / "hackbot.toml").write_text(table)
+
+
+@pytest.fixture
+def repo(tmp_path, cloud: FakeCloud):
+    """bug-fix 1.0.0 already in stage, test-repair 2.0.0 never deployed."""
+    write_agent(tmp_path, "bug-fix", "1.0.0", broker=True)
+    write_agent(tmp_path, "test-repair", "2.0.0")
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    deploy_agent(
+        cloud,
+        "bug-fix",
+        STAGE,
+        {
+            "agent": cloud.build(image("bug-fix-agent", 1), "h2"),
+            "broker": cloud.build(image("bug-fix-broker", 1), "h2"),
+        },
+    )
+    return tmp_path
+
+
+def test_a_push_releases_what_changed_version(cloud: FakeCloud, repo) -> None:
+    planned = release.plan(cloud, STAGE, repo, pusher="marco-c")
+    assert [(p.name, p.version, p.previous) for p in planned] == [
+        ("agents/test-repair", "2.0.0", None)
+    ]
+    assert planned[0].config_hash and not planned[0].has_broker
+
+
+@pytest.mark.parametrize("pusher", ["", "$(push.pusher.name)"])
+def test_a_build_run_by_hand_releases_regardless(
+    cloud: FakeCloud, repo, pusher: str
+) -> None:
+    planned = release.plan(cloud, STAGE, repo, names=["agents/bug-fix"], pusher=pusher)
+    assert [(p.name, p.previous, p.has_broker) for p in planned] == [
+        ("agents/bug-fix", "abc123", True)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("branch", "expected"),
+    [
+        ("dev/agents/bug-fix", "agents/bug-fix"),
+        ("dev/agents/bug-fix/suhaib-retry", "agents/bug-fix"),
+        ("dev/services/hackbot-api/x/y", "services/hackbot-api"),
+    ],
+)
+def test_dev_branches_name_what_to_release(branch: str, expected: str) -> None:
+    assert release.from_branch(branch) == expected
+
+
+@pytest.mark.parametrize(
+    "branch", ["master", "dev/agents/", "dev/agents/$(rm)", "dev/other/bug-fix"]
+)
+def test_other_branches_are_refused(branch: str) -> None:
+    with pytest.raises(DeployError, match="expected dev/agents"):
+        release.from_branch(branch)
+
+
+def test_dev_releases_the_branch_always(cloud: FakeCloud, repo) -> None:
+    planned = release.plan(
+        cloud, DEV, repo, branch="dev/agents/bug-fix/try", pusher="x"
+    )
+    assert [p.name for p in planned] == ["agents/bug-fix"]
+
+
+def test_plan_lines_round_trip() -> None:
+    item = release.Planned("agents/bug-fix", "1.0.0", None, "h2", True)
+    assert item.line() == "agents/bug-fix 1.0.0 - h2 broker"
+    assert release.Planned.parse(item.line()) == item
+    service = release.Planned("services/hackbot-api", "0.2.0", "abc")
+    assert release.Planned.parse(service.line()) == service
+
+
+def test_release_deploys_what_built_and_names_what_failed(
+    cloud: FakeCloud, tmp_path
+) -> None:
+    (tmp_path / "bug-fix-agent.digest").write_text(
+        cloud.build(image("bug-fix-agent", 2), "h2") + "\n"
+    )
+    (tmp_path / "bug-fix-broker.digest").write_text(
+        cloud.build(image("bug-fix-broker", 2), "h2") + "\n"
+    )
+    # Dev hasn't applied test-repair's shape.
+    (tmp_path / "test-repair-agent.digest").write_text(
+        cloud.build(image("test-repair-agent", 2), "h1") + "\n"
+    )
+    planned = [
+        release.Planned("agents/bug-fix", "1.1.0", None, "h2", True),
+        release.Planned("agents/test-repair", "2.1.0", None, "h1", False),
+        release.Planned("agents/build-repair", "3.0.0", None, "h3", False),
+    ]
+    released, failed = release.run(cloud, DEV, planned, tmp_path, actor="test")
+    assert released == ["agents/bug-fix 1.1.0"]
+    assert failed == [
+        "agents/test-repair: its shape isn't applied in dev; apply the infra PR, then rerun",
+        "agents/build-repair: its images didn't build",
+    ]
+    assert cloud.record(DEV, "agents/bug-fix")["images"]["agent"] == image(
+        "bug-fix-agent", 2
+    )
+
+
+def test_release_plan_reads_the_build_environment(
+    cloud: FakeCloud, repo, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(cli, "GoogleCloud", lambda: cloud)
+    monkeypatch.setenv("AGENTS", "bug-fix")
+    monkeypatch.setenv("PUSHER", "$(push.pusher.name)")  # a run by hand
+    monkeypatch.setenv("BRANCH_NAME", "master")
+    plan = tmp_path / "plan.txt"
+    with pytest.raises(SystemExit) as exit_:
+        cli.app(
+            [
+                "release-plan",
+                "--env",
+                "stage",
+                "--output",
+                str(plan),
+                "--root",
+                str(repo),
+            ]
+        )
+    assert exit_.value.code == 0
+    assert plan.read_text().split()[:3] == ["agents/bug-fix", "1.0.0", "abc123"]

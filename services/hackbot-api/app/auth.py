@@ -3,6 +3,7 @@ import hmac
 import logging
 
 from fastapi import Header, HTTPException, Request, status
+from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
@@ -46,6 +47,48 @@ async def require_phabricator_signature(
         )
 
 
+def verify_github_signature(
+    raw_body: bytes, signature: str | None, secret: str
+) -> bool:
+    """Constant-time-check GitHub's ``X-Hub-Signature-256``.
+
+    GitHub signs each delivery with HMAC-SHA256 over the raw request body, keyed
+    by the App's webhook secret, and sends ``sha256=<hex digest>``. Only SHA-256
+    is accepted: the legacy ``X-Hub-Signature`` (SHA-1) header is never read.
+    """
+    if not secret or not signature or not signature.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    # Bytes, because compare_digest raises on non-ASCII strings, and a header
+    # like "sha256=é" must be a 401, not a 500.
+    return hmac.compare_digest(f"sha256={expected}".encode(), signature.encode())
+
+
+async def require_github_signature(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+) -> None:
+    """Reject the request unless GitHub's webhook signature is valid.
+
+    The App is optional until deployed, so without it the webhook answers 503
+    (not configured) rather than 401 (bad signature). With it, the secret is
+    required at startup.
+    """
+    if settings.github is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GitHub webhook is not configured",
+        )
+    raw = await request.body()
+    if not verify_github_signature(
+        raw, x_hub_signature_256, settings.github.webhook_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing webhook signature",
+        )
+
+
 def require_bugzilla_webhook_secret(
     x_bugzilla_webhook_secret: str = Header(),
 ) -> None:
@@ -59,19 +102,50 @@ def require_bugzilla_webhook_secret(
         )
 
 
-async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    if not settings.external_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="API key not configured",
-        )
-    if x_api_key is None or not hmac.compare_digest(
-        x_api_key, settings.external_api_key
-    ):
+def require_api_key(
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> str | None:
+    """Accept either API key (X-API-Key) or service account token (Bearer).
+
+    Returns the service account email, or None for the API key.
+    """
+    if x_api_key is not None:
+        if settings.external_api_key and hmac.compare_digest(
+            x_api_key, settings.external_api_key
+        ):
+            return None
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-API-Key",
+            detail="Invalid X-API-Key",
         )
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing credentials",
+        )
+
+    try:
+        claims = id_token.verify_oauth2_token(
+            authorization.removeprefix("Bearer "),
+            google_requests.Request(),
+            audience=settings.hackbot_api_url,
+        )
+    except ValueError, google_auth_exceptions.GoogleAuthError:
+        log.warning("Rejected request with invalid OIDC credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        ) from None
+
+    email = claims.get("email")
+    if email not in settings.allowed_service_accounts:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service account not authorized",
+        )
+    return email
 
 
 async def require_push_auth(authorization: str | None = Header(default=None)) -> None:

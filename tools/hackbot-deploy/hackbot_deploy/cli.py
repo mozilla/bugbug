@@ -13,7 +13,7 @@ from typing import Annotated, Any
 
 import typer
 
-from hackbot_deploy import deploy, manifest
+from hackbot_deploy import deploy, manifest, release
 from hackbot_deploy.gcp import GoogleCloud
 
 EXIT_WAITING_FOR_INFRA = 3
@@ -33,6 +33,7 @@ Env = StrEnum("Env", sorted(deploy.ENVIRONMENTS))
 
 AgentsDir = Annotated[Path, typer.Option(help="Where the agents live.")]
 ServicesDir = Annotated[Path, typer.Option(help="Where the services live.")]
+Root = Annotated[Path, typer.Option(help="The repository root.")]
 Name = Annotated[
     str,
     typer.Argument(help="What to deploy: agents/<name> or services/<name>."),
@@ -217,19 +218,102 @@ def resolve_images(
 
 
 @app.command()
-def check_build(
+def wait_turn(
     build_id: str,
     project: Annotated[str, typer.Option()],
     location: Annotated[str, typer.Option()],
+    timeout: Annotated[
+        int, typer.Option(help="Seconds to wait before failing.")
+    ] = 3600,
 ) -> None:
-    """Fail if an older build of this build's trigger is still running."""
-    older = deploy.older_builds(GoogleCloud(), project, location, build_id)
-    if older:
-        print(
-            f"an older build of this trigger is still running ({', '.join(older)}); "
-            "rerun this trigger once it finishes to deploy this commit",
+    """Wait until no older build of this build's trigger is still running."""
+    deploy.wait_for_older_builds(
+        GoogleCloud(),
+        project,
+        location,
+        build_id,
+        timeout_seconds=timeout,
+        on_wait=lambda older: print(
+            f"waiting for older builds of this trigger: {', '.join(older)}",
             file=sys.stderr,
-        )
+        ),
+    )
+
+
+@app.command()
+def release_plan(
+    env: EnvOption,
+    output: Annotated[Path, typer.Option(help="Where to write the plan.")],
+    names: Annotated[
+        list[str] | None,
+        typer.Argument(help="What to consider (default: every agent with [deploy])."),
+    ] = None,
+    agents: Annotated[
+        str,
+        typer.Option(
+            envvar="AGENTS", help="Comma-separated agents to consider instead."
+        ),
+    ] = "",
+    branch: Annotated[
+        str,
+        typer.Option(
+            envvar="BRANCH_NAME",
+            help="The branch built: in dev, it names what to release.",
+        ),
+    ] = "",
+    pusher: Annotated[
+        str,
+        typer.Option(
+            envvar="PUSHER", help="Who pushed; none means the build was run by hand."
+        ),
+    ] = "",
+    root: Root = Path("."),
+) -> None:
+    """Write what a build releases into an environment (see release.py).
+
+    dev releases what the branch names, always. Elsewhere, a push releases
+    what changed version; a build run by hand releases everything considered.
+    The build configs pass the branch, agents and pusher in the environment,
+    so none of them is ever part of a shell command.
+    """
+    if agents:
+        names = [f"{deploy.AGENTS}/{a.strip()}" for a in agents.split(",") if a.strip()]
+    planned = release.plan(
+        GoogleCloud(),
+        deploy.ENVIRONMENTS[env],
+        root,
+        names=names,
+        branch=branch,
+        pusher=pusher,
+    )
+    for item in planned:
+        print(f"release  {item.name} {item.version}", file=sys.stderr)
+    if not planned:
+        print(f"nothing to release to {env}", file=sys.stderr)
+    output.write_text("".join(f"{item.line()}\n" for item in planned))
+
+
+@app.command("release")
+def release_(
+    env: EnvOption,
+    plan: Annotated[Path, typer.Option(help="The plan release-plan wrote.")],
+    digests: Annotated[
+        Path, typer.Option(help="Where the build wrote its .digest files.")
+    ],
+) -> None:
+    """Deploy what the plan lists and the build built; fail naming what didn't make it."""
+    planned = [release.Planned.parse(line) for line in plan.read_text().splitlines()]
+    cloud = GoogleCloud()
+    released, failed = release.run(
+        cloud, deploy.ENVIRONMENTS[env], planned, digests, actor=_actor(cloud)
+    )
+    print(f"Released to {env}:")
+    for line in released or ["nothing"]:
+        print(f"  {line}")
+    if failed:
+        print("Failed:")
+        for line in failed:
+            print(f"  {line}")
         raise typer.Exit(1)
 
 

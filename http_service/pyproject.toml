@@ -23,7 +23,7 @@ dependencies = [
     "flask-apispec~=0.11.4",
     "flask-cors~=6.0.2",
     "gunicorn>=25.1,<26.3",
-    "kombu~=5.6.2",
+    "kombu>=5.6.2,<5.8.0",
     "marshmallow>=3.18.0",
     "rq>=2.7,<2.13",
     "rq-dashboard>=0.8.6,<0.10.0",
@@ -38,6 +38,7 @@ perf-regression-predictor = ["bugbug[perf-regression-predictor]"]
 [project.scripts]
 bugbug-http-worker = "bugbug_http.worker:main"
 bugbug-http-pulse-listener = "bugbug_http.listener:main"
+bugbug-http-refresh-data = "bugbug_http.refresh:main"
 
 [tool.uv.sources]
 bugbug = { workspace = true }
