@@ -2361,7 +2361,6 @@ wheels = [
 
 [[package]]
 name = "hackbot-agent-autowebcompat-diagnosis"
-version = "0.1.0"
 source = { editable = "agents/autowebcompat-diagnosis" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
@@ -2396,7 +2395,6 @@ requires-dist = [
 
 [[package]]
 name = "hackbot-agent-autowebcompat-intervention"
-version = "0.1.0"
 source = { editable = "agents/autowebcompat-intervention" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
@@ -2440,7 +2438,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-autowebcompat-repro"
-version = "0.1.0"
 source = { editable = "agents/autowebcompat-repro" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
@@ -2475,7 +2472,6 @@ requires-dist = [
 
 [[package]]
 name = "hackbot-agent-bug-fix"
-version = "0.1.0"
 source = { editable = "agents/bug-fix" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
@@ -2517,7 +2513,6 @@ provides-extras = ["dev", "a11y"]
 
 [[package]]
 name = "hackbot-agent-build-repair"
-version = "0.1.0"
 source = { editable = "agents/build-repair" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
@@ -2555,7 +2550,6 @@ provides-extras = ["eval"]
 
 [[package]]
 name = "hackbot-agent-dataset-eval"
-version = "0.1.0"
 source = { editable = "agents/dataset-eval" }
 dependencies = [
     { name = "agent-tools", extra = ["firefox"] },
@@ -2585,7 +2579,6 @@ provides-extras = ["a11y"]
 
 [[package]]
 name = "hackbot-agent-frontend-triage"
-version = "0.1.0"
 source = { editable = "agents/frontend-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
@@ -2619,7 +2612,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-test-plan-generator"
-version = "0.1.0"
 source = { editable = "agents/test-plan-generator" }
 dependencies = [
     { name = "claude-agent-sdk" },
@@ -2640,7 +2632,6 @@ requires-dist = [
 
 [[package]]
 name = "hackbot-agent-test-repair"
-version = "0.1.0"
 source = { editable = "agents/test-repair" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
@@ -2665,7 +2656,6 @@ requires-dist = [
 
 [[package]]
 name = "hackbot-agent-test-repair-fix"
-version = "0.1.0"
 source = { editable = "agents/test-repair-fix" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "firefox"] },
@@ -2684,7 +2674,6 @@ requires-dist = [
 
 [[package]]
 name = "hackbot-agent-uplift-resolve"
-version = "0.1.0"
 source = { editable = "agents/uplift-resolve" }
 dependencies = [
     { name = "agent-tools", extra = ["searchfox", "vcs"] },
@@ -2722,7 +2711,6 @@ provides-extras = ["test"]
 
 [[package]]
 name = "hackbot-api"
-version = "0.1.0"
 source = { editable = "services/hackbot-api" }
 dependencies = [
     { name = "aiohttp" },
