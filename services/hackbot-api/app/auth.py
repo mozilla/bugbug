@@ -103,11 +103,13 @@ def require_bugzilla_webhook_secret(
 
 
 def require_api_key(
+    request: Request,
     x_api_key: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
 ) -> str | None:
     """Accept either API key (X-API-Key) or service account token (Bearer).
 
+    Service accounts with the "read" role may only make read requests.
     Returns the service account email, or None for the API key.
     """
     if x_api_key is not None:
@@ -140,10 +142,16 @@ def require_api_key(
         ) from None
 
     email = claims.get("email")
-    if email not in settings.allowed_service_accounts:
+    role = settings.service_account_roles.get(email)
+    if role is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Service account not authorized",
+        )
+    if role == "read" and request.method != "GET":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Read-only access",
         )
     return email
 
