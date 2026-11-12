@@ -118,9 +118,12 @@ def _discover_config_path(entrypoint: Callable) -> Path | None:
 
 def _resolve_config(entrypoint: Callable, config: ConfigArg) -> HackbotConfig:
     if isinstance(config, HackbotConfig):
-        return config
-    path = config if isinstance(config, Path) else _discover_config_path(entrypoint)
-    return load_config(path) if path else HackbotConfig()
+        parsed = config
+    else:
+        path = config if isinstance(config, Path) else _discover_config_path(entrypoint)
+        parsed = load_config(path) if path else HackbotConfig()
+    parsed.agent_name = resolve_agent_name(entrypoint)
+    return parsed
 
 
 def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | None:
@@ -131,7 +134,6 @@ def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | N
     the entry point's module), falling back to an empty config when there's none.
     """
     parsed = _resolve_config(entrypoint, config)
-    parsed.agent_name = resolve_agent_name(entrypoint)
     try:
         return HackbotContext.from_config_obj(parsed)
     except ValidationError as exc:
