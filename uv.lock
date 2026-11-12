@@ -2613,7 +2613,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-perf-triage"
-version = "0.1.0"
 source = { editable = "agents/perf-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
