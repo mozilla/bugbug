@@ -26,6 +26,7 @@ from agent_tools.registry import ToolError
 from autowebcompat_tools.browser import FirefoxBrowsers
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.mcp_servers import NODE_MODULES, build_firefox_devtools_server
 from autowebcompat_tools.task import RunTracker, StructuredTask, TaskConfig
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
@@ -42,7 +43,6 @@ from .config import (
     FOLLOW_UP_ACTIONS,
     INTERVENTION_ACTIONS,
 )
-from .mcp_servers import build_firefox_devtools_server
 from .result import (
     InterventionPlanResult,
     InterventionResult,
@@ -54,7 +54,6 @@ logger = logging.getLogger("autowebcompat-intervention")
 HERE = Path(__file__).resolve().parent
 
 WORK_DIR = Path("/app/autowebcompat-intervention")
-NODE_MODULES = Path("/app/node_modules")
 
 
 class PromptLibrary:

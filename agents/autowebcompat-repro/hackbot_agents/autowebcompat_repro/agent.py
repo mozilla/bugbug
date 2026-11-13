@@ -18,6 +18,10 @@ from typing import Any
 from autowebcompat_tools.browser import ChromeBrowsers, FirefoxBrowsers
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.mcp_servers import (
+    build_chrome_devtools_server,
+    build_firefox_devtools_server,
+)
 from autowebcompat_tools.result import ResultT
 from autowebcompat_tools.task import RunTracker, TaskConfig
 from autowebcompat_tools.task import Task as BaseTask
@@ -25,7 +29,6 @@ from claude_agent_sdk import McpServerConfig
 from pydantic import BaseModel
 
 from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
-from .mcp_servers import build_chrome_devtools_server, build_firefox_devtools_server
 from .result import (
     RESULT_SERVER_NAME,
     BugReproductionResult,
