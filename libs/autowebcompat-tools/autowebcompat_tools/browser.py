@@ -13,7 +13,7 @@ import mozdownload
 import mozinstall
 import requests
 
-logger = logging.getLogger("autowebcompat-repro")
+logger = logging.getLogger(__name__)
 
 # How many earlier days of Nightly to try if the latest build can't be fetched.
 NIGHTLY_FALLBACK_DAYS = 3
