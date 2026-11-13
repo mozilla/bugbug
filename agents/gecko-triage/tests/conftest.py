@@ -16,7 +16,6 @@ import pytest
 # config is imported, which reads it.
 os.environ.setdefault("TEAM", "media")
 
-import hackbot_agents.gecko_triage.__main__  # noqa: E402, F401
 from claude_agent_sdk import ResultMessage  # noqa: E402
 from hackbot_agents.gecko_triage import (  # noqa: E402
     agent,

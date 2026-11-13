@@ -23,10 +23,10 @@ from hackbot_agents.gecko_triage import (
     dupes,
     rerecord,
 )
-from hackbot_agents.gecko_triage.__main__ import AgentInputs
 from hackbot_agents.gecko_triage.authors import CommitFacts
 from hackbot_agents.gecko_triage.closing import CloseVerdicts
 from hackbot_agents.gecko_triage.investigations import Investigations
+from hackbot_agents.gecko_triage.run import AgentInputs
 from hackbot_agents.gecko_triage.state import TriageState
 from hackbot_agents.gecko_triage.steps import Steps
 from hackbot_runtime import AgentError

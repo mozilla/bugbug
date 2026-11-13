@@ -1,8 +1,10 @@
 # Configuring gecko-triage
 
-One agent serves every Gecko team. A run names its team with the optional `team` input
-(`TEAM` in the job). The run reads that team's directory and the shared files. This page
-says what each holds, how manual or automatic mode is set, and how a team joins.
+One agent serves every Gecko team. A run can name its team with the optional `team` input
+(`TEAM` in the job). With no `team` input, the run reads the bug's product and component
+first, and takes the one team whose `team.toml` lists that component (`team_pick.py`).
+The run reads that team's directory and the shared files. This page says what each
+holds, how manual or automatic mode is set, and how a team joins.
 
 | Source                   | Holds                                                         | Changes need      |
 | ------------------------ | ------------------------------------------------------------- | ----------------- |
@@ -20,7 +22,8 @@ stops the run before it reads a bug.
 
 ## A run with no team
 
-A run with no `team` input reads `rules/` and `shared/` only.
+A run with no team reads `rules/` and `shared/` only. That is a run with no `team` input
+whose component no team lists, or more than one team lists.
 
 - The scope is the bug's own product and component. The preflight does not skip the bug
   as out of scope. A move to the owning component is still allowed.

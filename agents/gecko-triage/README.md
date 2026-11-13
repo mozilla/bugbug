@@ -364,7 +364,7 @@ reading, at the image's versions:
 | Env var              | Required | Meaning                                                                              |
 | -------------------- | -------- | ------------------------------------------------------------------------------------ |
 | `BUG_ID`             | yes      | The bug to triage                                                                    |
-| `TEAM`               | no       | The team, `teams/<team>/`. Unset: the general rules only, in the bug's own component |
+| `TEAM`               | no       | The team, `teams/<team>/`. Unset: the team that lists the bug's component, else none |
 | `BROKER_URL`         | yes      | Bugzilla broker base URL; the agent appends `/mcp`                                   |
 | `FX_BUG_TOOLKIT_DIR` | no       | The fx-bug-toolkit plugin checkout; the image sets `/opt/fx-bug-toolkit`             |
 | `BOT_ALIASES`        | no       | Pilot only: comma-separated logins that count as the bot, like `hackbot@mozilla.tld` |

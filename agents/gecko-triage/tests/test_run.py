@@ -1,11 +1,11 @@
-"""Tests for the entry point: a skipped bug costs neither a checkout nor a model turn."""
+"""Tests for the run: a skipped bug costs neither a checkout nor a model turn."""
 
 import asyncio
 import threading
 
 import pytest
 from conftest import NOW
-from hackbot_agents.gecko_triage import __main__ as entry
+from hackbot_agents.gecko_triage import run
 from hackbot_agents.gecko_triage.preflight import BugUnreadable
 from hackbot_agents.gecko_triage.state import TriageState
 
@@ -27,7 +27,7 @@ class FakeContext:
 def wired(monkeypatch):
     monkeypatch.setenv("BUG_ID", str(BUG))
     monkeypatch.setenv("BROKER_URL", "http://127.0.0.1:8765/")
-    monkeypatch.setattr(entry, "require_toolkit", lambda _dir: None)
+    monkeypatch.setattr(run, "require_toolkit", lambda _dir: None)
     calls = {}
 
     def use_state(state):
@@ -35,7 +35,7 @@ def wired(monkeypatch):
             calls["fetch_state"] = (server, bug, kwargs)
             return state
 
-        monkeypatch.setattr(entry, "fetch_state", fetch_state)
+        monkeypatch.setattr(run, "fetch_state", fetch_state)
 
     async def resolve_index_revision():
         calls["searchfox"] = True
@@ -49,9 +49,9 @@ def wired(monkeypatch):
         calls["run"] = kwargs
         return "ran"
 
-    monkeypatch.setattr(entry, "resolve_index_revision", resolve_index_revision)
-    monkeypatch.setattr(entry, "find_candidates", find_candidates)
-    monkeypatch.setattr(entry, "run_gecko_triage", run_gecko_triage)
+    monkeypatch.setattr(run, "resolve_index_revision", resolve_index_revision)
+    monkeypatch.setattr(run, "find_candidates", find_candidates)
+    monkeypatch.setattr(run, "run_gecko_triage", run_gecko_triage)
     return use_state, calls
 
 
@@ -65,7 +65,7 @@ async def test_a_restricted_bug_is_skipped_before_the_checkout_and_the_model(
         )
     )
     ctx = FakeContext()
-    result = await entry.main(ctx)
+    result = await run.main(ctx)
     assert result.decision == "skipped"
     assert result.num_turns == 0 and result.total_cost_usd == 0.0
     assert "restricted" in result.result
@@ -78,7 +78,7 @@ async def test_a_bug_that_bugzilla_withholds_is_skipped_not_failed(wired):
     use_state, calls = wired
     use_state(TriageState(bug={"id": BUG}, now=NOW, restricted=True))
     ctx = FakeContext()
-    result = await entry.main(ctx)
+    result = await run.main(ctx)
     assert result.decision == "skipped"
     assert "restricted" in result.result
     assert not ctx.prepared
@@ -90,7 +90,7 @@ async def test_an_unreadable_bug_fails_before_the_checkout(wired):
     use_state(None)
     ctx = FakeContext()
     with pytest.raises(BugUnreadable):
-        await entry.main(ctx)
+        await run.main(ctx)
     assert not ctx.prepared
     assert set(calls) == {"fetch_state"}
 
@@ -103,7 +103,7 @@ async def test_a_bug_to_triage_reaches_the_model_after_the_checkout(
     use_state, calls = wired
     use_state(new_state)
     ctx = FakeContext()
-    assert await entry.main(ctx) == "ran"
+    assert await run.main(ctx) == "ran"
     assert ctx.prepared
     server, bug, kwargs = calls["fetch_state"]
     assert kwargs == {}
@@ -139,7 +139,7 @@ async def test_the_checkout_runs_beside_the_duplicate_search(
         calls["cloning_during_search"] = cloning.is_set()
         return []
 
-    monkeypatch.setattr(entry, "find_candidates", find_candidates)
+    monkeypatch.setattr(run, "find_candidates", find_candidates)
     ctx = BlockingContext()
-    assert await entry.main(ctx) == "ran"
+    assert await run.main(ctx) == "ran"
     assert calls["cloning_during_search"] and ctx.prepared

@@ -249,6 +249,10 @@ TEAM_RULES = (
 )
 
 
+# The teams, each in `teams/<team>/` with its `team.toml` and `rules/`.
+TEAMS_DIR = Path(__file__).parent / "teams"
+
+
 def team_dir(teams_dir: Path, name: str) -> Path:
     """The directory of team ``name``: `team.toml` and `rules/`.
 

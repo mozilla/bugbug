@@ -10,6 +10,7 @@ from pathlib import Path
 from .teamconfig import (
     EMAIL,
     OTHER_ISSUE_TYPE,
+    TEAMS_DIR,
     load_limits,
     load_people,
     load_team,
@@ -65,7 +66,6 @@ ENABLED_ACTION_TYPES = [
 # passes as `TEAM`. It picks `teams/<team>/`, with `team.toml` and the team's `rules/`.
 # With no team, every team value below is empty and the run uses the shared rules only,
 # in the bug's own component. An unknown team name fails the import.
-TEAMS_DIR = Path(__file__).parent / "teams"
 TEAM_NAME = os.environ.get("TEAM")
 TEAM_DIR = team_dir(TEAMS_DIR, TEAM_NAME) if TEAM_NAME else None
 TEAM = load_team(TEAM_DIR / "team.toml") if TEAM_DIR else None

@@ -10,7 +10,7 @@ import inspect
 from pathlib import Path
 
 from hackbot_agents.gecko_triage import agent, hooks
-from hackbot_agents.gecko_triage.__main__ import AgentInputs
+from hackbot_agents.gecko_triage.run import AgentInputs
 from hackbot_agents.gecko_triage.state import TriageState, fetch_state
 
 PACKAGE = Path(__file__).parents[1] / "hackbot_agents" / "gecko_triage"

@@ -11,6 +11,11 @@ from mcp.client.streamable_http import streamablehttp_client
 Call = Callable[[str, dict], Awaitable[dict]]
 
 
+def mcp_url(broker_url: str) -> str:
+    """The broker's MCP endpoint, from its base URL."""
+    return f"{broker_url.rstrip('/')}/mcp"
+
+
 @asynccontextmanager
 async def broker_session(url: str, timeout: float) -> AsyncIterator[Call]:
     """A ``call(tool, args)`` on the broker at ``url``, over one MCP session.
