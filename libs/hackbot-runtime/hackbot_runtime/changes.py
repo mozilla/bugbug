@@ -13,6 +13,7 @@ and creating that commit is safe.
 
 import base64
 import contextlib
+import itertools
 import logging
 import os
 import re
@@ -333,6 +334,93 @@ def build_try_push(repo: Path, base: str) -> dict | None:
             for revision in revisions
         ],
     }
+
+
+# A submodule entry: its tree entry points at a commit, not a blob.
+_GITLINK_MODE = "160000"
+
+
+def _github_file_changes(repo: Path, parent: str, commit: str) -> list[dict]:
+    """The tree entries ``commit`` changes relative to ``parent``.
+
+    Each entry is ``{"path", "mode"}`` plus one of ``"content"`` (the new blob,
+    base64-encoded so binary files survive JSON), ``"sha"`` (a submodule's new
+    commit) or ``"deleted": True``. Renames are reported as a deletion plus an
+    addition, which is how a git tree records them anyway.
+    """
+    out = _git_bytes(
+        repo, "diff-tree", "-r", "-z", "--no-renames", "--no-commit-id", parent, commit
+    )
+    # -z output is ":<srcmode> <dstmode> <srcsha> <dstsha> <status>\0<path>\0" per
+    # entry, with paths unquoted. --no-renames keeps it to one path per entry (a
+    # rename or copy would carry two), and strict pairing raises if that ever
+    # stops holding. A commit that changes no files prints nothing at all. GitHub
+    # only takes UTF-8 paths, so any other path raises here rather than being
+    # pushed mangled.
+    fields = out.removesuffix(b"\0").split(b"\0") if out else []
+    entries = []
+    for header, raw_path in itertools.batched(fields, 2, strict=True):
+        src_mode, dst_mode, _src_sha, dst_sha, status = header.lstrip(b":").split()
+        path = raw_path.decode("utf-8")
+        if status == b"D":
+            entries.append({"path": path, "mode": src_mode.decode(), "deleted": True})
+        elif dst_mode.decode() == _GITLINK_MODE:
+            entries.append(
+                {"path": path, "mode": _GITLINK_MODE, "sha": dst_sha.decode()}
+            )
+        else:
+            blob = _git_bytes(repo, "cat-file", "blob", dst_sha.decode())
+            entries.append(
+                {
+                    "path": path,
+                    "mode": dst_mode.decode(),
+                    "content": base64.b64encode(blob).decode("ascii"),
+                }
+            )
+    return entries
+
+
+def build_github_commits(repo: Path, base: str, repo_url: str) -> dict | None:
+    """Build the artifact for pushing the agent's commits to GitHub.
+
+    hackbot-api has no git checkout (or git binary) to ``git am`` the run's
+    patch into, so this captures each commit in ``base..HEAD`` in the shape
+    GitHub's Git Data API takes: the full message, the author, and the files it
+    changes with their new contents. The apply-side handler recreates the same
+    commits on top of ``base`` from that alone.
+
+    ``base`` must be a commit the GitHub repository already has (the published
+    base, as for a try push), since the recreated commits are parented on it.
+    Returns ``None`` when there are no commits to push.
+    """
+    # Normally already done by `collect`; repeated here (a no-op on a clean
+    # tree) so this does not drop uncommitted work if called on its own.
+    commit_all(repo, WIP_MESSAGE)
+
+    # First parent only: each commit is replayed as the diff against the one
+    # before it, so a merge the agent made is flattened rather than lost.
+    revisions = _git(
+        repo, "rev-list", "--reverse", "--first-parent", f"{base}..HEAD"
+    ).split()
+    if not revisions:
+        return None
+
+    fmt = _FIELD_SEP.join(["%an", "%ae", "%aI", "%B"])
+    commits = []
+    parent = base
+    for revision in revisions:
+        out = _git(repo, "show", "-s", f"--format={fmt}", revision)
+        name, email, date, message = out.split(_FIELD_SEP, 3)
+        commits.append(
+            {
+                "message": message.rstrip("\n"),
+                "author": {"name": name, "email": email, "date": date},
+                "changes": _github_file_changes(repo, parent, revision),
+            }
+        )
+        parent = revision
+
+    return {"repo_url": repo_url, "base_commit": base, "commits": commits}
 
 
 def collect(

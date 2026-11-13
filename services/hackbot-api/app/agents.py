@@ -52,6 +52,12 @@ class AgentSpec:
     expects_actions: bool = False
     # How long an execution may run; the API-wide default when unset.
     execution_timeout_seconds: int | None = None
+    # The one GitHub repository ("owner/repo") this agent's `github.submit_patch`
+    # actions may open pull requests on; unset, they are refused. It is set here,
+    # not taken from the run, because the run's artifact is agent-written. It must
+    # be the repository of the agent's `[source].repo_url`, since its commits are
+    # built on that checkout.
+    github_repository: str | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:

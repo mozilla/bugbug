@@ -8,6 +8,9 @@ from app.action_handlers.bugzilla_handler import (
 )
 from app.action_handlers.email_handler import SendEmailHandler
 from app.action_handlers.feedback_handler import ReportProblemHandler
+from app.action_handlers.github_handler import (
+    SubmitPatchHandler as GitHubSubmitPatchHandler,
+)
 from app.action_handlers.phabricator_handler import (
     AddCommentHandler as PhabricatorAddCommentHandler,
 )
@@ -19,8 +22,10 @@ from app.action_handlers.slack_handler import PostMessageHandler
 from app.action_handlers.testrail_handler import SubmitTestPlanHandler
 from app.action_handlers.try_server_handler import PushHandler
 
-# Actions that submit source changes to Phabricator.
-PATCH_ACTION_TYPES = frozenset({"phabricator.submit_patch", "phabricator.update_patch"})
+# Actions that submit source changes for review, on Phabricator or GitHub.
+PATCH_ACTION_TYPES = frozenset(
+    {"phabricator.submit_patch", "phabricator.update_patch", "github.submit_patch"}
+)
 
 # Maps a recorded action's dotted `type` to the handler that applies it.
 # Adding a new action type later is a one-line addition here — the dispatch
@@ -33,6 +38,7 @@ HANDLERS: dict[str, ActionHandler] = {
     "phabricator.submit_patch": SubmitPatchHandler(),
     "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
+    "github.submit_patch": GitHubSubmitPatchHandler(),
     "testrail.submit_test_plan": SubmitTestPlanHandler(),
     "slack.post_message": PostMessageHandler(),
     "email.send": SendEmailHandler(),

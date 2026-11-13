@@ -22,7 +22,8 @@ import { parseTestPlan, TestPlanView } from "./TestPlanView";
 // approves the actual text and not just an action type. A comment carries its
 // body in params.text; a Phabricator submission carries the title and summary of
 // the revision it would open for the patch (previewed by PatchView), and an
-// update carries them only when it rewords the existing revision's.
+// update carries them only when it rewords the existing revision's. A GitHub
+// submission carries the title and body of the pull request it would open.
 function actionPreview(
   action: RunAction
 ): { label: string; text: string } | null {
@@ -40,6 +41,12 @@ function actionPreview(
       .filter(Boolean)
       .join("\n\n");
     return body ? { label: "Revision preview", text: body } : null;
+  }
+  if (action.type === "github.submit_patch") {
+    const body = [text(action.params?.title), text(action.params?.body)]
+      .filter(Boolean)
+      .join("\n\n");
+    return body ? { label: "Pull request preview", text: body } : null;
   }
   return null;
 }
