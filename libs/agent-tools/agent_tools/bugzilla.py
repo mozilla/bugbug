@@ -1,4 +1,4 @@
-"""Read-only Bugzilla tools backed by bugsy.
+"""Read-only Bugzilla tools backed by ``bugzilla_client``.
 
 Framework-neutral: each tool is a ``@tool``-decorated handler whose first
 parameter is a :class:`BugzillaContext`. Handlers return plain data and surface
@@ -7,12 +7,14 @@ denied) as a structured :class:`~agent_tools.registry.ToolError`.
 """
 
 import base64
+import functools
 import mimetypes
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Annotated, Any
 
-import bugsy
+from bugzilla_client import BugzillaClient, BugzillaError
 from pydantic import Field
 
 from agent_tools.registry import ToolError, tool, tools_in
@@ -175,63 +177,60 @@ def _type_not_allowed_error(
 
 @dataclass
 class BugzillaContext:
-    """Holds the live bugsy client.
+    """Holds the live Bugzilla client.
 
     Every tool receives the same instance, so they share auth and one TCP
     connection pool.
     """
 
-    client: bugsy.Bugsy
+    client: BugzillaClient
 
 
-def _bugsy_error(e: bugsy.BugsyException) -> ToolError:
-    """Turn a bugsy exception into a structured ToolError.
+def _to_tool_error(e: Exception) -> ToolError:
+    """Turn a failed Bugzilla call into a structured ToolError.
 
     The payload is friendly and machine-parseable so the agent can decide what
     to do (skip the bug, try a different endpoint, ...) rather than just seeing
-    a stack trace.
+    a stack trace. The client raises ``BugzillaError`` for Bugzilla-level errors
+    and non-JSON answers; a network failure surfaces as an ``httpx`` error.
     """
-    code = getattr(e, "code", None)
-    msg = getattr(e, "msg", str(e))
-    if code == 101:
-        kind = "endpoint_not_exposed"
-        hint = "This Bugzilla proxy does not expose this endpoint."
-    elif code == 102:
-        kind = "access_denied"
-        hint = "Your API key cannot access this bug. Skip it."
-    else:
-        kind = "bugzilla_error"
-        hint = None
-    payload: dict[str, Any] = {"error": kind, "code": code, "message": msg}
-    if hint:
-        payload["hint"] = hint
-    return ToolError(msg, payload=payload)
+    if isinstance(e, BugzillaError):
+        if e.code == 101:
+            kind = "endpoint_not_exposed"
+            hint = "This Bugzilla proxy does not expose this endpoint."
+        elif e.code == 102:
+            kind = "access_denied"
+            hint = "Your API key cannot access this bug. Skip it."
+        else:
+            kind = "bugzilla_error"
+            hint = None
+        payload: dict[str, Any] = {"error": kind, "code": e.code, "message": e.message}
+        if hint:
+            payload["hint"] = hint
+        return ToolError(e.message, payload=payload)
+    return ToolError(
+        f"Bugzilla request failed: {type(e).__name__}: {e}",
+        payload={"error": "bugzilla_request_failed", "message": str(e)},
+    )
 
 
-def _request(ctx: BugzillaContext, path: str, params: dict[str, Any] | None = None):
-    """Issue a Bugzilla request, normalizing every failure into a ToolError.
+def _bugzilla_errors(fn: Callable[..., Awaitable]) -> Callable[..., Awaitable]:
+    """Let a tool call the client directly and still fail with a ToolError."""
 
-    bugsy only raises ``BugsyException`` for Bugzilla-level errors; a bad proxy
-    URL, an auth redirect, or an empty body instead surfaces as a raw
-    ``JSONDecodeError``/connection error. Catching those here turns an opaque
-    "Expecting value: line 1 column 1" into an actionable message.
-    """
-    try:
-        return ctx.client.request(path, params=params or {})
-    except bugsy.BugsyException as e:
-        raise _bugsy_error(e) from e
-    except Exception as e:
-        raise ToolError(
-            f"Bugzilla request to '{path}' failed: {type(e).__name__}: {e}",
-            payload={
-                "error": "bugzilla_request_failed",
-                "path": path,
-                "message": str(e),
-            },
-        ) from e
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except ToolError:
+            raise
+        except Exception as e:
+            raise _to_tool_error(e) from e
+
+    return wrapper
 
 
 @tool
+@_bugzilla_errors
 async def search_bugs(
     ctx: BugzillaContext,
     params: Annotated[
@@ -255,12 +254,13 @@ async def search_bugs(
     component, status, resolution, priority, severity, assigned_to, whiteboard,
     include_fields, limit.
     """
-    result = _request(ctx, "bug", params)
+    result = (await ctx.client.bugs.search(params)).data
     bugs = result.get("bugs", [])
     return {"count": len(bugs), "bugs": bugs}
 
 
 @tool
+@_bugzilla_errors
 async def get_bugs(
     ctx: BugzillaContext,
     ids: Annotated[list[int], Field(description="Bug IDs to fetch.")],
@@ -298,8 +298,7 @@ async def get_bugs(
         "creation_time,last_change_time,blocks,depends_on,see_also,"
         "cf_crash_signature,url,version,op_sys,platform"
     )
-    id_csv = ",".join(str(i) for i in ids)
-    result = _request(ctx, "bug", {"id": id_csv, "include_fields": include})
+    result = (await ctx.client.bugs.get(ids, include_fields=include.split(","))).data
     bugs = result.get("bugs", [])
     returned = {b["id"] for b in bugs}
     inaccessible = [i for i in ids if i not in returned]
@@ -307,22 +306,16 @@ async def get_bugs(
     payload = {"count": len(bugs), "bugs": bugs, "inaccessible": inaccessible}
 
     if include_comments and bugs:
-        # Bugzilla lets us fetch comments for many bugs in one call by hitting
-        # /bug/{first}/comment?ids=rest. One extra round trip total.
-        first, *rest = [b["id"] for b in bugs]
-        cparams = {"ids": ",".join(str(i) for i in rest)} if rest else {}
+        # Comments for all the bugs come back in one extra round trip total.
         try:
-            cres = ctx.client.request(f"bug/{first}/comment", params=cparams)
+            cres = (await ctx.client.comments.get(bug_ids=[b["id"] for b in bugs])).data
             comments_by_bug = {
                 int(bid): data["comments"] for bid, data in cres.get("bugs", {}).items()
             }
             for b in bugs:
                 b["comments"] = comments_by_bug.get(b["id"], [])
-        except bugsy.BugsyException as e:
-            payload["comments_error"] = {
-                "code": getattr(e, "code", None),
-                "message": getattr(e, "msg", str(e)),
-            }
+        except BugzillaError as e:
+            payload["comments_error"] = {"code": e.code, "message": e.message}
         except Exception as e:
             payload["comments_error"] = {"message": f"{type(e).__name__}: {e}"}
 
@@ -330,17 +323,19 @@ async def get_bugs(
 
 
 @tool
+@_bugzilla_errors
 async def get_bug_comments(
     ctx: BugzillaContext,
     bug_id: Annotated[int, Field(description="Bug ID.")],
 ) -> dict:
     """Fetch all comments for a single bug."""
-    result = _request(ctx, f"bug/{bug_id}/comment")
+    result = (await ctx.client.comments.get(bug_ids=[bug_id])).data
     comments = result.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
     return {"bug_id": bug_id, "count": len(comments), "comments": comments}
 
 
 @tool
+@_bugzilla_errors
 async def get_bug_attachments(
     ctx: BugzillaContext,
     bug_id: Annotated[int, Field(description="Bug ID.")],
@@ -369,7 +364,7 @@ async def get_bug_attachments(
     refuses gets a 'data_error' and does not take the rest of the response with
     it.
     """
-    result = _request(ctx, f"bug/{bug_id}/attachment", {"exclude_fields": "data"})
+    result = (await ctx.client.attachments.get(bug_ids=[bug_id])).data
     atts = result.get("bugs", {}).get(str(bug_id), [])
     payload = {"bug_id": bug_id, "count": len(atts), "attachments": atts}
     if not include_data:
@@ -405,9 +400,13 @@ async def get_bug_attachments(
             )
         else:
             try:
-                one = _request(ctx, f"bug/attachment/{att['id']}")
-            except ToolError as e:
-                att["data_error"] = e.payload or {"message": str(e)}
+                one = (
+                    await ctx.client.attachments.get(
+                        attachment_ids=[att["id"]], include_data=True
+                    )
+                ).data
+            except Exception as e:
+                att["data_error"] = _to_tool_error(e).payload
                 errors += 1
                 continue
             fetched = one.get("attachments", {}).get(str(att["id"]))
@@ -428,6 +427,7 @@ async def get_bug_attachments(
 
 
 @tool
+@_bugzilla_errors
 async def download_attachment(
     ctx: BugzillaContext,
     attachment_id: Annotated[
@@ -456,7 +456,7 @@ async def download_attachment(
     """
     # Metadata first, so a refused attachment's bytes never leave Bugzilla. One
     # extra round trip on the happy path buys that.
-    meta = _request(ctx, f"bug/attachment/{attachment_id}", {"exclude_fields": "data"})
+    meta = (await ctx.client.attachments.get(attachment_ids=[attachment_id])).data
 
     att = meta.get("attachments", {}).get(str(attachment_id))
     if att is None:
@@ -469,7 +469,11 @@ async def download_attachment(
     if not allowed:
         raise _type_not_allowed_error(attachment_id, att, effective)
 
-    full = _request(ctx, f"bug/attachment/{attachment_id}")
+    full = (
+        await ctx.client.attachments.get(
+            attachment_ids=[attachment_id], include_data=True
+        )
+    ).data
     data = full.get("attachments", {}).get(str(attachment_id), {}).get("data")
     if data is None:
         raise ToolError(
