@@ -6,6 +6,8 @@ requires-python = ">=3.14"
 dependencies = [
     "claude-agent-sdk>=0.2.165",
     "hackbot-runtime[claude-sdk]",
+    "mozdownload",
+    "mozinstall",
     "pydantic>=2.0.0",
     "requests>=2.32.0",
 ]
