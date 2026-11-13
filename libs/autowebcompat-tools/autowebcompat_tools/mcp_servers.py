@@ -1,17 +1,19 @@
-"""Stdio configs for the DevTools MCP servers the agent drives.
+"""Stdio configs for the DevTools MCP servers the agents drive.
 
 The MCP servers are npm packages pinned in ``package.json`` and installed into
-the image with ``npm ci`` (see the Dockerfile).
+each agent image with ``npm ci`` (see the agents' Dockerfiles).
 """
 
 from pathlib import Path
 
 from claude_agent_sdk.types import McpStdioServerConfig
 
+NODE_MODULES = Path("/app/node_modules")
+
 
 def resolve_bin(bin_name: str) -> str:
     """Resolve an installed MCP server binary to an absolute path."""
-    binary = Path("/app") / "node_modules" / ".bin" / bin_name
+    binary = NODE_MODULES / ".bin" / bin_name
     if not binary.exists():
         raise RuntimeError(
             f"MCP server binary not found at {binary}; the image should install "
