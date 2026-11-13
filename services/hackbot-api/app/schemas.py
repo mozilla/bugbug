@@ -198,7 +198,7 @@ class FrontendTriageInputs(AgentInputs):
     effort: str | None = None
 
 
-class GeckoTriageInputs(BaseModel):
+class GeckoTriageInputs(AgentInputs):
     bug_id: int
     # The team the run triages for, `teams/<team>/` in the agent. Add a team here
     # when the agent gains its directory. With no team, the run uses the shared rules
