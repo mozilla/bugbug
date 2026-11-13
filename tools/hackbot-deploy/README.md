@@ -151,6 +151,13 @@ hand in webservices-infra and changes there first. It changes only the image,
 and fails without recording anything if the new revision never becomes ready,
 in which case Cloud Run keeps serving the old one.
 
+A service in `MIGRATIONS` (`hackbot-api`) first runs its schema migrations: the
+new image goes on its migration Job (`hackbot-api-migrate<suffix>`), which runs
+`alembic upgrade head`, and the service is updated only if that execution
+succeeds. A missing Job or a failed execution fails the deploy with nothing
+changed and nothing recorded. A rollback or a dry run never migrates:
+migrations are forward only (docs/hackbot/api.md).
+
 Then it updates the Job or service, reads it back, and writes
 `deployments/<id>.json` (`deployments/agents/bug-fix.json`) with the images,
 version, commit, build time and a deployment history. The write is conditioned on the record's generation, so
