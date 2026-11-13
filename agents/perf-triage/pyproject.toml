@@ -1,0 +1,35 @@
+[project]
+name = "hackbot-agent-perf-triage"
+dynamic = ["version"]
+description = "Cloud Run Job image that runs the perf-triage agent for hackbot-api"
+requires-python = ">=3.14"
+dependencies = [
+    "hackbot-runtime[claude-sdk]",
+    "agent-tools[bugzilla]",
+    "claude-agent-sdk>=0.1.30",
+    "mcp>=1.0.0",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "pyyaml>=6.0"]
+
+[tool.uv.sources]
+hackbot-runtime = { workspace = true }
+agent-tools = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hackbot_agents"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_classes = ["Test*Case", "!TestCaseResult"]

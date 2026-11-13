@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -24,6 +24,7 @@ members = [
     "hackbot-agent-build-repair",
     "hackbot-agent-dataset-eval",
     "hackbot-agent-frontend-triage",
+    "hackbot-agent-perf-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
     "hackbot-agent-test-repair-fix",
@@ -2611,6 +2612,37 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "hackbot-agent-perf-triage"
+source = { editable = "agents/perf-triage" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "hackbot-agent-test-plan-generator"
 source = { editable = "agents/test-plan-generator" }
 dependencies = [
@@ -3003,8 +3035,8 @@ name = "httpcore2"
 version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
+    { name = "h11", marker = "sys_platform != 'emscripten'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/61/afa9d6b7452f9eca73f73d45324eb0bb52f098fd5e6049bf6b8263be9b4e/httpcore2-2.16.0.tar.gz", hash = "sha256:c72cd0413563b17e1cd8354677dff887466f8ec2551679759e93126534428643", size = 69886, upload-time = "2026-10-21T07:09:45.31Z" }
 wheels = [
@@ -6230,8 +6262,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform == 'linux'" },
+    { name = "jeepney", marker = "sys_platform == 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -6815,14 +6847,14 @@ resolution-markers = [
     "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
+    { name = "filelock", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "fsspec", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "jinja2", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "networkx", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "nvidia-nccl-cu13", marker = "sys_platform == 'never'" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "setuptools", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "sympy", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/43/19/23a1aed488423a5055727256b25406e4b93bd2bcf1352bef582b9951c10c/torch-2.14.1-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:cee091caf2a6229e248daf41d18ceebf590ba02d9179205610062c64ee5fef03", size = 127325330, upload-time = "2026-09-30T17:52:54.752Z" },
@@ -6838,13 +6870,13 @@ resolution-markers = [
     "sys_platform == 'linux'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "fsspec", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "jinja2", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "networkx", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "setuptools", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "sympy", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp314-cp314-linux_s390x.whl", hash = "sha256:a7a580e3d92467516c9247a22bc805ae4f79c7b1b9a2052f92849f34e89720f5", upload-time = "2026-09-30T19:48:32Z" },

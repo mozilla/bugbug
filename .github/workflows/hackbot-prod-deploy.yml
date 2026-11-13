@@ -57,6 +57,7 @@ on:
           - agents/build-repair
           - agents/dataset-eval
           - agents/frontend-triage
+          - agents/perf-triage
           - agents/test-plan-generator
           - agents/test-repair
           - agents/test-repair-fix
