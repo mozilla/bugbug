@@ -21,10 +21,10 @@ import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from agent_tools.bugzilla_prompt import is_automation
 from claude_agent_sdk import McpServerConfig
 
 from .broker_client import Call, broker_session
+from .bugzilla_prompt import is_automation
 from .config import (
     AGENT_TAG,
     BOT_ACCOUNT,

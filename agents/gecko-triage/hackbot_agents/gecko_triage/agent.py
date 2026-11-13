@@ -22,7 +22,7 @@ from functools import partial
 from pathlib import Path
 from typing import Annotated
 
-from agent_tools import bugzilla_prompt, mozilla_vcs, searchfox
+from agent_tools import mozilla_vcs, searchfox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.mozilla_vcs import MozillaVcsContext
 from agent_tools.searchfox import SearchfoxContext
@@ -46,7 +46,7 @@ from hackbot_runtime.searchfox import (
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 from searchfox import AsyncSearchfoxClient
 
-from . import attachments, authors, ci_logs, closing, dupes, rerecord
+from . import attachments, authors, bugzilla_prompt, ci_logs, closing, dupes, rerecord
 from .actions_view import needinfo_requestees, updates
 from .citations import ReadComments, read_hook
 from .config import (
@@ -637,7 +637,6 @@ def render_bug(
         bug,
         shown,
         cap=cap,
-        read_from="read through the broker when the run started",
         drop_first=lambda login: _is_automation(login, aliases),
     )
 

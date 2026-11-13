@@ -1,6 +1,6 @@
 import json
 
-from agent_tools.bugzilla_prompt import (
+from hackbot_agents.gecko_triage.bugzilla_prompt import (
     as_data,
     comment_entry,
     fit_comments,
@@ -21,7 +21,7 @@ def _comment(count, text="x", creator="reporter@example.com", **fields):
 
 
 def _render(bug, comments, cap=150_000):
-    return render_bug(bug, comments, cap=cap, read_from="read from Bugzilla")
+    return render_bug(bug, comments, cap=cap)
 
 
 def _comments_in(prompt: str) -> list[dict]:
@@ -113,11 +113,6 @@ def test_the_automation_test_is_a_parameter():
 
 def test_ranges_joins_the_runs_of_numbers():
     assert ranges([1, 2, 3, 5, 7, 8]) == "1-3, 5, 7-8"
-
-
-def test_render_bug_says_where_the_data_came_from():
-    text = render_bug({"id": 1}, [], cap=100, read_from="read by the test")
-    assert "its comments, read by the test, as JSON" in text
 
 
 def test_render_bug_wraps_the_data_in_tags():
