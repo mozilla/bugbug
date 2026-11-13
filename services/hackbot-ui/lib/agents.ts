@@ -25,15 +25,3 @@ export const AGENTS = [
 export type AgentValue = (typeof AGENTS)[number]["value"];
 
 export const AGENT_NAMES: readonly string[] = AGENTS.map((a) => a.value);
-
-// The gecko-triage teams, as `GeckoTriageInputs.team` in hackbot-api lists them.
-// An empty team means a run with the shared rules only.
-export const GECKO_TRIAGE_TEAMS = ["media"] as const;
-
-export type GeckoTriageTeam = (typeof GECKO_TRIAGE_TEAMS)[number] | "";
-
-export function parseGeckoTriageTeam(value: string | null): GeckoTriageTeam {
-  return value === "" || GECKO_TRIAGE_TEAMS.some((t) => t === value)
-    ? (value as GeckoTriageTeam)
-    : GECKO_TRIAGE_TEAMS[0];
-}

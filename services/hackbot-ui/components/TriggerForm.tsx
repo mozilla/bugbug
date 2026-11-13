@@ -3,13 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import {
-  AGENTS,
-  type AgentValue,
-  GECKO_TRIAGE_TEAMS,
-  type GeckoTriageTeam,
-  parseGeckoTriageTeam,
-} from "@/lib/agents";
+import { AGENTS, type AgentValue } from "@/lib/agents";
 import { parseBugId } from "@/lib/bugzilla";
 import { saveRun } from "@/lib/store";
 import type { RunRef } from "@/lib/types";
@@ -74,8 +68,6 @@ export function TriggerForm() {
   const [evalLabel, setEvalLabel] = useState(() => params.get("label") ?? "");
   const [judgeRubric, setJudgeRubric] = useState(
     () => params.get("judge_rubric") ?? ""
-  const [team, setTeam] = useState(() =>
-    parseGeckoTriageTeam(params.get("team"))
   );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
@@ -90,7 +82,6 @@ export function TriggerForm() {
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
   const isDatasetEvalAgent = agent === "dataset-eval";
-  const isGeckoTriageAgent = agent === "gecko-triage";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -200,7 +191,6 @@ export function TriggerForm() {
         return;
       }
       inputs.bug_id = parsedBugId;
-      if (isGeckoTriageAgent && team) inputs.team = team;
     } else {
       if (!hasBugId && !hasBugData) {
         setError(
@@ -317,24 +307,6 @@ export function TriggerForm() {
             />
           </div>
         )}
-
-      {isGeckoTriageAgent && (
-        <div className="field">
-          <label htmlFor="team">Team</label>
-          <select
-            id="team"
-            value={team}
-            onChange={(e) => setTeam(e.target.value as GeckoTriageTeam)}
-          >
-            {GECKO_TRIAGE_TEAMS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-            <option value="">no team (shared rules only)</option>
-          </select>
-        </div>
-      )}
 
       {isWebcompatAgent && (
         <div className="field">
