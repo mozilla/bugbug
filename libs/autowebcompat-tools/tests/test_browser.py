@@ -2,7 +2,7 @@ from unittest import mock
 
 import mozdownload
 import pytest
-from hackbot_agents.autowebcompat_repro import browser
+from autowebcompat_tools import browser
 
 
 def _install(side_effect, channel="nightly"):
