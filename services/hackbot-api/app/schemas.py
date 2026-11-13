@@ -198,6 +198,19 @@ class FrontendTriageInputs(AgentInputs):
     effort: str | None = None
 
 
+class GeckoTriageInputs(AgentInputs):
+    bug_id: int
+    # The team the run triages for, `teams/<team>/` in the agent. Add a team here
+    # when the agent gains its directory. With none, the agent takes the team whose
+    # components include the bug's component. With no such team, the run uses the shared
+    # rules only, in the bug's own component, and never vouches for unattended apply.
+    team: Literal["media"] | None = None
+    model: str | None = None
+    max_turns: Annotated[int | None, Field(ge=1, le=200)] = None
+    max_budget_usd: Annotated[float | None, Field(gt=0, le=20)] = None
+    effort: str | None = None
+
+
 class TestPlanGeneratorInputs(AgentInputs):
     feature_name: str
     feature_description: str

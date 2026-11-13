@@ -1,0 +1,80 @@
+{
+  "bugs": {
+    "9000001": {
+      "comments": [
+        {
+          "id": 1,
+          "bug_id": 9000001,
+          "count": 0,
+          "creator": "reporter@example.com",
+          "author": "reporter@example.com",
+          "creation_time": "2026-10-09T08:00:00Z",
+          "time": "2026-10-09T08:00:00Z",
+          "last_change_time": "2026-10-09T08:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": [],
+          "text": "After the laptop wakes up, every video I play stutters until I restart.",
+          "raw_text": "After the laptop wakes up, every video I play stutters until I restart.",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        },
+        {
+          "id": 2,
+          "bug_id": 9000001,
+          "count": 1,
+          "creator": "component-bot@example.com",
+          "author": "component-bot@example.com",
+          "creation_time": "2026-10-11T08:00:00Z",
+          "time": "2026-10-11T08:00:00Z",
+          "last_change_time": "2026-10-11T08:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": [],
+          "text": "The component bot thinks this bug should belong to the 'Core::Audio/Video: Playback' component.",
+          "raw_text": "The component bot thinks this bug should belong to the 'Core::Audio/Video: Playback' component.",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        },
+        {
+          "id": 3,
+          "bug_id": 9000001,
+          "count": 2,
+          "creator": "hackbot@mozilla.tld",
+          "author": "hackbot@mozilla.tld",
+          "creation_time": "2026-10-13T09:00:00Z",
+          "time": "2026-10-13T09:00:00Z",
+          "last_change_time": "2026-10-13T09:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": ["gecko-triage"],
+          "text": "Thanks for the report.\n\n**Next steps**\n\n1. Please attach `about:support`.\n\n---\n\nIf you'd like to provide feedback on this comment, please use the \ud83d\udc4d or \ud83d\udc4e reaction.\n\ngecko-triage \u00b7 rules 0.1.0 \u00b7 asked: about:support, media log \u00b7 unread: none",
+          "raw_text": "Thanks for the report.\n\n**Next steps**\n\n1. Please attach `about:support`.\n\n---\n\nIf you'd like to provide feedback on this comment, please use the \ud83d\udc4d or \ud83d\udc4e reaction.\n\ngecko-triage \u00b7 rules 0.1.0 \u00b7 asked: about:support, media log \u00b7 unread: none",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        },
+        {
+          "id": 4,
+          "bug_id": 9000001,
+          "count": 3,
+          "creator": "reporter@example.com",
+          "author": "reporter@example.com",
+          "creation_time": "2026-10-14T10:00:00Z",
+          "time": "2026-10-14T10:00:00Z",
+          "last_change_time": "2026-10-14T10:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": [],
+          "text": "Here is about:support: ... Application Basics ...",
+          "raw_text": "Here is about:support: ... Application Basics ...",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "bugs": {
+    "9000001": {
+      "comments": [
+        {
+          "id": 1,
+          "bug_id": 9000001,
+          "count": 0,
+          "creator": "reporter@example.com",
+          "author": "reporter@example.com",
+          "creation_time": "2026-10-09T08:00:00Z",
+          "time": "2026-10-09T08:00:00Z",
+          "last_change_time": "2026-10-09T08:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": [],
+          "text": "After the laptop wakes up, every video I play stutters until I restart.",
+          "raw_text": "After the laptop wakes up, every video I play stutters until I restart.",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        },
+        {
+          "id": 2,
+          "bug_id": 9000001,
+          "count": 1,
+          "creator": "component-bot@example.com",
+          "author": "component-bot@example.com",
+          "creation_time": "2026-10-11T08:00:00Z",
+          "time": "2026-10-11T08:00:00Z",
+          "last_change_time": "2026-10-11T08:00:00Z",
+          "is_private": false,
+          "attachment_id": null,
+          "tags": [],
+          "text": "The component bot thinks this bug should belong to the 'Core::Audio/Video: Playback' component.",
+          "raw_text": "The component bot thinks this bug should belong to the 'Core::Audio/Video: Playback' component.",
+          "edit_count": 0,
+          "collapsed": false,
+          "reactions": {}
+        }
+      ]
+    }
+  }
+}
