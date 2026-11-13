@@ -9,7 +9,7 @@ dependencies = [
     "autowebcompat-tools",
     "phabricator-client",
     "phabricator-proxy",
-    "bugsy",
+    "bugzilla-client",
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
     "mozdownload",
@@ -24,6 +24,7 @@ dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+bugzilla-client = { workspace = true }
 autowebcompat-tools = { workspace = true }
 phabricator-client = { workspace = true }
 phabricator-proxy = { workspace = true }

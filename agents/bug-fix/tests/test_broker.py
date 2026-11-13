@@ -19,7 +19,7 @@ def _app() -> Starlette:
     return broker.build_app(
         broker.BrokerInputs(
             bugzilla_api_url="https://bugzilla.example.com/rest",
-            bugzilla_api_key="bz-key",
+            bugzilla_api_key="a" * 40,
             phabricator=PhabricatorSettings(
                 url="https://phab.example.com", api_key=VALID_TOKEN
             ),

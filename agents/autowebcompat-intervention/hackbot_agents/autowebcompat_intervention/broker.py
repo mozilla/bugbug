@@ -19,13 +19,13 @@ credentials:
 import logging
 from contextlib import asynccontextmanager
 
-import bugsy
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools import phabricator as phabricator_tools
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.phabricator import PhabricatorContext
+from bugzilla_client import BugzillaClient, BugzillaSettings
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from phabricator_proxy import create_app as conduit_proxy
@@ -60,8 +60,8 @@ def mcp_endpoint(manager: StreamableHTTPSessionManager):
 
 
 def build_app(inputs: BrokerInputs) -> Starlette:
-    client = bugsy.Bugsy(
-        api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
+    client = BugzillaClient(
+        BugzillaSettings(url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key)
     )
     bugzilla_config = build_sdk_server(
         "bugzilla", BugzillaContext(client=client), bugzilla.TOOLS
@@ -82,7 +82,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
 
     @asynccontextmanager
     async def lifespan(app):
-        async with bugzilla_manager.run(), phabricator_manager.run():
+        async with client, bugzilla_manager.run(), phabricator_manager.run():
             log.info(
                 "broker ready on %s:%d (bugzilla + phabricator read-only, "
                 "phabricator conduit proxy)",
