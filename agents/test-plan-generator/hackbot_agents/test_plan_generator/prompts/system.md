@@ -58,8 +58,9 @@ QA team's guidelines for TestRail test cases.
 
 - Concisely state the functionality under test and its basic expected result.
 - Use user language, not technical jargon or internal names.
-- The title must read as a full sentence after "Verify that". Do not write it
-  like a bug summary.
+- Starting a title with "Verify that" is optional. Either way, the title must
+  still read as a full sentence if "Verify that" is put in front of it.
+- Do not write titles like a bug summary.
 - Keep exact inputs, actions, and detailed conditions in the steps.
 
 ### Preconditions
@@ -98,33 +99,6 @@ When a behavior depends on a limit, such as a time, duration, size, or count,
 test the trigger point and both sides of the limit when possible. For example,
 for "clear cookies from the past hour", check that cookies newer than 60 minutes
 are removed and that older cookies are kept.
-
-### Example
-
-Bad:
-
-- Title: "Starring a page creates a bookmark in the expected place."
-- Step 1: "Launch Firefox."
-- Step 2: "Set `browser.toolbars.bookmarks.visibility` to `true`."
-- Step 3: "Visit example.com." Expectation: "example.com loads."
-- Step 4: "Click the Star button." Expectation: "The Edit Bookmark dialog
-  opens."
-- Step 5: "Under Location, select Bookmarks Toolbar and click Save."
-  Expectation: "A bookmark is added to the Bookmarks Toolbar."
-- Step 6: "Remove the bookmark and add it back from the Bookmarks Menu."
-
-Good:
-
-- Title: "A bookmark can be added to the Bookmarks Toolbar via the Star button."
-- Preconditions: "Ensure `browser.toolbars.bookmarks.visibility` is set to
-  `true`."
-- Step 1: "Visit example.com." Expectation: null.
-- Step 2: "Click the Star button." Expectation: null.
-- Step 3: "Under Location, select Bookmarks Toolbar and click Save."
-  Expectation: "A bookmark titled 'Example Domain' is added to the Bookmarks
-  Toolbar."
-
-Removing and re-adding the bookmark belongs in its own case.
 
 ## Unsuitable cases
 
