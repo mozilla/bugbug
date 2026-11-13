@@ -1,0 +1,38 @@
+[project]
+name = "hackbot-mcp"
+dynamic = ["version"]
+description = "Remote MCP server for running Hackbot agents, signed in with Google"
+requires-python = ">=3.14"
+dependencies = [
+    "cloud-sql-python-connector[asyncpg]>=1.20.3",
+    "fastmcp>=3.4.7",
+    "hackbot-client",
+    "httpx>=0.28.1",
+    "jsonschema>=4.23.0",
+    "py-key-value-aio[postgresql,wrappers-encryption]>=0.4.5,<0.5.0",
+    "pydantic>=2.13.0",
+    "pydantic-settings>=2.13.0",
+    "sentry-sdk>=2.60.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.0.3", "pytest-asyncio>=1.4.0"]
+
+[tool.uv.sources]
+hackbot-client = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hackbot_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

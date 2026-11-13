@@ -1,0 +1,128 @@
+# Release hackbot-mcp: build it and deploy it to one environment.
+#
+# Two triggers (webservices-infra, hackbot/tf/modules/resources/build.tf) run
+# this, telling it which environment in _ENV:
+#   stage-hackbot-mcp  a push to the default branch touching
+#                      services/hackbot-mcp/VERSION. Deploys only
+#                      if its version isn't the one stage runs; run by hand, it
+#                      deploys regardless.
+#   dev-hackbot-mcp    a push to dev/services/hackbot-mcp or
+#                      dev/services/hackbot-mcp/<anything>. Deploys to dev,
+#                      always.
+# Prod is a separate, approved promotion; nothing here reaches it.
+# services/cloudbuild.yaml is hackbot-dev's older config and goes away at
+# cutover.
+#
+# `release-plan` decides whether to release and `release` deploys it. The
+# Sentry release is hackbot-mcp@<version> (dev builds add +<commit>), with the
+# commits since what the environment ran before, and a deploy in its
+# environment; prod's deploy is marked by the prod workflow.
+#
+# Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
+# build on unknown ones, so shell variables below are written `$$name`.
+
+steps:
+  # Builds of one trigger deploy to one environment: take turns. The wait
+  # allows for an older build's own work; the timeout is that plus this one's.
+  - id: Wait
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    entrypoint: bash
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy wait-turn "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION" --timeout 3600
+
+  # /workspace/plan.txt: "name version previous-commit - -", or empty when
+  # there is nothing to release (every step below then does nothing).
+  - id: Plan
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    entrypoint: bash
+    # The tool reads these from the environment: in a command, a run by hand's
+    # unresolved pusher ("$(push.pusher.name)") would run as a command.
+    env:
+      - BRANCH_NAME=$BRANCH_NAME
+      - PUSHER=${_PUSHER}
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release-plan services/hackbot-mcp --env "${_ENV}" --output /workspace/plan.txt
+
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        read -r _ version _ < /workspace/plan.txt || exit 0
+        release="hackbot-mcp@$$version"
+        sha="$COMMIT_SHA"
+        if [ "${_ENV}" = dev ]; then release="$$release+$${sha:0:12}"; fi
+        image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/hackbot-mcp:$COMMIT_SHA"
+        docker build --no-cache -f services/hackbot-mcp/Dockerfile \
+          --build-arg "SENTRY_RELEASE=$$release" \
+          --label "org.opencontainers.image.version=$$version" \
+          --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+          --label "org.opencontainers.image.created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -t "$$image" .
+        docker push "$$image"
+        docker inspect --format='{{index .RepoDigests 0}}' "$$image" > /workspace/hackbot-mcp.digest
+
+  # Services have no shape gate: their infrastructure is written by hand in
+  # webservices-infra and changes there first.
+  - id: Deploy
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    entrypoint: bash
+    # Recorded as deployed_by: whoever pushed, or the build when the trigger
+    # is run by hand. Substitutions aren't in a step's environment otherwise.
+    env:
+      - GITHUB_ACTOR=${_PUSHER}
+      - BUILD_ID=$BUILD_ID
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release --env "${_ENV}" --plan /workspace/plan.txt --digests /workspace
+
+  # After the deploy, so a Sentry outage can't hold one up.
+  - id: Sentry
+    name: getsentry/sentry-cli
+    entrypoint: sh
+    secretEnv:
+      - SENTRY_AUTH_TOKEN
+    args:
+      - -c
+      - |
+        set -eu
+        read -r _ version previous _ < /workspace/plan.txt || exit 0
+        release="hackbot-mcp@$$version"
+        environment=staging
+        sha="$COMMIT_SHA"
+        if [ "${_ENV}" = dev ]; then
+          release="$$release+$$(echo "$$sha" | cut -c1-12)"
+          environment=development
+        fi
+        commits="mozilla/bugbug@$COMMIT_SHA"
+        if [ "$$previous" != - ]; then commits="mozilla/bugbug@$$previous..$COMMIT_SHA"; fi
+        sentry-cli releases new "$$release"
+        sentry-cli releases set-commits "$$release" --commit "$$commits"
+        sentry-cli releases finalize "$$release"
+        sentry-cli deploys new --release "$$release" -e "$$environment"
+
+# _ENV is set by each trigger; _PUSHER from the push event, empty when run
+# any other way.
+substitutions:
+  _ENV: stage
+  _PUSHER: ""
+
+timeout: 5400s
+
+options:
+  substitutionOption: MUST_MATCH
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - SENTRY_ORG=mozilla
+    - SENTRY_PROJECT=hackbot-mcp
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/${_SENTRY_AUTH_TOKEN_SECRET}/versions/latest
+      env: SENTRY_AUTH_TOKEN

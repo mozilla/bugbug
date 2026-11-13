@@ -61,6 +61,7 @@ on:
           - agents/test-repair
           - agents/test-repair-fix
           - services/hackbot-api
+          - services/hackbot-mcp
           - services/hackbot-ui
       action:
         description: "promote: what stage runs; rollback: prod's previous deployment"

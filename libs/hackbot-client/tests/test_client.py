@@ -347,3 +347,139 @@ async def test_trigger_run_with_service_account_auth(monkeypatch):
     assert captured["filename"] == "/path/key.json"
     assert captured["audience"] == "https://hackbot.example"
     assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}
+
+
+def _mocked(handler) -> HackbotClient:
+    """A client whose requests ``handler`` answers."""
+    client = _client()
+    client._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return client
+
+
+def _run_doc(**overrides) -> dict:
+    doc = {
+        "run_id": RUN_ID,
+        "agent": "bug-fix",
+        "status": "succeeded",
+        "inputs": {"bug_id": 1},
+        "requested_by": "user@example.com",
+        "created_at": "2026-11-12T00:00:00Z",
+        "updated_at": "2026-11-12T00:00:00Z",
+        "results_prefix": f"runs/{RUN_ID}",
+        "summary": {"status": "ok", "actions": [{"type": "email.send"}]},
+        "artifacts": [{"name": "changes/changes.patch", "size": 10}],
+    }
+    doc.update(overrides)
+    return doc
+
+
+async def test_list_agents_returns_descriptors():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json=[{"name": "bug-fix", "description": "d", "input_schema": {}}],
+        )
+
+    agents = await _mocked(handler).list_agents(on_behalf_of="user@example.com")
+
+    assert [agent.name for agent in agents] == ["bug-fix"]
+    assert str(seen[0].url) == "https://hackbot.example/agents"
+    assert seen[0].headers["X-On-Behalf-Of"] == "user@example.com"
+    assert seen[0].headers["X-API-Key"] == "secret"
+
+
+async def test_get_run_returns_the_typed_run():
+    run = await _mocked(lambda r: httpx.Response(200, json=_run_doc())).get_run(RUN_ID)
+
+    assert run.run_id == UUID(RUN_ID)
+    assert run.status is RunStatus.succeeded
+    assert run.summary.actions == [{"type": "email.send"}]
+    assert run.artifacts[0].name == "changes/changes.patch"
+
+
+async def test_get_run_rejects_an_invalid_run():
+    client = _mocked(lambda r: httpx.Response(200, json={"run_id": RUN_ID}))
+    with pytest.raises(HackbotInvalidResponseError, match="invalid run"):
+        await client.get_run(RUN_ID)
+
+
+async def test_list_runs_sends_only_the_filters_given():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json=[_run_doc()])
+
+    runs = await _mocked(handler).list_runs(
+        requested_by="user@example.com", status="running", limit=5
+    )
+
+    assert len(runs) == 1
+    assert dict(seen[0].url.params) == {
+        "requested_by": "user@example.com",
+        "status": "running",
+        "limit": "5",
+    }
+
+
+async def test_list_runs_rejects_a_body_that_is_not_a_list():
+    client = _mocked(lambda r: httpx.Response(200, json={}))
+    with pytest.raises(HackbotInvalidResponseError, match="not a list"):
+        await client.list_runs()
+
+
+async def test_list_actions_returns_each_action():
+    client = _mocked(
+        lambda r: httpx.Response(
+            200,
+            json=[{"idx": 0, "type": "email.send", "params": {}, "status": "pending"}],
+        )
+    )
+
+    actions = await client.list_actions(RUN_ID)
+
+    assert [action.status for action in actions] == ["pending"]
+
+
+async def test_get_artifact_url_returns_the_signed_url():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"url": "https://storage.example/x"})
+
+    url = await _mocked(handler).get_artifact_url(RUN_ID, "changes/changes.patch")
+
+    assert url == "https://storage.example/x"
+    assert seen[0].url.path == f"/runs/{RUN_ID}/artifacts/changes/changes.patch"
+
+
+async def test_get_artifact_url_rejects_a_body_without_a_url():
+    client = _mocked(lambda r: httpx.Response(200, json={}))
+    with pytest.raises(HackbotInvalidResponseError, match="artifact URL"):
+        await client.get_artifact_url(RUN_ID, "x")
+
+
+async def test_errors_carry_the_status_and_the_api_detail():
+    client = _mocked(
+        lambda r: httpx.Response(422, json={"detail": "comment requires revision_id"})
+    )
+
+    with pytest.raises(HackbotAPIError, match="comment requires revision_id") as exc:
+        await client.trigger_run("bug-fix", {"bug_id": 1, "comment": "x"})
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "comment requires revision_id"
+
+
+async def test_unreachable_api_errors_have_no_status():
+    def handler(request):
+        raise httpx.ConnectError("connection refused")
+
+    with pytest.raises(HackbotAPIError) as exc:
+        await _mocked(handler).get_run(RUN_ID)
+
+    assert exc.value.status_code is None
