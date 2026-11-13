@@ -76,7 +76,9 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Revision test plan. If you recorded a Try push, link it here."
+                "Revision test plan. If you recorded a Try push in this run, "
+                "include its Treeherder URL as {{actions.<action_id>.url}}, "
+                "using the ID that recording returned."
             )
         ),
     ] = None,
@@ -171,7 +173,10 @@ async def update_patch(
         Field(
             description=(
                 "New test plan for the revision. Replaces the current one "
-                "entirely. Leave unset to keep the same test plan."
+                "entirely. Leave unset to keep the same test plan. If you "
+                "recorded a Try push in this run, include its Treeherder URL as "
+                "{{actions.<action_id>.url}}, using the ID that recording "
+                "returned."
             )
         ),
     ] = None,
