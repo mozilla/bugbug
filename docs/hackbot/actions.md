@@ -84,10 +84,17 @@ still exists.
 whose `[source].repo_url` is on GitHub. hackbot-api has no checkout to apply a patch in, so
 `publish_changes` also captures each of the run's commits (message, author and changed
 files) as `changes/github_commits.json`. The handler recreates those commits through
-GitHub's Git Data API on a `hackbot/<run_id>` branch of the source repository and opens a
-draft pull request against its default branch, with the GitHub App's credentials (so the
-App must be installed on that repository). Retrying reuses the branch and any pull request
-already open from it.
+GitHub's Git Data API on a `hackbot/<run_id>` branch of the repository and opens a draft
+pull request against its default branch, with the GitHub App's credentials (so the App
+must be installed on that repository, with `contents: write` and `pull_requests: write`).
+Retrying reuses the branch and any pull request already open from it.
+
+The artifact is written by the agent, so it never decides where hackbot writes. The target
+is the agent's `github_repository` in `AGENT_REGISTRY`, an `owner/repo` that must match its
+`[source].repo_url`. An agent without one can't submit, and an artifact naming any other
+repository is refused before credentials are minted. A run that changes files under
+`.github/workflows/` is also refused. The branch is pushed to the repository itself, not a
+fork, so its pull request's workflows would run with that repository's secrets.
 
 ### Hooks
 

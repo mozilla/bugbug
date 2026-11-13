@@ -7,12 +7,14 @@ the handler actually makes. The commits artifact it reads is built agent-side
 """
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 from app.action_handlers import ApplyContext, github_handler
 from app.action_handlers.registry import PATCH_ACTION_TYPES, get_handler
+from app.agents import AGENT_REGISTRY
 from app.config import GitHubAppSettings
 from app.github import GitHubApp
 from cryptography.hazmat.primitives import serialization
@@ -132,6 +134,22 @@ class _FakeGitHub:
             case "GET", "/pulls":
                 return httpx.Response(200, json=[{"number": 7, "html_url": PR_URL}])
         return httpx.Response(404, json={"message": f"unexpected {method} {path}"})
+
+
+@pytest.fixture(autouse=True)
+def agent_registry(monkeypatch):
+    """Registers ``test-agent`` with ``owner/repo`` as its GitHub repository."""
+
+    def register(github_repository: str | None = f"{OWNER}/{REPO}") -> None:
+        spec = replace(
+            AGENT_REGISTRY["bug-fix"],
+            name="test-agent",
+            github_repository=github_repository,
+        )
+        monkeypatch.setattr(github_handler, "AGENT_REGISTRY", {"test-agent": spec})
+
+    register()
+    return register
 
 
 @pytest.fixture
@@ -314,6 +332,74 @@ async def test_submit_patch_fails_for_a_repository_not_on_github(fake_github):
 
     assert result.status == "failed"
     assert "not on GitHub" in result.error
+    assert fake.requests == []
+
+
+async def test_submit_patch_targets_the_configured_repository(fake_github):
+    # GitHub names are case-insensitive, so a repo_url that differs only in
+    # case still matches. The calls use the configured name, not the artifact's.
+    fake = fake_github()
+    submission = {**_SUBMISSION, "repo_url": "https://github.com/OWNER/Repo.git"}
+
+    result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx(submission))
+
+    assert result.status == "applied", result.error
+    assert result.result["repository"] == f"{OWNER}/{REPO}"
+    assert fake.calls("POST", f"/repos/{OWNER}/{REPO}/pulls")
+
+
+async def test_submit_patch_fails_for_an_agent_without_a_github_repository(
+    fake_github, agent_registry
+):
+    fake = fake_github()
+    agent_registry(github_repository=None)
+
+    result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx())
+
+    assert result.status == "failed"
+    assert "not configured to open pull requests" in result.error
+    assert fake.requests == []
+
+
+async def test_submit_patch_refuses_a_repository_other_than_the_configured_one(
+    fake_github,
+):
+    # The artifact is agent-written: it must not pick where hackbot writes.
+    fake = fake_github()
+    submission = {**_SUBMISSION, "repo_url": "https://github.com/other/repo.git"}
+
+    result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx(submission))
+
+    assert result.status == "failed"
+    assert "may only open pull requests on owner/repo" in result.error
+    # Refused before any credentials are minted.
+    assert fake.requests == []
+
+
+async def test_submit_patch_refuses_changes_to_workflow_files(fake_github):
+    fake = fake_github()
+    commit = {
+        **_SUBMISSION["commits"][0],
+        "changes": [
+            {"path": ".github/CODEOWNERS", "mode": "100644", "content": "YQo="},
+            {"path": ".github/workflows/ci.yml", "mode": "100644", "content": "YQo="},
+        ],
+    }
+    deletion = {
+        **_SUBMISSION["commits"][1],
+        "changes": [
+            {"path": ".github/workflows/old.yml", "mode": "100644", "deleted": True}
+        ],
+    }
+    submission = {**_SUBMISSION, "commits": [commit, deletion]}
+
+    result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx(submission))
+
+    assert result.status == "failed"
+    # Every workflow path is named, deletions included; other .github files
+    # are fine.
+    assert result.error.endswith(".github/workflows/ci.yml, .github/workflows/old.yml")
+    assert "CODEOWNERS" not in result.error
     assert fake.requests == []
 
 

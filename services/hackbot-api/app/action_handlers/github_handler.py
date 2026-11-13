@@ -7,13 +7,17 @@ through GitHub's Git Data API: a blob per changed file, a tree per commit on top
 of its parent's, then the commit itself. Commits made this way are attributed to
 their original author and committed (and signed) by the GitHub App.
 
-The pull request goes to the repository the agent's source was checked out
-from, which must have the GitHub App installed.
+The artifact is written by the agent, so nothing in it decides where hackbot
+writes. The pull request goes to the repository set as the agent's
+``github_repository`` in ``AGENT_REGISTRY``, which must have the GitHub App
+installed. A submission whose artifact names another repository, or that
+changes workflow files, is refused before any credentials are minted.
 """
 
 import json
 import logging
 import re
+from collections.abc import Iterable
 from functools import lru_cache
 from typing import Any
 
@@ -21,6 +25,7 @@ from githubkit import AppInstallationAuthStrategy, GitHub
 from githubkit.exception import RequestFailed
 
 from app.action_handlers.base import ActionResult, ApplyContext
+from app.agents import AGENT_REGISTRY
 from app.config import settings
 from app.github import READ_WRITE_PERMISSIONS, GitHubApp
 
@@ -36,6 +41,11 @@ _GITHUB_REPO_URL_RE = re.compile(
 
 _GITLINK_MODE = "160000"
 
+# GitHub only lets a token with `workflows: write` push changes here. hackbot
+# never asks for it: the branch is pushed to the repository itself, not a fork,
+# so its pull request's workflows run with that repository's secrets.
+_WORKFLOWS_DIR = ".github/workflows"
+
 
 @lru_cache(maxsize=1)
 def _github_app() -> GitHubApp:
@@ -50,6 +60,19 @@ def parse_repo_url(repo_url: str) -> tuple[str, str] | None:
     if match is None:
         return None
     return match["owner"], match["repo"]
+
+
+def _workflow_paths(commits: Iterable[dict[str, Any]]) -> list[str]:
+    """The paths under ``.github/workflows`` that ``commits`` change, sorted."""
+    return sorted(
+        {
+            change["path"]
+            for commit in commits
+            for change in commit["changes"]
+            if change["path"] == _WORKFLOWS_DIR
+            or change["path"].startswith(f"{_WORKFLOWS_DIR}/")
+        }
+    )
 
 
 def branch_name(run_id: str) -> str:
@@ -190,9 +213,10 @@ async def _open_pull_request(
 class SubmitPatchHandler:
     """Applies ``github.submit_patch``: the run's commits become a pull request.
 
-    The branch is pushed to the source repository itself and the pull request
-    targets its default branch. Retrying after a partial failure reuses the
-    branch and any pull request already open from it.
+    The branch is pushed to the agent's configured ``github_repository`` itself,
+    not a fork, and the pull request targets its default branch. Retrying after
+    a partial failure reuses the branch and any pull request already open from
+    it.
     """
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
@@ -207,15 +231,38 @@ class SubmitPatchHandler:
                 f"Could not load the GitHub commits artifact for this run: {exc}"
             )
 
+        # The target comes from trusted configuration. The artifact's repo_url
+        # only has to agree with it, since the commits were built on that
+        # checkout.
+        spec = AGENT_REGISTRY.get(ctx.agent)
+        configured = spec.github_repository if spec else None
+        if not configured:
+            return ActionResult.failed(
+                f"Agent {ctx.agent!r} is not configured to open pull requests "
+                "(no github_repository in its AGENT_REGISTRY entry)"
+            )
+        owner, _, repo = configured.partition("/")
+
         repo_url = submission["repo_url"]
         parsed = parse_repo_url(repo_url)
         if parsed is None:
             return ActionResult.failed(
                 f"The agent's source repository {repo_url!r} is not on GitHub"
             )
+        # GitHub owner and repository names are case-insensitive.
+        if "/".join(parsed).lower() != configured.lower():
+            return ActionResult.failed(
+                f"The run's commits are for {repo_url!r}, but agent {ctx.agent!r} "
+                f"may only open pull requests on {configured}"
+            )
         if not submission["commits"]:
             return ActionResult.failed("This run has no commits to submit")
-        owner, repo = parsed
+        workflow_paths = _workflow_paths(submission["commits"])
+        if workflow_paths:
+            return ActionResult.failed(
+                f"The run changes files under {_WORKFLOWS_DIR}/, which hackbot does "
+                f"not submit: {', '.join(workflow_paths)}"
+            )
         branch = branch_name(ctx.run_id)
 
         try:
