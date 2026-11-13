@@ -23,6 +23,11 @@ FROM python:3.14-slim AS base
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
+# For the migration Job (webservices-infra, hackbot-api-migrate), which runs
+# `alembic upgrade head` here with this same image before each deploy.
+COPY services/hackbot-api/alembic.ini ./
+COPY services/hackbot-api/alembic ./alembic
+
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PORT=8080
