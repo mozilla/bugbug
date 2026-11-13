@@ -2,13 +2,53 @@
 
 from unittest.mock import MagicMock
 
-import bugsy
+import httpx
 import pytest
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.registry import ToolError
+from bugzilla_client import BugzillaClient, BugzillaSettings
 from mcp.types import ListToolsRequest
+
+_RealAsyncClient = httpx.AsyncClient
+
+# What Bugzilla answers when the API key cannot see a bug.
+ACCESS_DENIED = httpx.Response(
+    401, json={"error": True, "code": 102, "message": "nope"}
+)
+
+
+@pytest.fixture
+async def bugzilla_ctx(monkeypatch):
+    """Build a context whose Bugzilla requests are answered by ``handler``.
+
+    ``handler(path, params)`` gets the path relative to ``/rest/``. Returns the
+    context and the ``(path, params)`` pairs it sent, so a test can assert what
+    was and was not fetched.
+    """
+    clients: list[BugzillaClient] = []
+
+    def make(handler):
+        calls = []
+
+        def record(request: httpx.Request) -> httpx.Response:
+            path = request.url.path.removeprefix("/rest/")
+            calls.append((path, dict(request.url.params)))
+            return handler(path, request.url.params)
+
+        monkeypatch.setattr(
+            httpx,
+            "AsyncClient",
+            lambda **kw: _RealAsyncClient(transport=httpx.MockTransport(record), **kw),
+        )
+        client = BugzillaClient(BugzillaSettings(api_key="a" * 40))
+        clients.append(client)
+        return BugzillaContext(client=client), calls
+
+    yield make
+    for client in clients:
+        await client.close()
 
 
 async def _list(server):
@@ -34,54 +74,39 @@ async def test_exposes_read_only_tools():
     }
 
 
-async def test_search_bugs_returns_data():
-    client = MagicMock()
-    client.request.return_value = {"bugs": [{"id": 1}, {"id": 2}]}
-    result = await bugzilla.search_bugs(
-        BugzillaContext(client=client), params={"id": "1,2"}
+async def test_search_bugs_returns_data(bugzilla_ctx):
+    ctx, calls = bugzilla_ctx(
+        lambda path, params: httpx.Response(200, json={"bugs": [{"id": 1}, {"id": 2}]})
     )
+    result = await bugzilla.search_bugs(ctx, params={"id": "1,2"})
     assert result == {"count": 2, "bugs": [{"id": 1}, {"id": 2}]}
+    assert calls == [("bug", {"id": "1,2"})]
 
 
-async def test_search_bugs_raises_tool_error_on_bugsy_failure():
-    import bugsy
-
-    client = MagicMock()
-    err = bugsy.BugsyException("nope")
-    err.code = 102
-    client.request.side_effect = err
+async def test_search_bugs_raises_tool_error_on_bugzilla_failure(bugzilla_ctx):
+    ctx, _ = bugzilla_ctx(lambda path, params: ACCESS_DENIED)
     with pytest.raises(ToolError) as ei:
-        await bugzilla.search_bugs(BugzillaContext(client=client), params={})
+        await bugzilla.search_bugs(ctx, params={})
     assert ei.value.payload["error"] == "access_denied"
 
 
-def _attachment_client(att, *, data="aGVsbG8="):
-    """A bugsy client that serves one attachment, with and without its data.
+def _attachment_ctx(bugzilla_ctx, att, *, data="aGVsbG8="):
+    """A context whose Bugzilla serves one attachment, with and without its data.
 
     Mirrors Bugzilla: `exclude_fields=data` returns the metadata only, and the
-    unqualified request returns the same record plus base64 `data`. Records every
-    (path, params) pair so a test can assert what was and was not fetched.
+    unqualified request returns the same record plus base64 `data`.
     """
-    client = MagicMock()
-    calls = []
 
-    def request(path, params=None):
-        params = params or {}
-        calls.append((path, params))
-        if path.endswith("/attachment"):
-            body = (
-                dict(att)
-                if params.get("exclude_fields") == "data"
-                else {**att, "data": data}
-            )
-            return {"bugs": {"1": [body]}}
+    def handler(path, params):
         if params.get("exclude_fields") == "data":
-            return {"attachments": {str(att["id"]): dict(att)}}
-        return {"attachments": {str(att["id"]): {**att, "data": data}}}
+            body = dict(att)
+        else:
+            body = {**att, "data": data}
+        if path.endswith("/attachment"):
+            return httpx.Response(200, json={"bugs": {"1": [body]}})
+        return httpx.Response(200, json={"attachments": {str(att["id"]): body}})
 
-    client.request.side_effect = request
-    client.calls = calls
-    return client
+    return bugzilla_ctx(handler)
 
 
 def _att(**overrides):
@@ -89,26 +114,26 @@ def _att(**overrides):
     return {**base, **overrides}
 
 
-async def test_download_attachment_writes_allowed_image(tmp_path):
-    client = _attachment_client(_att())
+async def test_download_attachment_writes_allowed_image(bugzilla_ctx, tmp_path):
+    ctx, calls = _attachment_ctx(bugzilla_ctx, _att())
     dest = tmp_path / "shot.png"
     result = await bugzilla.download_attachment(
-        BugzillaContext(client=client), attachment_id=7, dest_path=str(dest)
+        ctx, attachment_id=7, dest_path=str(dest)
     )
     assert dest.read_bytes() == b"hello"
     assert result["content_type"] == "image/png"
     assert result["size_bytes"] == 5
     # Metadata is probed before the bytes are asked for.
-    assert client.calls[0] == ("bug/attachment/7", {"exclude_fields": "data"})
-    assert client.calls[1] == ("bug/attachment/7", {})
+    assert calls[0] == ("bug/attachment/7", {"exclude_fields": "data"})
+    assert calls[1] == ("bug/attachment/7", {})
 
 
-async def test_download_attachment_writes_allowed_text(tmp_path):
-    client = _attachment_client(_att(file_name="update.log", content_type="text/x-log"))
-    dest = tmp_path / "update.log"
-    await bugzilla.download_attachment(
-        BugzillaContext(client=client), attachment_id=7, dest_path=str(dest)
+async def test_download_attachment_writes_allowed_text(bugzilla_ctx, tmp_path):
+    ctx, _ = _attachment_ctx(
+        bugzilla_ctx, _att(file_name="update.log", content_type="text/x-log")
     )
+    dest = tmp_path / "update.log"
+    await bugzilla.download_attachment(ctx, attachment_id=7, dest_path=str(dest))
     assert dest.read_bytes() == b"hello"
 
 
@@ -123,17 +148,17 @@ async def test_download_attachment_writes_allowed_text(tmp_path):
     ],
     ids=["mp4", "zip", "webm", "empty-type", "no-type"],
 )
-async def test_download_attachment_refuses_unreadable_types(tmp_path, att):
-    client = _attachment_client(att)
+async def test_download_attachment_refuses_unreadable_types(
+    bugzilla_ctx, tmp_path, att
+):
+    ctx, calls = _attachment_ctx(bugzilla_ctx, att)
     dest = tmp_path / "out.bin"
     with pytest.raises(ToolError) as ei:
-        await bugzilla.download_attachment(
-            BugzillaContext(client=client), attachment_id=7, dest_path=str(dest)
-        )
+        await bugzilla.download_attachment(ctx, attachment_id=7, dest_path=str(dest))
     assert ei.value.payload["error"] == "attachment_type_not_allowed"
     assert not dest.exists()
     # The refusal costs one metadata request; the bytes are never fetched.
-    assert client.calls == [("bug/attachment/7", {"exclude_fields": "data"})]
+    assert calls == [("bug/attachment/7", {"exclude_fields": "data"})]
 
 
 @pytest.mark.parametrize(
@@ -147,13 +172,15 @@ async def test_download_attachment_refuses_unreadable_types(tmp_path, att):
         ("trace", False),
     ],
 )
-async def test_octet_stream_resolves_by_file_name(tmp_path, file_name, allowed):
+async def test_octet_stream_resolves_by_file_name(
+    bugzilla_ctx, tmp_path, file_name, allowed
+):
     """Bugzilla's fallback type covers both plain logs and untyped screencasts."""
-    client = _attachment_client(
-        _att(file_name=file_name, content_type="application/octet-stream")
+    ctx, _ = _attachment_ctx(
+        bugzilla_ctx,
+        _att(file_name=file_name, content_type="application/octet-stream"),
     )
     dest = tmp_path / "out.bin"
-    ctx = BugzillaContext(client=client)
     if allowed:
         await bugzilla.download_attachment(ctx, attachment_id=7, dest_path=str(dest))
         assert dest.read_bytes() == b"hello"
@@ -165,87 +192,75 @@ async def test_octet_stream_resolves_by_file_name(tmp_path, file_name, allowed):
         assert ei.value.payload["error"] == "attachment_type_not_allowed"
 
 
-async def test_is_patch_overrides_an_odd_content_type(tmp_path):
+async def test_is_patch_overrides_an_odd_content_type(bugzilla_ctx, tmp_path):
     """A patch is text even when the uploader typed it as something else."""
-    client = _attachment_client(
+    ctx, _ = _attachment_ctx(
+        bugzilla_ctx,
         _att(
             file_name="fix.patch",
             content_type="application/octet-stream",
             is_patch=True,
-        )
+        ),
     )
     dest = tmp_path / "fix.patch"
-    await bugzilla.download_attachment(
-        BugzillaContext(client=client), attachment_id=7, dest_path=str(dest)
-    )
+    await bugzilla.download_attachment(ctx, attachment_id=7, dest_path=str(dest))
     assert dest.read_bytes() == b"hello"
 
 
-async def test_content_type_parameters_and_case_are_ignored(tmp_path):
-    client = _attachment_client(
-        _att(file_name="steps.txt", content_type="TEXT/PLAIN; charset=UTF-8")
+async def test_content_type_parameters_and_case_are_ignored(bugzilla_ctx, tmp_path):
+    ctx, _ = _attachment_ctx(
+        bugzilla_ctx,
+        _att(file_name="steps.txt", content_type="TEXT/PLAIN; charset=UTF-8"),
     )
     dest = tmp_path / "steps.txt"
-    await bugzilla.download_attachment(
-        BugzillaContext(client=client), attachment_id=7, dest_path=str(dest)
-    )
+    await bugzilla.download_attachment(ctx, attachment_id=7, dest_path=str(dest))
     assert dest.read_bytes() == b"hello"
 
 
-async def test_download_attachment_not_found():
-    client = MagicMock()
-    client.request.return_value = {"attachments": {}}
+async def test_download_attachment_not_found(bugzilla_ctx):
+    ctx, _ = bugzilla_ctx(
+        lambda path, params: httpx.Response(200, json={"attachments": {}})
+    )
     with pytest.raises(ToolError) as ei:
-        await bugzilla.download_attachment(
-            BugzillaContext(client=client), attachment_id=7, dest_path="/tmp/x"
-        )
+        await bugzilla.download_attachment(ctx, attachment_id=7, dest_path="/tmp/x")
     assert ei.value.payload["error"] == "attachment_not_found"
 
 
-async def test_get_bug_attachments_metadata_only_never_asks_for_data():
-    client = _attachment_client(_att())
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1
-    )
+async def test_get_bug_attachments_metadata_only_never_asks_for_data(bugzilla_ctx):
+    ctx, calls = _attachment_ctx(bugzilla_ctx, _att())
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1)
     assert result["count"] == 1
     assert "data" not in result["attachments"][0]
-    assert client.calls == [("bug/1/attachment", {"exclude_fields": "data"})]
+    assert calls == [("bug/1/attachment", {"exclude_fields": "data"})]
 
 
-def _list_client(atts, *, data="aGVsbG8=", fail_ids=()):
-    """A client serving an attachment list, then per-attachment data on demand.
+def _list_ctx(bugzilla_ctx, atts, *, data="aGVsbG8=", fail_ids=()):
+    """A context serving an attachment list, then per-attachment data on demand.
 
-    `fail_ids` makes those attachment IDs raise the way the proxy does for a bug
+    `fail_ids` makes those attachment IDs fail the way the proxy does for a bug
     the API key cannot reach.
     """
-    client = MagicMock()
-    calls = []
 
-    def request(path, params=None):
-        calls.append((path, params or {}))
+    def handler(path, params):
         if path == "bug/1/attachment":
-            return {"bugs": {"1": [dict(a) for a in atts]}}
+            return httpx.Response(200, json={"bugs": {"1": [dict(a) for a in atts]}})
         att_id = path.rsplit("/", 1)[1]
         if int(att_id) in fail_ids:
-            err = bugsy.BugsyException("nope")
-            err.code = 102
-            raise err
+            return ACCESS_DENIED
         source = next(a for a in atts if str(a["id"]) == att_id)
-        return {"attachments": {att_id: {**source, "data": data}}}
+        return httpx.Response(
+            200, json={"attachments": {att_id: {**source, "data": data}}}
+        )
 
-    client.request.side_effect = request
-    client.calls = calls
-    return client
+    return bugzilla_ctx(handler)
 
 
-async def test_get_bug_attachments_inlines_text_and_refuses_video():
+async def test_get_bug_attachments_inlines_text_and_refuses_video(bugzilla_ctx):
     log = {"id": 7, "file_name": "update.log", "content_type": "text/plain"}
     mp4 = {"id": 8, "file_name": "screencast.mp4", "content_type": "video/mp4"}
-    client = _list_client([log, mp4])
+    ctx, calls = _list_ctx(bugzilla_ctx, [log, mp4])
 
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1, include_data=True
-    )
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1, include_data=True)
 
     by_id = {a["id"]: a for a in result["attachments"]}
     assert by_id[7]["data"] == "aGVsbG8="
@@ -253,13 +268,15 @@ async def test_get_bug_attachments_inlines_text_and_refuses_video():
     assert "video/mp4" in by_id[8]["data_omitted"]
     assert (result["inlined_count"], result["omitted_count"]) == (1, 1)
     # The video is never fetched: one list call plus one fetch for the log.
-    assert client.calls == [
+    assert calls == [
         ("bug/1/attachment", {"exclude_fields": "data"}),
         ("bug/attachment/7", {}),
     ]
 
 
-async def test_get_bug_attachments_does_not_inline_binary_it_would_still_download():
+async def test_get_bug_attachments_does_not_inline_binary_it_would_still_download(
+    bugzilla_ctx,
+):
     """A tool result is text, so a base64 png is a long string, not an image block.
 
     download_attachment plus Read is the only path that reaches the model as an
@@ -268,11 +285,9 @@ async def test_get_bug_attachments_does_not_inline_binary_it_would_still_downloa
     png = {"id": 7, "file_name": "shot.png", "content_type": "image/png"}
     pdf = {"id": 8, "file_name": "report.pdf", "content_type": "application/pdf"}
     svg = {"id": 9, "file_name": "case.svg", "content_type": "image/svg+xml"}
-    client = _list_client([png, pdf, svg])
+    ctx, calls = _list_ctx(bugzilla_ctx, [png, pdf, svg])
 
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1, include_data=True
-    )
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1, include_data=True)
 
     by_id = {a["id"]: a for a in result["attachments"]}
     for att_id in (7, 8):
@@ -281,15 +296,17 @@ async def test_get_bug_attachments_does_not_inline_binary_it_would_still_downloa
     # SVG is markup, so the text is the content.
     assert by_id[9]["data"] == "aGVsbG8="
     assert (result["inlined_count"], result["omitted_count"]) == (1, 2)
-    assert ("bug/attachment/7", {}) not in client.calls
-    assert ("bug/attachment/8", {}) not in client.calls
+    assert ("bug/attachment/7", {}) not in calls
+    assert ("bug/attachment/8", {}) not in calls
 
     # Still downloadable to disk, where size does not cost context.
     assert bugzilla.attachment_type_allowed(png) == (True, "image/png")
     assert bugzilla.attachment_type_allowed(pdf) == (True, "application/pdf")
 
 
-async def test_get_bug_attachments_skips_text_over_the_inline_size_limit():
+async def test_get_bug_attachments_skips_text_over_the_inline_size_limit(
+    bugzilla_ctx,
+):
     big = {
         "id": 7,
         "file_name": "huge.log",
@@ -302,29 +319,25 @@ async def test_get_bug_attachments_skips_text_over_the_inline_size_limit():
         "content_type": "text/plain",
         "size": bugzilla.MAX_INLINE_BYTES,
     }
-    client = _list_client([big, small])
+    ctx, calls = _list_ctx(bugzilla_ctx, [big, small])
 
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1, include_data=True
-    )
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1, include_data=True)
 
     by_id = {a["id"]: a for a in result["attachments"]}
     assert "data" not in by_id[7]
     assert "inline limit" in by_id[7]["data_omitted"]
     assert by_id[8]["data"] == "aGVsbG8="
-    assert ("bug/attachment/7", {}) not in client.calls
+    assert ("bug/attachment/7", {}) not in calls
 
 
-async def test_get_bug_attachments_caps_the_number_it_inlines():
+async def test_get_bug_attachments_caps_the_number_it_inlines(bugzilla_ctx):
     atts = [
         {"id": i, "file_name": f"{i}.log", "content_type": "text/plain"}
         for i in range(1, bugzilla.MAX_INLINE_ATTACHMENTS + 4)
     ]
-    client = _list_client(atts)
+    ctx, _ = _list_ctx(bugzilla_ctx, atts)
 
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1, include_data=True
-    )
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1, include_data=True)
 
     assert result["inlined_count"] == bugzilla.MAX_INLINE_ATTACHMENTS
     assert result["omitted_count"] == 3
@@ -334,7 +347,9 @@ async def test_get_bug_attachments_caps_the_number_it_inlines():
     assert all("only the first" in a["data_omitted"] for a in over)
 
 
-async def test_get_bug_attachments_one_failure_does_not_discard_the_rest():
+async def test_get_bug_attachments_one_failure_does_not_discard_the_rest(
+    bugzilla_ctx,
+):
     """Before the per-attachment loop this was one request that could not fail partway.
 
     A raise from the loop would throw away everything already fetched, so an
@@ -343,11 +358,9 @@ async def test_get_bug_attachments_one_failure_does_not_discard_the_rest():
     a = {"id": 7, "file_name": "a.log", "content_type": "text/plain"}
     b = {"id": 8, "file_name": "b.log", "content_type": "text/plain"}
     c = {"id": 9, "file_name": "c.log", "content_type": "text/plain"}
-    client = _list_client([a, b, c], fail_ids=(8,))
+    ctx, _ = _list_ctx(bugzilla_ctx, [a, b, c], fail_ids=(8,))
 
-    result = await bugzilla.get_bug_attachments(
-        BugzillaContext(client=client), bug_id=1, include_data=True
-    )
+    result = await bugzilla.get_bug_attachments(ctx, bug_id=1, include_data=True)
 
     by_id = {x["id"]: x for x in result["attachments"]}
     assert by_id[7]["data"] == "aGVsbG8="
