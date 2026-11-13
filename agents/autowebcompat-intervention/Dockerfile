@@ -50,17 +50,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the DevTools MCP server from the pinned package.json/lockfile.
-COPY agents/autowebcompat-intervention/package.json \
-     agents/autowebcompat-intervention/package-lock.json \
-     /app/autowebcompat-intervention/
-RUN cd /app/autowebcompat-intervention && npm ci --omit=dev
+COPY libs/autowebcompat-tools/package.json \
+     libs/autowebcompat-tools/package-lock.json \
+     /app/
+RUN cd /app && npm ci --omit=dev
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
 COPY agents/autowebcompat-intervention/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
-    && mkdir -p /workspace \
+    && mkdir -p /workspace /app/autowebcompat-intervention \
     && chown agent:agent /workspace /app/autowebcompat-intervention
 
 ENV SCREEN_WIDTH=1280
