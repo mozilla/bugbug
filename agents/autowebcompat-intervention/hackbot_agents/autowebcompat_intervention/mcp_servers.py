@@ -13,7 +13,7 @@ from pathlib import Path
 
 from claude_agent_sdk.types import McpStdioServerConfig
 
-MCP_INSTALL_DIR = Path("/app/autowebcompat-intervention")
+MCP_INSTALL_DIR = Path("/app")
 
 
 def resolve_bin(bin_name: str) -> str:

@@ -54,7 +54,7 @@ logger = logging.getLogger("autowebcompat-intervention")
 HERE = Path(__file__).resolve().parent
 
 WORK_DIR = Path("/app/autowebcompat-intervention")
-NODE_MODULES = WORK_DIR / "node_modules"
+NODE_MODULES = Path("/app/node_modules")
 
 
 class PromptLibrary:

@@ -11,7 +11,7 @@ from claude_agent_sdk.types import McpStdioServerConfig
 
 def resolve_bin(bin_name: str) -> str:
     """Resolve an installed MCP server binary to an absolute path."""
-    binary = Path("/app/repro") / "node_modules" / ".bin" / bin_name
+    binary = Path("/app") / "node_modules" / ".bin" / bin_name
     if not binary.exists():
         raise RuntimeError(
             f"MCP server binary not found at {binary}; the image should install "

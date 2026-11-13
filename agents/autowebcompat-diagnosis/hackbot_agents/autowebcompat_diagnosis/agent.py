@@ -31,11 +31,11 @@ from .result import (
 
 HERE = Path(__file__).resolve().parent
 
-# Where the pinned npm deps (puppeteer, the DevTools MCP servers) are installed
-# in the image; the agent runs the reproduction script with this on NODE_PATH so
-# its `import puppeteer` resolves.
+# Where the pinned npm deps (puppeteer-core, the DevTools MCP servers) are
+# installed in the image; the agent runs the reproduction script with this on
+# NODE_PATH so its `import puppeteer-core` resolves.
 WORK_DIR = Path("/app/diagnosis")
-NODE_MODULES = WORK_DIR / "node_modules"
+NODE_MODULES = Path("/app/node_modules")
 
 logger = logging.getLogger("autowebcompat-diagnosis")
 
