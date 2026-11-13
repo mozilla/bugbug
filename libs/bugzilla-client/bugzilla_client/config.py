@@ -9,7 +9,7 @@ env-driven config (``BUGZILLA_URL``, ``BUGZILLA_API_KEY``, ...).
 from importlib.metadata import version
 from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,12 @@ class BugzillaSettings(BaseModel):
     timeout_seconds: float = 30
     edge_key: str | None = None
     user_agent: str = f"Bugbug-BugzillaClient/{version('bugzilla-client')}"
+
+    @field_validator("url")
+    @classmethod
+    def _site_root(cls, v: str) -> str:
+        # Accept the REST base too (``.../rest``), as the agents' config uses it.
+        return v.rstrip("/").removesuffix("/rest")
 
     @classmethod
     def from_env(cls) -> BugzillaSettings:
