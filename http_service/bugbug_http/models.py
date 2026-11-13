@@ -40,6 +40,7 @@ MODELS_NAMES = [
     "invalidcompatibilityreport",
     "needsdiagnosis",
     "regression",
+    "regressor",
     "stepstoreproduce",
     "spambug",
     "testlabelselect",
