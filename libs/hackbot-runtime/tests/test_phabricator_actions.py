@@ -56,6 +56,22 @@ async def test_submit_rejects_test_plan_headers(header):
     assert rec.actions == []
 
 
+async def test_submit_rejects_reviewers_header():
+    rec = ActionsRecorder()
+
+    with pytest.raises(ToolError) as exc:
+        await phabricator.submit_patch(
+            rec,
+            bug_id=1,
+            title="Fix",
+            reasoning="r",
+            summary="Explanation\n\nReviewers: #spidermonkey-reviewers",
+        )
+
+    assert "Reviewers:" in str(exc.value)
+    assert rec.actions == []
+
+
 @pytest.mark.parametrize(
     "summary",
     [
