@@ -10,11 +10,11 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-import bugsy
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
+from bugzilla_client import BugzillaClient, BugzillaSettings
 from mcp.server.streamable_http_manager import (
     Receive,
     Scope,
@@ -38,8 +38,8 @@ class BrokerInputs(BaseSettings):
 
 
 def build_app(inputs: BrokerInputs) -> Starlette:
-    client = bugsy.Bugsy(
-        api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
+    client = BugzillaClient(
+        BugzillaSettings(url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key)
     )
     ctx = BugzillaContext(client=client)
     sdk_config = build_sdk_server("bugzilla", ctx, bugzilla.TOOLS)
@@ -49,7 +49,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
-        async with manager.run():
+        async with client, manager.run():
             log.info(
                 "bugzilla broker ready on %s:%d (read-only)",
                 inputs.host,

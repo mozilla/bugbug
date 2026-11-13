@@ -9,13 +9,12 @@ The agent container itself binds no Bugzilla credentials.
 import logging
 from contextlib import asynccontextmanager
 
-import bugsy
 import uvicorn
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
+from bugzilla_client import BugzillaClient, BugzillaSettings
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
 from starlette.routing import Mount
@@ -31,21 +30,10 @@ class BrokerInputs(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    @field_validator("bugzilla_api_url")
-    @classmethod
-    def _ensure_rest_base(cls, v: str) -> str:
-        """Bugsy expects the REST base (``.../rest``) and just appends the path.
-
-        A bare host like ``https://bugzilla.mozilla.org`` makes every call hit
-        the HTML site and fail to parse as JSON, so normalize it here.
-        """
-        v = v.rstrip("/")
-        return v if v.endswith("/rest") else f"{v}/rest"
-
 
 def build_app(inputs: BrokerInputs) -> Starlette:
-    client = bugsy.Bugsy(
-        api_key=inputs.bugzilla_api_key, bugzilla_url=inputs.bugzilla_api_url
+    client = BugzillaClient(
+        BugzillaSettings(url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key)
     )
     ctx = BugzillaContext(client=client)
     sdk_config = build_sdk_server("bugzilla", ctx, bugzilla.TOOLS)
@@ -59,7 +47,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
         # clear log line instead of an opaque JSON-decode error on every tool
         # call. We stay up regardless: the agent then gets a structured error.
         try:
-            version = client.request("version").get("version")
+            version = (await client.request("GET", "version")).get("version")
             log.info(
                 "bugzilla reachable at %s (version %s)",
                 inputs.bugzilla_api_url,
@@ -71,7 +59,7 @@ def build_app(inputs: BrokerInputs) -> Starlette:
                 "and BUGZILLA_API_KEY; tool calls will fail until this is fixed",
                 inputs.bugzilla_api_url,
             )
-        async with manager.run():
+        async with client, manager.run():
             log.info(
                 "bugzilla broker ready on %s:%d (read-only)",
                 inputs.host,

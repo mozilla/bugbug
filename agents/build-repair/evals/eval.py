@@ -24,13 +24,13 @@ import uuid
 from functools import cached_property
 from pathlib import Path
 
-import bugsy
 import weave
 from agent_tools import bugzilla
 from agent_tools.bugzilla import BugzillaContext
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox import FirefoxContext
 from agent_tools.firefox.tools.build_firefox import build_firefox
+from bugzilla_client import BugzillaClient, BugzillaSettings
 from hackbot_agents.build_repair.agent import run_build_repair
 from hackbot_agents.build_repair.config import ANALYSIS_MODEL, FIX_MODEL
 
@@ -66,11 +66,11 @@ def _bugzilla_server():
     mcp_url = _broker_mcp_url()
     if mcp_url:
         return {"type": "http", "url": mcp_url}
-    client = bugsy.Bugsy(
-        bugzilla_url=os.environ.get(
-            "BUGZILLA_API_URL", "https://bugzilla.mozilla.org/rest"
-        ),
-        api_key=os.environ.get("BUGZILLA_API_KEY"),
+    client = BugzillaClient(
+        BugzillaSettings(
+            url=os.environ.get("BUGZILLA_API_URL", "https://bugzilla.mozilla.org"),
+            api_key=os.environ.get("BUGZILLA_API_KEY"),
+        )
     )
     return build_sdk_server("bugzilla", BugzillaContext(client=client), bugzilla.TOOLS)
 

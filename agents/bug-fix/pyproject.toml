@@ -8,7 +8,7 @@ dependencies = [
     "agent-tools[bugzilla,firefox]",
     "phabricator-client",
     "phabricator-proxy",
-    "bugsy",
+    "bugzilla-client",
     "claude-agent-sdk>=0.1.30",
     "mcp>=1.0.0",
     "starlette>=0.36.0",
@@ -24,6 +24,7 @@ a11y = ["pygobject>=3.52"]
 [tool.uv.sources]
 hackbot-runtime = { workspace = true }
 agent-tools = { workspace = true }
+bugzilla-client = { workspace = true }
 phabricator-client = { workspace = true }
 phabricator-proxy = { workspace = true }
 
