@@ -23,6 +23,7 @@ from hackbot_agents.gecko_triage import (  # noqa: E402
     broker_client,
     closing,
     config,
+    hooks,
 )
 from hackbot_agents.gecko_triage.closing import (  # noqa: E402
     CloseVerdict,
@@ -37,7 +38,6 @@ from hackbot_agents.gecko_triage.hooks import install_hooks  # noqa: E402
 from hackbot_agents.gecko_triage.investigations import Investigations  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
 from hackbot_runtime.actions import ActionsRecorder  # noqa: E402
-from hackbot_runtime.actions import bugzilla as runtime_bugzilla  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -257,7 +257,7 @@ def corpus() -> list[dict]:
 BUG = 9000001
 DUPE_TARGET = 9000004
 KNOWN_META = sorted(TEAM_META_BUGS)[0]
-REACTION_FOOTER = runtime_bugzilla.COMMENT_TRAILER
+REACTION_FOOTER = hooks.RUNTIME_FOOTER
 
 
 def _recorder(

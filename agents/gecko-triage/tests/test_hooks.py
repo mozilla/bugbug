@@ -99,7 +99,14 @@ def test_the_style_limits_skip_the_runtime_trailer():
     rec = _recorder()
     text = _comment(rec)["params"]["text"]
     assert text == f"Short note.{REACTION_FOOTER}"
-    assert hooks.split_runtime_footer(text) == ("Short note.", REACTION_FOOTER)
+    assert hooks.without_runtime_footer(text) == "Short note."
+
+
+def test_a_rule_line_in_the_agent_text_is_not_taken_for_the_footer():
+    # Only the exact runtime footer is left out; a "---" rule of the agent stays text.
+    text = "Analysis.\n\n---\n\nNext steps."
+    assert hooks.without_runtime_footer(text) == text
+    assert hooks.without_runtime_footer(text + REACTION_FOOTER) == text
 
 
 def test_the_full_hook_chain_rewrites_the_comment_in_order(tmp_path):

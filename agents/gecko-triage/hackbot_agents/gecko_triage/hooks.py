@@ -69,7 +69,6 @@ from pathlib import Path
 
 from agent_tools.registry import ToolError
 from hackbot_runtime.actions import ActionHook, ActionsRecorder
-from hackbot_runtime.actions.bugzilla import without_footer
 from hackbot_runtime.searchfox import PLACEHOLDER as SEARCHFOX_PLACEHOLDER
 from hackbot_runtime.searchfox import permalink_hook, permalink_prefix
 
@@ -170,11 +169,18 @@ def block_placeholder_hook(action: dict) -> None:
     params["text"] = text.replace(MOZREGRESSION_PLACEHOLDER, MOZREGRESSION_BLOCK)
 
 
-def split_runtime_footer(text: str) -> tuple[str, str]:
-    """``(agent's text, runtime's trailer)``; the trailer is empty when absent."""
-    head = without_footer(text)
-    tail = text[len(head) :]
-    return (head, tail) if tail.strip() else (text, "")
+# The feedback footer that Hackbot's `add_comment` puts at the end of each comment.
+# The checks below read only the agent's text, so they leave out this exact footer. When
+# Hackbot stops adding it, nothing matches and the checks read the whole text.
+RUNTIME_FOOTER = (
+    "\n\n---\n\nIf you'd like to provide feedback on this comment, please use the "
+    "👍 or 👎 reaction."
+)
+
+
+def without_runtime_footer(text: str) -> str:
+    """``text`` with no runtime footer at its end."""
+    return text.removesuffix(RUNTIME_FOOTER)
 
 
 _FENCED_CODE = re.compile(
@@ -399,7 +405,7 @@ def capture_block_hook(action: dict) -> None:
     text = params.get("text")
     if CAPTURE is None or not isinstance(text, str):
         return
-    body = split_runtime_footer(text)[0]
+    body = without_runtime_footer(text)
     has_block = CAPTURE.capture_block in body
     rest = _BLOCKQUOTE.sub("", _without_quoted_blocks(body))
     marker = CAPTURE.capture_marker
@@ -443,7 +449,7 @@ _SECURITY_RATING = re.compile(
 def _comment_body(action: dict) -> str | None:
     """The model's text of a recorded comment, without the runtime's footer."""
     text = action_params(action).get("text")
-    return split_runtime_footer(text)[0] if isinstance(text, str) else None
+    return without_runtime_footer(text) if isinstance(text, str) else None
 
 
 def security_wording_hook(action: dict) -> None:
@@ -589,7 +595,7 @@ def comment_style_hook(action: dict) -> None:
     text = params.get("text")
     if not isinstance(text, str):
         return
-    body = prose(split_runtime_footer(text)[0])
+    body = prose(without_runtime_footer(text))
 
     for line in body.splitlines():
         if _DASH_ASIDE.search(_LIST_MARKER.sub("", line)):
@@ -641,7 +647,7 @@ def refuted_close_hook(close_verdicts: CloseVerdicts) -> ActionHook:
         text = action_params(action).get("text")
         if not close_verdicts.refuted() or not isinstance(text, str):
             return
-        if match := _CLOSE_REQUEST.search(prose(split_runtime_footer(text)[0])):
+        if match := _CLOSE_REQUEST.search(prose(without_runtime_footer(text))):
             raise ToolError(
                 f"close_verifier refuted the close, but your comment still says "
                 f"{match[0]!r}. Do not propose, recommend or ask for any close. Say "

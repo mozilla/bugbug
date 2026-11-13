@@ -9,27 +9,8 @@ async def test_add_comment_appends_footer():
     rec = ActionsRecorder()
     await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
     text = rec.actions[0]["params"]["text"]
-    assert text == "Looks invalid.\n\n---\n\n" + bugzilla.COMMENT_FOOTER
+    assert text == "Looks invalid.\n\n---\n\n" + bugzilla._COMMENT_FOOTER
     assert rec.actions[0]["params"]["is_private"] is False
-
-
-async def test_add_comment_keeps_one_footer_when_the_text_has_it():
-    # An agent that read an earlier comment of its own can copy the footer.
-    footer = bugzilla.COMMENT_TRAILER
-    rec = ActionsRecorder()
-    await bugzilla.add_comment(
-        rec, bug_id=1, text=f"Looks invalid.{footer}{footer}\n", reasoning="r"
-    )
-    assert rec.actions[0]["params"]["text"] == f"Looks invalid.{footer}"
-
-
-def test_without_footer_removes_only_the_trailing_footer():
-    footer = bugzilla.COMMENT_TRAILER
-    assert bugzilla.without_footer(f"Note.{footer}") == "Note."
-    assert bugzilla.without_footer("Note.\n\n---\n\nMore.") == "Note.\n\n---\n\nMore."
-    assert bugzilla.without_footer(f"{bugzilla.COMMENT_FOOTER} Note.") == (
-        f"{bugzilla.COMMENT_FOOTER} Note."
-    )
 
 
 async def test_add_attachment_patch_forces_text_plain(tmp_path):

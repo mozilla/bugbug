@@ -930,3 +930,10 @@ def test_the_prompt_says_the_rules_win_over_a_tree_doc():
         'A `rule_file` block with `set="tree"` is a doc from the Firefox tree' in prompt
     )
     assert "these rules win" in prompt
+
+
+def test_the_comment_rules_say_hackbot_adds_the_feedback_line():
+    # A model copied the feedback line of an earlier agent comment into a new one.
+    text = _read("comment.md")
+    assert "Add no feedback line." in text
+    assert "Hackbot adds its own feedback line" in text

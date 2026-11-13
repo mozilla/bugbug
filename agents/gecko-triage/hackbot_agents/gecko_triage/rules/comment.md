@@ -61,6 +61,9 @@ and clear for readers whose first language is not English.
   product names, and bug numbers.
 - **Instructions** (steps the reader follows): imperative, one instruction per sentence,
   20 words maximum.
+- **Add no feedback line.** Hackbot adds its own feedback line at the end of each
+  comment. Do not copy it, or any other closing line or signature, from an earlier
+  comment.
 - **Name the person.** Never write "you" or "your" alone. Use the person's name, for
   example "the patch by <name>". A request is polite and puts the name first: "<name>,
   could you please …?" One request per sentence. The recorder refuses a "you" that
