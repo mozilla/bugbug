@@ -218,7 +218,10 @@ async def run_bug_fix(
         model=model,
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
-        setting_sources=[],
+        # Loads the Firefox tree's CLAUDE.md, which imports its AGENTS.md.
+        setting_sources=["project"],
+        # Ignores the tree's .mcp.json; only mcp_servers are available.
+        extra_args={"strict-mcp-config": None},
         max_buffer_size=MAX_BUFFER_SIZE,
     )
 
