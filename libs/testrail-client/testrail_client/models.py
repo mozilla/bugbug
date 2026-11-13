@@ -3,56 +3,56 @@
 from pydantic import BaseModel, ConfigDict, RootModel
 
 
-class TestRailModel(BaseModel):
+class _Model(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class TestRailCaseType(TestRailModel):
+class CaseType(_Model):
     id: int
     name: str
 
 
-class TestRailTemplate(TestRailModel):
+class Template(_Model):
     id: int
     name: str
 
 
-class TestRailStatus(TestRailModel):
+class Status(_Model):
     id: int
     name: str
 
 
-class TestRailSuite(TestRailModel):
+class Suite(_Model):
     id: int
 
 
-class TestRailSection(TestRailModel):
+class Section(_Model):
     id: int
 
 
-class TestRailCase(TestRailModel):
+class Case(_Model):
     id: int
 
 
-class TestRailRun(TestRailModel):
+class Run(_Model):
     id: int
 
 
-class TestRailResult(TestRailModel):
+class Result(_Model):
     id: int
 
 
-class TestRailCaseTypesResponse(RootModel[list[TestRailCaseType]]):
+class _CaseTypesResponse(RootModel[list[CaseType]]):
     pass
 
 
-class TestRailTemplatesResponse(RootModel[list[TestRailTemplate]]):
+class _TemplatesResponse(RootModel[list[Template]]):
     pass
 
 
-class TestRailStatusesResponse(RootModel[list[TestRailStatus]]):
+class _StatusesResponse(RootModel[list[Status]]):
     pass
 
 
-class TestRailResultsResponse(RootModel[list[TestRailResult]]):
+class _ResultsResponse(RootModel[list[Result]]):
     pass

@@ -6,18 +6,18 @@ import httpx
 
 from testrail_client.config import TestRailSettings
 from testrail_client.models import (
-    TestRailCase,
-    TestRailCaseType,
-    TestRailCaseTypesResponse,
-    TestRailResult,
-    TestRailResultsResponse,
-    TestRailRun,
-    TestRailSection,
-    TestRailStatus,
-    TestRailStatusesResponse,
-    TestRailSuite,
-    TestRailTemplate,
-    TestRailTemplatesResponse,
+    Case,
+    CaseType,
+    Result,
+    Run,
+    Section,
+    Status,
+    Suite,
+    Template,
+    _CaseTypesResponse,
+    _ResultsResponse,
+    _StatusesResponse,
+    _TemplatesResponse,
 )
 
 
@@ -54,54 +54,54 @@ class TestRailClient:
             raise RuntimeError("TestRail returned an unexpected response")
         return result
 
-    async def get_case_types(self) -> list[TestRailCaseType]:
+    async def get_case_types(self) -> list[CaseType]:
         response = await self.request("GET", "get_case_types")
-        return TestRailCaseTypesResponse.model_validate(response).root
+        return _CaseTypesResponse.model_validate(response).root
 
-    async def get_templates(self) -> list[TestRailTemplate]:
+    async def get_templates(self) -> list[Template]:
         response = await self.request(
             "GET", f"get_templates/{self.settings.project_id}"
         )
-        return TestRailTemplatesResponse.model_validate(response).root
+        return _TemplatesResponse.model_validate(response).root
 
-    async def get_statuses(self) -> list[TestRailStatus]:
+    async def get_statuses(self) -> list[Status]:
         response = await self.request("GET", "get_statuses")
-        return TestRailStatusesResponse.model_validate(response).root
+        return _StatusesResponse.model_validate(response).root
 
-    async def add_suite(self, name: str) -> TestRailSuite:
+    async def add_suite(self, name: str) -> Suite:
         response = await self.request(
             "POST",
             f"add_suite/{self.settings.project_id}",
             {"name": name},
         )
-        return TestRailSuite.model_validate(response)
+        return Suite.model_validate(response)
 
-    async def add_section(self, suite_id: int, name: str) -> TestRailSection:
+    async def add_section(self, suite_id: int, name: str) -> Section:
         response = await self.request(
             "POST",
             f"add_section/{self.settings.project_id}",
             {"suite_id": suite_id, "name": name},
         )
-        return TestRailSection.model_validate(response)
+        return Section.model_validate(response)
 
-    async def add_case(self, section_id: int, payload: dict[str, Any]) -> TestRailCase:
+    async def add_case(self, section_id: int, payload: dict[str, Any]) -> Case:
         response = await self.request("POST", f"add_case/{section_id}", payload)
-        return TestRailCase.model_validate(response)
+        return Case.model_validate(response)
 
-    async def add_run(self, payload: dict[str, Any]) -> TestRailRun:
+    async def add_run(self, payload: dict[str, Any]) -> Run:
         response = await self.request(
             "POST",
             f"add_run/{self.settings.project_id}",
             payload,
         )
-        return TestRailRun.model_validate(response)
+        return Run.model_validate(response)
 
     async def add_results_for_cases(
         self, run_id: int, results: list[dict[str, Any]]
-    ) -> list[TestRailResult]:
+    ) -> list[Result]:
         response = await self.request(
             "POST",
             f"add_results_for_cases/{run_id}",
             {"results": results},
         )
-        return TestRailResultsResponse.model_validate(response).root
+        return _ResultsResponse.model_validate(response).root

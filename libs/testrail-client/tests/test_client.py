@@ -3,10 +3,9 @@
 import httpx
 import pytest
 from pydantic import ValidationError
-from testrail_client import TestRailCaseType as CaseType
+from testrail_client import CaseType, Suite
 from testrail_client import TestRailClient as Client
 from testrail_client import TestRailSettings as Settings
-from testrail_client import TestRailSuite as Suite
 from testrail_client import client as client_module
 
 
