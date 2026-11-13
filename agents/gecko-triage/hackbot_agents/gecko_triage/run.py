@@ -11,6 +11,7 @@ from pydantic import AfterValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import (
+    DEFAULT_EFFORT,
     DEFAULT_MAX_BUDGET_USD,
     DEFAULT_MAX_TURNS,
     GeckoTriageResult,
@@ -31,7 +32,6 @@ TRIAGE_TASK = (
 
 # Opus 5.5's context window is natively 1M, so the bare id needs no `[1m]` suffix.
 DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_EFFORT = "high"
 
 
 def _zero_is_none(value):

@@ -11,7 +11,7 @@ import.
 import re
 import tomllib
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     AfterValidator,
@@ -331,6 +331,21 @@ class Turns(_Strict):
     close_verifier: Annotated[int, Field(ge=0)]
 
 
+# How hard a session thinks, as the Claude Agent SDK names it.
+EffortLevel = Literal["low", "medium", "high", "xhigh", "max"]
+
+
+class Effort(_Strict):
+    main: EffortLevel
+    investigator: EffortLevel
+    bug_investigator: EffortLevel
+    profile_analyst: EffortLevel
+    log_analyst: EffortLevel
+    spec_checker: EffortLevel
+    duplicate_hunter: EffortLevel
+    close_verifier: EffortLevel
+
+
 class Budget(_Strict):
     max_usd: Annotated[float, Field(ge=0)]
 
@@ -338,10 +353,15 @@ class Budget(_Strict):
 class Limits(_Strict):
     turns: Turns
     budget: Budget
+    effort: Effort
 
     def turn_limit(self, session: str) -> int | None:
         """The step limit of ``session``, or None for no limit."""
         return getattr(self.turns, session) or None
+
+    def effort_for(self, session: str) -> EffortLevel:
+        """How hard ``session`` thinks."""
+        return getattr(self.effort, session)
 
     @property
     def max_budget_usd(self) -> float | None:

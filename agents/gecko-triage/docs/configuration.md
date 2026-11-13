@@ -83,8 +83,9 @@ this for every team.
 
 ## The shared files
 
-`shared/limits.toml`: `[turns]` sets the step limit of each session, and `[budget]` the
-cost limit of a run. 0 means no limit. `TURN_LIMITS_FILE` names another file.
+`shared/limits.toml`: `[turns]` sets the step limit of each session, `[effort]` how hard
+each session thinks, and `[budget]` the cost limit of a run. 0 means no limit.
+`TURN_LIMITS_FILE` names another file, which must have all three tables.
 
 `shared/people.toml`: `employee_domain` (the login domain of Mozilla staff),
 `qa_name_markers` (words in a real name that mark a QA account) and `qa_accounts` (QA

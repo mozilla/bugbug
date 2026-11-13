@@ -6,11 +6,16 @@ from hackbot_agents.gecko_triage.teamconfig import SESSIONS, Limits, load_limits
 from pydantic import ValidationError
 
 TURNS = {s: 10 for s in SESSIONS}
+EFFORT = {s: "high" for s in SESSIONS}
 
 
-def _limits(turns=None, budget=5.0):
+def _limits(turns=None, budget=5.0, effort=None):
     return Limits.model_validate(
-        {"turns": TURNS if turns is None else turns, "budget": {"max_usd": budget}}
+        {
+            "turns": TURNS if turns is None else turns,
+            "budget": {"max_usd": budget},
+            "effort": EFFORT if effort is None else effort,
+        }
     )
 
 
@@ -53,6 +58,8 @@ def test_another_file_can_turn_every_limit_off(tmp_path):
         "[turns]\n"
         + "".join(f"{s} = 0\n" for s in SESSIONS)
         + "\n[budget]\nmax_usd = 0\n"
+        + "\n[effort]\n"
+        + "".join(f'{s} = "high"\n' for s in SESSIONS)
     )
     limits = load_limits(path)
     assert all(limits.turn_limit(s) is None for s in SESSIONS)
@@ -74,6 +81,8 @@ def test_turn_limits_file_replaces_the_shipped_file(tmp_path):
         "[turns]\n"
         + "".join(f"{s} = 0\n" for s in SESSIONS)
         + "\n[budget]\nmax_usd = 0\n"
+        + "\n[effort]\n"
+        + "".join(f'{s} = "high"\n' for s in SESSIONS)
     )
     code = (
         "from hackbot_agents.gecko_triage import agent; "
@@ -88,3 +97,42 @@ def test_turn_limits_file_replaces_the_shipped_file(tmp_path):
         check=True,
     )
     assert out.stdout.split() == ["None", "None", "None"]
+
+
+def test_the_shipped_file_sets_an_effort_for_every_session():
+    limits = load_limits(SHARED_DIR / "limits.toml")
+    for session in SESSIONS:
+        assert limits.effort_for(session) in {"low", "medium", "high", "xhigh", "max"}
+    # The analysis sessions think hardest; the drafting and search sessions less.
+    for session in (
+        "bug_investigator",
+        "profile_analyst",
+        "log_analyst",
+        "close_verifier",
+    ):
+        assert limits.effort_for(session) == "high", session
+
+
+def test_an_unknown_effort_is_refused():
+    with pytest.raises(ValidationError):
+        _limits(effort={**EFFORT, "main": "very high"})
+    with pytest.raises(ValidationError):
+        _limits(effort={s: "high" for s in SESSIONS if s != "main"})
+
+
+def test_each_subagent_takes_its_effort_from_the_file():
+    from hackbot_agents.gecko_triage import agent
+    from hackbot_agents.gecko_triage.config import LIMITS, TRIAGE_SCOPE
+
+    made = {
+        "investigator": agent.make_investigator(),
+        "profile_analyst": agent.make_profile_analyst(),
+        "log_analyst": agent.make_log_analyst(),
+        "bug_investigator": agent.make_bug_investigator(),
+        "spec_checker": agent.make_spec_checker(),
+        "duplicate_hunter": agent.make_duplicate_hunter(TRIAGE_SCOPE),
+        "close_verifier": agent.make_close_verifier(),
+    }
+    for session, definition in made.items():
+        assert definition.effort == LIMITS.effort_for(session), session
+    assert LIMITS.effort_for("main") == agent.DEFAULT_EFFORT

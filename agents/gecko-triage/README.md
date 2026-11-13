@@ -305,8 +305,10 @@ no option to read the parts that it knows. A new Firefox Profiler release can ch
 format. Then the agent cannot read new profiles until the pin above is updated. Check for
 a new `profiler-cli` release when the agent says that a profile format is not supported.
 
-`hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit of the main agent
-and of each subagent, and the cost limit of a run. A limit stops a session that loops.
+`hackbot_agents/gecko_triage/shared/limits.toml` sets the step limit and the effort of the
+main agent and of each subagent, and the cost limit of a run. The sessions that analyze
+the bug use `high`; the main session and the search sessions use `medium`. A limit stops
+a session that loops.
 0 means no limit. `TURN_LIMITS_FILE` names another file in place of this one, for
 example a local file with every limit at 0. Each run records the tool calls of each
 session in `findings.steps`, and each subagent that stopped at its limit in
@@ -361,17 +363,17 @@ reading, at the image's versions:
 
 ## Inputs
 
-| Env var              | Required | Meaning                                                                              |
-| -------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `BUG_ID`             | yes      | The bug to triage                                                                    |
-| `TEAM`               | no       | The team, `teams/<team>/`. Unset: the team that lists the bug's component, else none |
-| `BROKER_URL`         | yes      | Bugzilla broker base URL; the agent appends `/mcp`                                   |
-| `FX_BUG_TOOLKIT_DIR` | no       | The fx-bug-toolkit plugin checkout; the image sets `/opt/fx-bug-toolkit`             |
-| `BOT_ALIASES`        | no       | Pilot only: comma-separated logins that count as the bot, like `hackbot@mozilla.tld` |
-| `MODEL`, `EFFORT`    | no       | Model controls; the defaults are in `__main__.py`                                    |
-| `MAX_TURNS`          | no       | Turn limit of the main agent; the default is in `shared/limits.toml`; 0 is no limit  |
-| `MAX_BUDGET_USD`     | no       | Cost limit for one run; the default is in `shared/limits.toml`; 0 is no limit        |
-| `TURN_LIMITS_FILE`   | no       | Another limits file in place of `shared/limits.toml`                                 |
+| Env var              | Required | Meaning                                                                               |
+| -------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `BUG_ID`             | yes      | The bug to triage                                                                     |
+| `TEAM`               | no       | The team, `teams/<team>/`. Unset: the team that lists the bug's component, else none  |
+| `BROKER_URL`         | yes      | Bugzilla broker base URL; the agent appends `/mcp`                                    |
+| `FX_BUG_TOOLKIT_DIR` | no       | The fx-bug-toolkit plugin checkout; the image sets `/opt/fx-bug-toolkit`              |
+| `BOT_ALIASES`        | no       | Pilot only: comma-separated logins that count as the bot, like `hackbot@mozilla.tld`  |
+| `MODEL`, `EFFORT`    | no       | The model (default in `run.py`) and the main effort (default in `shared/limits.toml`) |
+| `MAX_TURNS`          | no       | Turn limit of the main agent; the default is in `shared/limits.toml`; 0 is no limit   |
+| `MAX_BUDGET_USD`     | no       | Cost limit for one run; the default is in `shared/limits.toml`; 0 is no limit         |
+| `TURN_LIMITS_FILE`   | no       | Another limits file in place of `shared/limits.toml`                                  |
 
 A run that hackbot-api starts cannot turn a limit off: `GeckoTriageInputs` in
 `services/hackbot-api/app/schemas.py` refuses 0. Only `limits.toml` or `TURN_LIMITS_FILE`

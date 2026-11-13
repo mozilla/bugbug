@@ -737,6 +737,7 @@ def make_investigator() -> AgentDefinition:
         ],
         model="inherit",
         maxTurns=LIMITS.turn_limit("investigator"),
+        effort=LIMITS.effort_for("investigator"),
     )
 
 
@@ -751,6 +752,7 @@ def _skill_agent(
         skills=[qualified(skill)],
         model="inherit",
         maxTurns=LIMITS.turn_limit(session),
+        effort=LIMITS.effort_for(session),
     )
 
 
@@ -835,6 +837,7 @@ def make_duplicate_hunter(scope: tuple[Component, ...]) -> AgentDefinition:
         ],
         model="inherit",
         maxTurns=LIMITS.turn_limit("duplicate_hunter"),
+        effort=LIMITS.effort_for("duplicate_hunter"),
     )
 
 
@@ -859,6 +862,7 @@ def make_close_verifier() -> AgentDefinition:
         ],
         model="inherit",
         maxTurns=LIMITS.turn_limit("close_verifier"),
+        effort=LIMITS.effort_for("close_verifier"),
     )
 
 
@@ -1044,6 +1048,7 @@ def combined_options(
 # no limit. The values come from `limits.toml` or the `TURN_LIMITS_FILE` file.
 DEFAULT_MAX_TURNS = LIMITS.turn_limit("main")
 DEFAULT_MAX_BUDGET_USD = LIMITS.max_budget_usd
+DEFAULT_EFFORT = LIMITS.effort_for("main")
 
 
 async def run_gecko_triage(

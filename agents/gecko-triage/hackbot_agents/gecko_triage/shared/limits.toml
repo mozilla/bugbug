@@ -1,6 +1,6 @@
-# The step limits of each Claude Code session of a run, and the cost limit of the run.
-# A limit stops a session that loops. 0 means no limit. `TURN_LIMITS_FILE` names another
-# file in place of this one, for example a local file with every limit at 0.
+# The step limits and the effort of each Claude Code session of a run, and the cost limit
+# of the run. A limit stops a session that loops. 0 means no limit. `TURN_LIMITS_FILE`
+# names another file in place of this one, for example a local file with every limit at 0.
 
 [turns]
 main = 40
@@ -11,6 +11,19 @@ log_analyst = 40
 spec_checker = 30
 duplicate_hunter = 24
 close_verifier = 45
+
+# How hard each session thinks: low, medium, high, xhigh or max. The sessions that
+# analyze the bug think hardest; the main session, which plans and drafts, and the
+# search sessions think less. An `EFFORT` run input overrides `main` only.
+[effort]
+main = "medium"
+investigator = "medium"
+bug_investigator = "high"
+profile_analyst = "high"
+log_analyst = "high"
+spec_checker = "medium"
+duplicate_hunter = "medium"
+close_verifier = "high"
 
 [budget]
 max_usd = 12.0
