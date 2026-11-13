@@ -29,6 +29,7 @@ class Run(Base):
     agent: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, index=True)
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    bug_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     requested_by: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     requested_via: Mapped[str | None] = mapped_column(String, nullable=True)
     dedupe_key: Mapped[str | None] = mapped_column(String, nullable=True)

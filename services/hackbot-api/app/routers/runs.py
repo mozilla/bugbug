@@ -153,6 +153,7 @@ async def create_run(
             agent=agent.name,
             status=RunStatus.pending.value,
             inputs=inputs.model_dump(mode="json"),
+            bug_id=getattr(inputs, "bug_id", None),
             requested_by=on_behalf_of,
             requested_via=requested_via,
             dedupe_key=dedupe_key,
@@ -251,6 +252,10 @@ async def list_runs(
         DedupeKey,
         Query(description="Only return runs carrying this dedupe key."),
     ] = None,
+    bug_id: Annotated[
+        int | None,
+        Query(ge=1, description="Only return runs for this Bugzilla bug."),
+    ] = None,
 ) -> list[RunDoc]:
     stmt = select(Run)
     if agent is not None:
@@ -263,6 +268,8 @@ async def list_runs(
         # The trigger's own handle on its run: a caller that keyed the work can
         # find it again without having stored the run id.
         stmt = stmt.where(Run.dedupe_key == dedupe_key)
+    if bug_id is not None:
+        stmt = stmt.where(Run.bug_id == bug_id)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
     # paging is stable when timestamps collide. (agent/status/requested_by and
     # created_at are all indexed, so filtering + ordering stay index-backed.)
