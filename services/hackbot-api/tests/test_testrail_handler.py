@@ -2,6 +2,7 @@
 
 from app.action_handlers import ApplyContext, get_handler, testrail_handler
 from app.action_handlers.testrail_handler import SubmitTestPlanHandler
+from testrail_client import models as testrail_models
 
 
 def _ctx():
@@ -83,7 +84,7 @@ class _FakeClient:
                 {"id": 101},
                 {"id": 102},
                 {"id": 301},
-                {"results": [{"id": 401}, {"id": 402}]},
+                [{"id": 401}, {"id": 402}],
             ]
         )
 
@@ -95,35 +96,47 @@ class _FakeClient:
 
     async def get_case_types(self):
         self.calls.append(("get_case_types",))
-        return self._next()
+        return [
+            testrail_models.TestRailCaseType.model_validate(value)
+            for value in self._next()
+        ]
 
     async def get_templates(self):
         self.calls.append(("get_templates",))
-        return self._next()
+        return [
+            testrail_models.TestRailTemplate.model_validate(value)
+            for value in self._next()
+        ]
 
     async def get_statuses(self):
         self.calls.append(("get_statuses",))
-        return self._next()
+        return [
+            testrail_models.TestRailStatus.model_validate(value)
+            for value in self._next()
+        ]
 
     async def add_suite(self, name):
         self.calls.append(("add_suite", name))
-        return self._next()
+        return testrail_models.TestRailSuite.model_validate(self._next())
 
     async def add_section(self, suite_id, name):
         self.calls.append(("add_section", suite_id, name))
-        return self._next()
+        return testrail_models.TestRailSection.model_validate(self._next())
 
-    async def add_case(self, section_id, payload):
-        self.calls.append(("add_case", section_id, payload))
-        return self._next()
+    async def add_case(self, section_id, **fields):
+        self.calls.append(("add_case", section_id, fields))
+        return testrail_models.TestRailCase.model_validate(self._next())
 
-    async def add_run(self, payload):
-        self.calls.append(("add_run", payload))
-        return self._next()
+    async def add_run(self, **fields):
+        self.calls.append(("add_run", fields))
+        return testrail_models.TestRailRun.model_validate(self._next())
 
     async def add_results_for_cases(self, run_id, results):
         self.calls.append(("add_results_for_cases", run_id, results))
-        return self._next()
+        return [
+            testrail_models.TestRailResult.model_validate(value)
+            for value in self._next()
+        ]
 
     def suite_url(self, suite_id):
         return f"https://testrail.example/index.php?/suites/view/{suite_id}"
@@ -157,19 +170,19 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "type_id": 6,
         "template_id": 2,
         "labels": ["AI Generated"],
-        "custom_preconds": "A PDF is available.",
-        "custom_steps_separated": [
-            {"content": "Open the PDF", "expected": ""},
-            {
-                "content": "Select some text",
-                "expected": "Text selection is highlighted in the PDF.",
-            },
+        "preconditions": "A PDF is available.",
+        "steps": [
+            testrail_models.TestRailStep(content="Open the PDF", expected=""),
+            testrail_models.TestRailStep(
+                content="Select some text",
+                expected="Text selection is highlighted in the PDF.",
+            ),
         ],
     }
+    assert client.calls[6][2]["preconditions"] is None
 
     add_run_call = client.calls[7]
     assert add_run_call[0] == "add_run"
-    assert add_run_call[1]["include_all"] is False
     assert add_run_call[1]["case_ids"] == [101, 102]
     assert add_run_call[1]["suite_id"] == 10
     assert add_run_call[1]["name"].startswith("[Hackbot] Run Results - ")
@@ -179,19 +192,19 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "add_results_for_cases",
         301,
         [
-            {
-                "case_id": 101,
-                "status_id": 1,
-                "comment": "The PDF behaved as expected.",
-            },
-            {
-                "case_id": 102,
-                "status_id": 2,
-                "comment": (
+            testrail_models.TestRailResultInput(
+                case_id=101,
+                status_id=1,
+                comment="The PDF behaved as expected.",
+            ),
+            testrail_models.TestRailResultInput(
+                case_id=102,
+                status_id=2,
+                comment=(
                     "The toolbar could not be inspected.\n\n"
                     "Failure reason:\nNo available tool can inspect it."
                 ),
-            },
+            ),
         ],
     )
 
@@ -235,9 +248,9 @@ def test_separated_steps_maps_expectations_from_step_objects():
             ],
         }
     ) == [
-        {"content": "Open the PDF", "expected": ""},
-        {"content": "Select text", "expected": ""},
-        {"content": "Copy text", "expected": "Text is copied."},
+        testrail_models.TestRailStep(content="Open the PDF", expected=""),
+        testrail_models.TestRailStep(content="Select text", expected=""),
+        testrail_models.TestRailStep(content="Copy text", expected="Text is copied."),
     ]
 
 

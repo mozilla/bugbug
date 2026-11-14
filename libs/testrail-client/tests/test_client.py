@@ -3,8 +3,12 @@
 import httpx
 import pytest
 from pydantic import ValidationError
+from testrail_client import TestRailCaseType as CaseType
 from testrail_client import TestRailClient as Client
+from testrail_client import TestRailResultInput as ResultInput
 from testrail_client import TestRailSettings as Settings
+from testrail_client import TestRailStep as Step
+from testrail_client import TestRailSuite as Suite
 from testrail_client import client as client_module
 
 
@@ -49,7 +53,7 @@ def _capture_request(monkeypatch, payload) -> dict:
 
         async def request(self, method, url, **kwargs):
             captured.update(method=method, url=url, **kwargs)
-            return _FakeResponse(payload)
+            return _FakeResponse(payload(url) if callable(payload) else payload)
 
     monkeypatch.setattr(client_module.httpx, "AsyncClient", _FakeAsyncClient)
     return captured
@@ -99,8 +103,61 @@ async def test_request_requires_json_object_or_array(monkeypatch):
         await _client().request("GET", "get_projects")
 
 
+async def test_endpoint_response_is_typed(monkeypatch):
+    _capture_request(
+        monkeypatch,
+        [{"id": "6", "name": "Functional", "future": True}],
+    )
+
+    result = await _client().get_case_types()
+
+    assert result == [CaseType(id=6, name="Functional")]
+
+
+async def test_single_resource_response_is_typed(monkeypatch):
+    _capture_request(monkeypatch, {"id": "10", "name": "Suite"})
+
+    assert await _client().add_suite("Suite") == Suite(id=10)
+
+
+async def test_endpoint_response_is_validated(monkeypatch):
+    _capture_request(monkeypatch, [{"name": "Functional"}])
+
+    with pytest.raises(ValidationError):
+        await _client().get_case_types()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "response"),
+    [
+        ("get_case_types", {"case_types": [{"id": 1, "name": "Functional"}]}),
+        ("get_templates", {"templates": [{"id": 1, "name": "Steps"}]}),
+        ("get_statuses", {"statuses": [{"id": 1, "name": "passed"}]}),
+        ("add_results_for_cases", {"results": [{"id": 1}]}),
+    ],
+)
+async def test_list_endpoints_reject_unexpected_response_shape(
+    monkeypatch, method_name, response
+):
+    _capture_request(monkeypatch, response)
+    client = _client()
+
+    with pytest.raises(ValidationError):
+        if method_name == "add_results_for_cases":
+            await client.add_results_for_cases(1, [])
+        else:
+            await getattr(client, method_name)()
+
+
 async def test_endpoint_wrappers(monkeypatch):
-    captured = _capture_request(monkeypatch, {"id": 10})
+    captured = _capture_request(
+        monkeypatch,
+        lambda url: (
+            [{"id": 10, "name": "Functional"}]
+            if "/get_" in url or "/add_results_for_cases/" in url
+            else {"id": 10}
+        ),
+    )
     client = _client()
 
     await client.get_case_types()
@@ -121,25 +178,58 @@ async def test_endpoint_wrappers(monkeypatch):
     assert captured["url"].endswith("/add_section/73")
     assert captured["json"] == {"suite_id": 10, "name": "Cases"}
 
-    await client.add_case(20, {"title": "Case"})
+    await client.add_case(
+        20,
+        title="Case",
+        type_id=6,
+        template_id=2,
+        steps=[Step(content="Open", expected="It opens")],
+        preconditions="A PDF is available.",
+        labels=["AI Generated"],
+    )
     assert captured["url"].endswith("/add_case/20")
-    assert captured["json"] == {"title": "Case"}
+    assert captured["json"] == {
+        "title": "Case",
+        "type_id": 6,
+        "template_id": 2,
+        "custom_steps_separated": [{"content": "Open", "expected": "It opens"}],
+        "custom_preconds": "A PDF is available.",
+        "labels": ["AI Generated"],
+    }
 
-    await client.add_run({"name": "Run", "include_all": False, "case_ids": [101]})
+    await client.add_run(suite_id=10, case_ids=[101], name="Run", description="Summary")
     assert captured["url"].endswith("/add_run/73")
     assert captured["json"] == {
         "name": "Run",
+        "suite_id": 10,
         "include_all": False,
         "case_ids": [101],
+        "description": "Summary",
     }
 
     await client.add_results_for_cases(
-        301, [{"case_id": 101, "status_id": 1, "comment": "ok"}]
+        301, [ResultInput(case_id=101, status_id=1, comment="ok")]
     )
     assert captured["url"].endswith("/add_results_for_cases/301")
     assert captured["json"] == {
         "results": [{"case_id": 101, "status_id": 1, "comment": "ok"}]
     }
+
+
+async def test_optional_fields_are_left_out_when_empty(monkeypatch):
+    captured = _capture_request(monkeypatch, {"id": 10})
+    client = _client()
+
+    await client.add_case(20, title="Case", type_id=6, template_id=2, steps=[])
+    assert captured["json"] == {
+        "title": "Case",
+        "type_id": 6,
+        "template_id": 2,
+        "custom_steps_separated": [],
+    }
+
+    await client.add_run(suite_id=10, case_ids=[101], name="Run", description="")
+    assert "description" not in captured["json"]
 
 
 def test_suite_url_default_base():
