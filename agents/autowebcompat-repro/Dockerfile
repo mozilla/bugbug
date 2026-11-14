@@ -80,6 +80,62 @@ COPY --from=builder /opt/venv /opt/venv
 
 CMD ["python", "-m", "hackbot_agents.autowebcompat_repro"]
 
+FROM agent AS android-base
+
+USER root
+
+ENV ANDROID_HOME=/opt/android-sdk \
+    ANDROID_USER_HOME=/home/agent/.android \
+    ANDROID_AVD_HOME=/home/agent/.android/avd \
+    ADB_VENDOR_KEYS=/home/agent/.android/adbkey
+ENV PATH="/opt/android-sdk/platform-tools:/opt/android-sdk/emulator:$PATH"
+
+ARG TARGETARCH
+RUN test "$TARGETARCH" = amd64 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpulse0 libglu1-mesa \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM android-base AS android-sdk
+
+ARG ANDROID_API=37.0
+ARG CMDLINE_TOOLS_VERSION=15859902
+
+ENV PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends default-jre-headless curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    mkdir -p "$ANDROID_HOME/cmdline-tools"; \
+    curl --fail --location --retry 5 --retry-delay 5 --retry-max-time 300 \
+        --connect-timeout 30 --max-time 180 \
+        -o /tmp/cmdline-tools.zip \
+        "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"; \
+    unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"; \
+    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"; \
+    rm /tmp/cmdline-tools.zip; \
+    yes | sdkmanager --licenses > /dev/null; \
+    image="system-images;android-${ANDROID_API};google_apis_playstore;x86_64"; \
+    sdkmanager --install "platform-tools" "emulator" "$image"; \
+    mkdir -p "$ANDROID_AVD_HOME"; \
+    echo no | avdmanager create avd --force --name "webcompat" \
+        --device "pixel_9" --package "$image" --path "$ANDROID_AVD_HOME/webcompat.avd"; \
+    printf 'disk.dataPartition.size=12G\nhw.ramSize=8192\nhw.keyboard=no\n' \
+        >> "$ANDROID_AVD_HOME/webcompat.avd/config.ini"
+
+FROM android-base AS android-agent
+
+# Java and the SDK command-line tools are only needed to prepare the AVD.
+COPY --from=android-sdk /opt/android-sdk/platform-tools /opt/android-sdk/platform-tools
+COPY --from=android-sdk /opt/android-sdk/system-images /opt/android-sdk/system-images
+COPY --from=android-sdk --chown=agent:agent /opt/android-sdk/emulator /opt/android-sdk/emulator
+COPY --from=android-sdk --chown=agent:agent /home/agent/.android /home/agent/.android
+
+USER agent
+
 FROM base AS broker
 
 RUN useradd --create-home --shell /bin/bash broker
