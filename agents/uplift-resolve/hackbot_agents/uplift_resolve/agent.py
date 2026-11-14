@@ -25,7 +25,7 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 from hackbot_runtime import AgentError, HackbotAgentResult
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter
 from phabricator_client import PhabricatorClient, PhabricatorSettings
 from searchfox import AsyncSearchfoxClient
 
@@ -261,7 +261,7 @@ def build_options(
         max_turns=max_turns,
         setting_sources=["project"],
         effort=effort or EFFORT,
-        env=GIT_IDENTITY_ENV,
+        env={**GIT_IDENTITY_ENV, **FOREGROUND_TASKS_ENV},
     )
 
 

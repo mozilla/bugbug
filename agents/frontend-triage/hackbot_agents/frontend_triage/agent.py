@@ -31,7 +31,7 @@ from claude_agent_sdk import (
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import Reporter, running_subagents
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter, running_subagents
 from hackbot_runtime.searchfox import (
     PLACEHOLDER as SEARCHFOX_PLACEHOLDER,
 )
@@ -702,6 +702,7 @@ async def run_frontend_triage(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        env=FOREGROUND_TASKS_ENV,
     )
 
     rules_path = rules_dir.resolve()

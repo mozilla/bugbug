@@ -13,7 +13,7 @@ from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.actions.testrail import ACTION_TYPE as TESTRAIL_SUBMIT_TEST_PLAN
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter
 
 from .config import DEVTOOLS_TOOLS, ENABLED_ACTION_TYPES
 from .devtools_mcp import build_devtools_server
@@ -93,6 +93,7 @@ async def run_test_plan_generator(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        env=FOREGROUND_TASKS_ENV,
         max_buffer_size=10 * 1024 * 1024,
     )
 

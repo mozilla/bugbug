@@ -38,7 +38,7 @@ from hackbot_agents.build_repair.try_push import TRY_TOOLS
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter
 
 from .config import (
     ADDITIONAL_DIRS,
@@ -131,6 +131,7 @@ def _build_options(
         max_turns=max_turns,
         # Loads the Firefox tree's CLAUDE.md, which imports its AGENTS.md.
         setting_sources=["project"],
+        env=FOREGROUND_TASKS_ENV,
         # Ignores the tree's .mcp.json; only mcp_servers are available.
         extra_args={"strict-mcp-config": None},
     )

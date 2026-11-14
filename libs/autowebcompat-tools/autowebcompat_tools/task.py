@@ -16,7 +16,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import AgentError
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter
 from pydantic import ValidationError
 
 from autowebcompat_tools.result import (
@@ -164,6 +164,7 @@ class Task(ABC, Generic[ResultT]):
             model=self.task_config.model,
             max_turns=self.task_config.max_turns,
             setting_sources=[],
+            env=FOREGROUND_TASKS_ENV,
             # DevTools snapshots of complex pages can exceed the SDK's default
             # 1 MiB message buffer, which kills the reader fatally.
             max_buffer_size=10 * 1024 * 1024,

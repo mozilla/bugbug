@@ -23,7 +23,7 @@ from claude_agent_sdk import (
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import FOREGROUND_TASKS_ENV, Reporter, running_subagents
 
 from .config import (
     BUG_FIX_ACTIONS,
@@ -219,16 +219,20 @@ async def run_bug_fix(
         max_turns=max_turns,
         **({"effort": effort} if effort else {}),
         setting_sources=[],
+        env=FOREGROUND_TASKS_ENV,
         max_buffer_size=MAX_BUFFER_SIZE,
     )
 
     result_msg: ResultMessage | None = None
+    unfinished: list[str] = []
     with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
             async for msg in client.receive_response():
                 reporter.message(msg)
+                if (running := running_subagents(msg)) is not None:
+                    unfinished = running
                 if isinstance(msg, ResultMessage):
                     result_msg = msg
 
@@ -237,6 +241,11 @@ async def run_bug_fix(
     if result_msg.is_error:
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
+        )
+    if unfinished:
+        raise AgentError(
+            f"bug {bug}: the agent ended its turn with subagents still running "
+            f"({', '.join(unfinished)}), so their findings never reached the fix"
         )
 
     _record_needinfo_clear(

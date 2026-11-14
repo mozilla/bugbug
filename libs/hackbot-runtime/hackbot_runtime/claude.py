@@ -38,6 +38,14 @@ def _stamp() -> str:
     return f"{clock}.{millis:03d}"
 
 
+# Claude Code otherwise starts subagents and shell commands in the background and
+# tells the model it will be notified when they finish. That notification only
+# arrives as a new turn, after the ``ResultMessage`` that ends
+# ``receive_response()``, so an agent that ends its turn to wait never sees it.
+# In the foreground the result comes back as an ordinary tool result.
+FOREGROUND_TASKS_ENV = {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
+
+
 def running_subagents(msg) -> list[str] | None:
     """Subagents a ``background_tasks_changed`` message reports as running.
 
