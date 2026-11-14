@@ -17,6 +17,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.actions.handlers.registry import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
@@ -25,7 +26,7 @@ UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
+PATCH_ACTION_TYPES = frozenset({ActionType.PHABRICATOR_SUBMIT_PATCH, ActionType.PHABRICATOR_UPDATE_PATCH})
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
