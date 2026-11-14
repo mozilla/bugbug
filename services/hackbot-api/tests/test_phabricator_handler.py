@@ -568,6 +568,62 @@ async def test_add_comment_posts_comment_transaction(monkeypatch):
     ]
 
 
+async def test_inline_comments_post_with_comment_in_one_edit(monkeypatch):
+    fake, calls = _fake_conduit({"differential.revision.edit": {"object": {"id": 42}}})
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+
+    inline = {
+        "revision_id": 42,
+        "diff_id": 100,
+        "file_path": "dom/base/Foo.cpp",
+        "on_new_side": True,
+        "line": 10,
+        "line_length": 2,
+        "content": "This can overflow.",
+    }
+    entries = [
+        ("phabricator.add_comment", {"revision_id": 42, "text": "Review."}),
+        ("phabricator.add_inline_comment", inline),
+        ("phabricator.add_comment", {"revision_id": 42, "text": "Thanks."}),
+    ]
+    assert phabricator_handler.plan_inline_groups(entries) == [[0, 1, 2]]
+
+    result = await phabricator_handler.PostCommentsHandler().apply(
+        phabricator_handler.merge_inline_comments(entries),
+        ApplyContext(
+            run_id="run-1",
+            agent="test-agent",
+            download_artifact=None,
+            hackbot_client=object(),
+        ),
+    )
+
+    assert result.status == "applied"
+    assert calls == [
+        (
+            "differential.revision.edit",
+            {
+                "objectIdentifier": 42,
+                "transactions": [
+                    {
+                        "type": "inline",
+                        "value": {
+                            "diff": 100,
+                            "path": "dom/base/Foo.cpp",
+                            "isNewFile": True,
+                            "line": 10,
+                            "length": 3,
+                            "content": "This can overflow.",
+                        },
+                    },
+                    {"type": "comment", "value": "Review."},
+                    {"type": "comment", "value": "Thanks."},
+                ],
+            },
+        )
+    ]
+
+
 async def test_add_comment_conduit_error_fails(monkeypatch):
     async def fake(method, **payload):
         raise RuntimeError("Conduit error ERR-CONDUIT-CORE: nope")

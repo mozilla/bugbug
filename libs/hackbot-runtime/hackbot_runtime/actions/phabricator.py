@@ -230,4 +230,76 @@ async def add_comment(
     return confirmation(action)
 
 
+@tool
+async def add_inline_comment(
+    recorder: ActionsRecorder,
+    revision_id: Annotated[
+        int, Field(description="Differential revision to comment on (the D number).")
+    ],
+    diff_id: Annotated[
+        int,
+        Field(
+            description=(
+                "Diff the line numbers refer to (the revision's latest_diff_id)."
+            )
+        ),
+    ],
+    file_path: Annotated[
+        str,
+        Field(description=("Path of the file in the diff.")),
+    ],
+    on_new_side: Annotated[
+        bool,
+        Field(
+            description=(
+                "True to comment on the new (right) side of the diff, False for "
+                "the old (left) side."
+            )
+        ),
+    ],
+    line: Annotated[int, Field(ge=1, description="First line the comment applies to.")],
+    line_length: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=(
+                "Number of extra lines the comment covers after `line` "
+                "(0 for a single line)."
+            ),
+        ),
+    ],
+    content: Annotated[str, Field(description="Comment body")],
+    reasoning: Annotated[
+        str, Field(description="Why you are recording this comment (for audit log).")
+    ],
+) -> str:
+    """Record an intended inline comment on a line of a Phabricator revision's diff.
+
+    Posted together with the revision's other recorded comments.
+    Recorded into the run summary for human review; nothing is posted to
+    Phabricator during the run.
+    """
+    # The SDK does not enforce the schema's bounds, so check them here.
+    if line < 1 or line_length < 0:
+        raise ToolError(
+            f"Invalid line range: line must be >= 1 (got {line}) and "
+            f"line_length >= 0 (got {line_length})."
+        )
+
+    action = recorder.record(
+        "phabricator.add_inline_comment",
+        {
+            "revision_id": revision_id,
+            "diff_id": diff_id,
+            "file_path": file_path,
+            "on_new_side": on_new_side,
+            "line": line,
+            "line_length": line_length,
+            "content": content,
+        },
+        reasoning=reasoning,
+    )
+    return confirmation(action)
+
+
 TOOLS = tools_in(__name__)

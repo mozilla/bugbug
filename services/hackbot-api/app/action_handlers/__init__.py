@@ -10,6 +10,10 @@ from app.action_handlers.bugzilla_handler import (
     merge_resolved,
     plan_coalesced_groups,
 )
+from app.action_handlers.phabricator_handler import (
+    merge_inline_comments,
+    plan_inline_groups,
+)
 from app.action_handlers.registry import HANDLERS, get_handler
 
 __all__ = [
@@ -19,6 +23,8 @@ __all__ = [
     "ArtifactTooLargeError",
     "HANDLERS",
     "get_handler",
+    "merge_inline_comments",
     "merge_resolved",
     "plan_coalesced_groups",
+    "plan_inline_groups",
 ]
