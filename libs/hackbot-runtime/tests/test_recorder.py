@@ -52,10 +52,13 @@ def test_attachment_uploaded_when_uploader_set(tmp_path):
     )
     key = f"attachments/{recorded['action_id']}/file"
 
-    # Uploaded under the stable key; NOT copied locally.
-    assert uploader.uploaded == [(key, src)]
-    assert not artifacts.exists()
-    assert rec.actions[0]["attachments"] == [{"name": "file", "uploaded_key": key}]
+    assert uploader.uploaded == []
+    assert (artifacts / key).read_text() == "diff"
+
+    src.unlink()
+    rec.publish_attachments()
+
+    assert uploader.uploaded == [(key, artifacts / key)]
 
 
 def test_attachment_copied_when_no_uploader(tmp_path):
