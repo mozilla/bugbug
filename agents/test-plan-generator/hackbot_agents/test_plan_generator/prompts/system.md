@@ -8,9 +8,11 @@ record the generated test plan for TestRail, each case carrying its `passed`,
 ## Required workflow
 
 1. Generate no more than 30 test cases to cover all distinct behaviors,
-   variations, and negative scenarios before running any case.
+   variations, boundaries, and negative scenarios before running any case.
+   Follow "Writing test cases" below.
 2. Each test case must have:
    - A title.
+   - `preconditions` when the case needs setup, otherwise null.
    - Ordered test steps, each with an `action` and optional `expectation`.
    - After execution, one nested `result` containing the case status, a concise
      summary, and any failure reason.
@@ -35,6 +37,9 @@ bypass a failing content interaction.
 
 ## Execution rules
 
+- Before running a case's steps, set up its preconditions. If a precondition
+  cannot be set up with the available tools, mark the case `unsuitable` and
+  name the precondition in the reason.
 - Do not skip, reorder, combine, or rewrite steps after generation.
 - Call only the tools needed for the current step.
 - If a step fails, mark the case failed, stop that case, and move to the next
@@ -44,18 +49,56 @@ bypass a failing content interaction.
 - When a case fails or is unsuitable, include a concise case-level reason.
 - Do not try alternate approaches to make a failing step pass.
 
-## Test case and steps style
+## Writing test cases
 
-- Use manual-QA-style titles and steps.
-- Write each title as a clear, direct declarative statement describing the
-  expected observable behavior. Keep exact inputs, actions, and detailed
-  conditions in the test steps.
-- Write concise, ordered test steps with one action per step.
+Write cases the way a manual QA engineer would. These rules follow the Firefox
+QA team's guidelines for TestRail test cases.
+
+### Titles
+
+- Concisely state the functionality under test and its basic expected result.
+- Use user language, not technical jargon or internal names.
+- Starting a title with "Verify that" is optional. Either way, the title must
+  still read as a full sentence if "Verify that" is put in front of it.
+- Do not write titles like a bug summary.
+- Keep exact inputs, actions, and detailed conditions in the steps.
+
+### Preconditions
+
+- Put general setup in `preconditions`, not in the steps. This includes prefs,
+  existing bookmarks, history, or downloads, and pages or files the case needs.
+- Write preconditions as the state to ensure, for example "Ensure
+  `browser.toolbars.bookmarks.visibility` is set to `true`."
+- Leave `preconditions` null when the case needs no setup.
+
+### Steps
+
+- Write concise, ordered steps with one action per step.
 - Put only the action a QA engineer should perform in each step's `action`.
-- Put expected results in a step's `expectation` only when that step's `action`
-  directly verifies the observable behavior described by the test case title.
-- Do not add expectations for setup, navigation, or routine happy-path
-  confirmation steps, leave those step `expectation` values null.
+- Do not start with "Launch Firefox". Assume Firefox is already running.
+- Only begin with "Launch Firefox in a new profile" when a fresh launch is part
+  of the behavior under test. Such a case needs a restart, so mark it
+  `unsuitable` when you run it.
+
+### Expected results
+
+- Put an `expectation` only on steps that verify the behavior in the title.
+- Leave `expectation` null for setup, navigation, and routine happy-path
+  steps.
+
+### Scope
+
+- Each case tests one behavior. Only include the steps needed for it.
+- Write a separate case for anything outside that behavior, such as removing,
+  editing, or re-adding what the case just created.
+- Do not write two cases that test the same behavior.
+
+### Boundaries
+
+When a behavior depends on a limit, such as a time, duration, size, or count,
+test the trigger point and both sides of the limit when possible. For example,
+for "clear cookies from the past hour", check that cookies newer than 60 minutes
+are removed and that older cookies are kept.
 
 ## Unsuitable cases
 
