@@ -8,6 +8,8 @@ rendering the streamed messages.
 Requires the ``claude-sdk`` optional extra of hackbot-runtime.
 """
 
+from __future__ import annotations
+
 import json
 import time
 from pathlib import Path
@@ -36,6 +38,26 @@ def _stamp() -> str:
     return f"{clock}.{millis:03d}"
 
 
+def running_subagents(msg) -> list[str] | None:
+    """Subagents a ``background_tasks_changed`` message reports as running.
+
+    Claude Code launches subagents in the background by default. A model that
+    ends its turn to wait for one ends the run there: the ``ResultMessage``
+    arrives before the subagent's findings, and nothing picks them up. Returns
+    ``None`` for any other message, so a caller keeps the last list it saw.
+    """
+    if not (
+        isinstance(msg, SystemMessage) and msg.subtype == "background_tasks_changed"
+    ):
+        return None
+    tasks = msg.data.get("tasks")
+    return [
+        task.get("subagent_type") or task.get("task_id", "?")
+        for task in (tasks if isinstance(tasks, list) else [])
+        if task.get("task_type") == "local_agent"
+    ]
+
+
 class Reporter:
     """Routes streamed claude-agent-sdk messages to stdout and/or a log file."""
 
@@ -44,22 +66,6 @@ class Reporter:
         self._log = log_path.open("w", encoding="utf-8") if log_path else None
         self._turn = 0
         self._started = time.monotonic()
-        # Claude Code's background tasks as of its last ``background_tasks_changed``.
-        self._background_tasks: list[dict] = []
-
-    @property
-    def unfinished_subagents(self) -> list[str]:
-        """Subagents still running in the background when the session last reported.
-
-        Claude Code launches subagents in the background by default. A model that
-        ends its turn to wait for one ends the run there: the ``ResultMessage``
-        arrives before the subagent's findings, and nothing picks them up.
-        """
-        return [
-            task.get("subagent_type") or task.get("task_id", "?")
-            for task in self._background_tasks
-            if task.get("task_type") == "local_agent"
-        ]
 
     def __enter__(self):
         return self
@@ -139,9 +145,6 @@ class Reporter:
                         )
 
         elif isinstance(msg, SystemMessage):
-            if msg.subtype == "background_tasks_changed":
-                tasks = msg.data.get("tasks")
-                self._background_tasks = tasks if isinstance(tasks, list) else []
             if msg.subtype == "init":
                 model = msg.data.get("model", "?")
                 self._emit(f"[system] session started (model={model})")
@@ -161,8 +164,3 @@ class Reporter:
             self._emit(line, always=True)
             if msg.is_error:
                 self._emit(f"[done] ERROR: {msg.result}", always=True)
-            if unfinished := self.unfinished_subagents:
-                self._emit(
-                    f"[done] ended with subagents still running: {', '.join(unfinished)}",
-                    always=True,
-                )

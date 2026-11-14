@@ -1,7 +1,7 @@
 """Tests for the shared claude-agent-sdk Reporter (hackbot_runtime.claude)."""
 
-from claude_agent_sdk import ResultMessage, SystemMessage
-from hackbot_runtime.claude import Reporter, _truncate
+from claude_agent_sdk import SystemMessage
+from hackbot_runtime.claude import Reporter, _truncate, running_subagents
 
 
 def test_truncate_short_string_unchanged():
@@ -48,38 +48,20 @@ def _subagent(name):
     return {"task_id": f"a-{name}", "task_type": "local_agent", "subagent_type": name}
 
 
-def _result():
-    return ResultMessage(
-        subtype="success",
-        duration_ms=1,
-        duration_api_ms=1,
-        is_error=False,
-        num_turns=1,
-        session_id="s",
-        result="done",
-    )
+def test_running_subagents_lists_the_background_subagents():
+    assert running_subagents(_tasks_changed([_subagent("investigator")])) == [
+        "investigator"
+    ]
 
 
-def test_reports_subagents_still_running_at_the_end(capsys):
-    with Reporter(verbose=False, log_path=None) as reporter:
-        reporter.message(_tasks_changed([_subagent("investigator")]))
-        reporter.message(_result())
-
-    assert reporter.unfinished_subagents == ["investigator"]
-    assert "subagents still running: investigator" in capsys.readouterr().out
-
-
-def test_a_subagent_that_finished_is_not_unfinished():
-    with Reporter(verbose=False, log_path=None) as reporter:
-        reporter.message(_tasks_changed([_subagent("duplicate_hunter")]))
-        reporter.message(_tasks_changed([]))
-        reporter.message(_result())
-
-    assert reporter.unfinished_subagents == []
+def test_running_subagents_is_empty_once_they_finish():
+    assert running_subagents(_tasks_changed([])) == []
 
 
 def test_background_shell_tasks_are_not_subagents():
-    with Reporter(verbose=False, log_path=None) as reporter:
-        reporter.message(_tasks_changed([{"task_id": "b1", "task_type": "local_bash"}]))
+    shell = {"task_id": "b1", "task_type": "local_bash"}
+    assert running_subagents(_tasks_changed([shell])) == []
 
-    assert reporter.unfinished_subagents == []
+
+def test_other_messages_report_nothing():
+    assert running_subagents(SystemMessage(subtype="init", data={})) is None

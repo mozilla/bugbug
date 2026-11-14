@@ -31,7 +31,7 @@ from claude_agent_sdk import (
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
-from hackbot_runtime.claude import Reporter
+from hackbot_runtime.claude import Reporter, running_subagents
 from hackbot_runtime.searchfox import (
     PLACEHOLDER as SEARCHFOX_PLACEHOLDER,
 )
@@ -719,12 +719,15 @@ async def run_frontend_triage(
         )
 
     result_msg: ResultMessage | None = None
+    unfinished: list[str] = []
     with Reporter(verbose=verbose, log_path=log) as reporter:
         reporter.header(f"bug {bug}")
         async with ClaudeSDKClient(options=options) as client:
             await client.query(user_prompt)
             async for msg in client.receive_response():
                 reporter.message(msg)
+                if (running := running_subagents(msg)) is not None:
+                    unfinished = running
                 if isinstance(msg, ResultMessage):
                     result_msg = msg
 
@@ -734,7 +737,7 @@ async def run_frontend_triage(
         raise AgentError(
             f"bug {bug} triage failed: {result_msg.result or result_msg.subtype}"
         )
-    if unfinished := reporter.unfinished_subagents:
+    if unfinished:
         raise AgentError(
             f"bug {bug}: the agent ended its turn with subagents still running "
             f"({', '.join(unfinished)}), so their findings never reached the triage"
