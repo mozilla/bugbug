@@ -180,8 +180,7 @@ a reviewer in the GitHub environment for its kind: `hackbot-prod-agents` or
 `hackbot-prod-services`. On approval it runs `promote --expect`, which puts on
 exactly the digests that were planned, or reports `superseded` if stage has
 moved on. The approver is recorded as `deployed_by`. For a service, it also
-marks its Sentry release (`<service>@<version>`) deployed to production, with
-the `SENTRY_AUTH_TOKEN` secret of `hackbot-prod-services`.
+marks its Sentry release (`<service>@<version>`) deployed to production.
 
 `rollback` steps prod back through its history in the `hackbot-prod-rollback`
 environment. The prod deploy account is bound to those three environments, so no workflow can
