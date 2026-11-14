@@ -5,6 +5,20 @@ from typing import Any
 import httpx
 
 from testrail_client.config import TestRailSettings
+from testrail_client.models import (
+    Case,
+    CaseType,
+    Result,
+    Run,
+    Section,
+    Status,
+    Suite,
+    Template,
+    _CaseTypesResponse,
+    _ResultsResponse,
+    _StatusesResponse,
+    _TemplatesResponse,
+)
 
 
 class TestRailClient:
@@ -40,46 +54,54 @@ class TestRailClient:
             raise RuntimeError("TestRail returned an unexpected response")
         return result
 
-    async def get_case_types(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", "get_case_types")
+    async def get_case_types(self) -> list[CaseType]:
+        response = await self.request("GET", "get_case_types")
+        return _CaseTypesResponse.model_validate(response).root
 
-    async def get_templates(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", f"get_templates/{self.settings.project_id}")
+    async def get_templates(self) -> list[Template]:
+        response = await self.request(
+            "GET", f"get_templates/{self.settings.project_id}"
+        )
+        return _TemplatesResponse.model_validate(response).root
 
-    async def get_statuses(self) -> dict[str, Any] | list[Any]:
-        return await self.request("GET", "get_statuses")
+    async def get_statuses(self) -> list[Status]:
+        response = await self.request("GET", "get_statuses")
+        return _StatusesResponse.model_validate(response).root
 
-    async def add_suite(self, name: str) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_suite(self, name: str) -> Suite:
+        response = await self.request(
             "POST",
             f"add_suite/{self.settings.project_id}",
             {"name": name},
         )
+        return Suite.model_validate(response)
 
-    async def add_section(self, suite_id: int, name: str) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_section(self, suite_id: int, name: str) -> Section:
+        response = await self.request(
             "POST",
             f"add_section/{self.settings.project_id}",
             {"suite_id": suite_id, "name": name},
         )
+        return Section.model_validate(response)
 
-    async def add_case(
-        self, section_id: int, payload: dict[str, Any]
-    ) -> dict[str, Any] | list[Any]:
-        return await self.request("POST", f"add_case/{section_id}", payload)
+    async def add_case(self, section_id: int, payload: dict[str, Any]) -> Case:
+        response = await self.request("POST", f"add_case/{section_id}", payload)
+        return Case.model_validate(response)
 
-    async def add_run(self, payload: dict[str, Any]) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    async def add_run(self, payload: dict[str, Any]) -> Run:
+        response = await self.request(
             "POST",
             f"add_run/{self.settings.project_id}",
             payload,
         )
+        return Run.model_validate(response)
 
     async def add_results_for_cases(
         self, run_id: int, results: list[dict[str, Any]]
-    ) -> dict[str, Any] | list[Any]:
-        return await self.request(
+    ) -> list[Result]:
+        response = await self.request(
             "POST",
             f"add_results_for_cases/{run_id}",
             {"results": results},
         )
+        return _ResultsResponse.model_validate(response).root
