@@ -118,9 +118,12 @@ def _discover_config_path(entrypoint: Callable) -> Path | None:
 
 def _resolve_config(entrypoint: Callable, config: ConfigArg) -> HackbotConfig:
     if isinstance(config, HackbotConfig):
-        return config
-    path = config if isinstance(config, Path) else _discover_config_path(entrypoint)
-    return load_config(path) if path else HackbotConfig()
+        parsed = config
+    else:
+        path = config if isinstance(config, Path) else _discover_config_path(entrypoint)
+        parsed = load_config(path) if path else HackbotConfig()
+    parsed.agent_name = resolve_agent_name(entrypoint)
+    return parsed
 
 
 def _load_hackbot(entrypoint: Callable, config: ConfigArg) -> HackbotContext | None:
@@ -169,6 +172,7 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
+    payload["agent_version"] = ctx.config.agent_version
 
     try:
         _publish_log(ctx)
