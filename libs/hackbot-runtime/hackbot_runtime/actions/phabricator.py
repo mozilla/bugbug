@@ -27,23 +27,36 @@ UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
 # in ``context.publish_changes`` — has to cover both types.
 PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
 
-_PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
-    r"^(?:Test Plan|Testplan|Tested|Tests):",
-    re.IGNORECASE | re.MULTILINE,
-)
+# Phabricator reads these labels at the start of a line as commit-message
+# fields. Each pattern is paired with what the agent should do instead.
+_FIELD_LABEL_FIXES = [
+    (
+        re.compile(
+            r"^(?:Test Plan|Testplan|Tested|Tests):", re.IGNORECASE | re.MULTILINE
+        ),
+        "Move the verification details to the test_plan argument",
+    ),
+    (
+        re.compile(
+            r"^(?:Reviewers|Reviewer|Reviewed By):", re.IGNORECASE | re.MULTILINE
+        ),
+        "Reviewers can't be set in the summary, so remove that line",
+    ),
+]
 
 
 def _validate_summary(summary: str | None, tool_name: str) -> None:
     if not summary:
         return
 
-    match = _PHABRICATOR_TEST_PLAN_HEADER_RE.search(summary)
-    if match:
-        raise ToolError(
-            f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
-            "a line belongs in the Test Plan field. Move the verification details "
-            f"to the test_plan argument and call {tool_name} again."
-        )
+    for pattern, fix in _FIELD_LABEL_FIXES:
+        match = pattern.search(summary)
+        if match:
+            raise ToolError(
+                f'Invalid Phabricator summary: "{match.group()}" at the beginning of '
+                f"a line is parsed by Phabricator as a field. {fix} "
+                f"and call {tool_name} again."
+            )
 
 
 @tool
@@ -64,8 +77,8 @@ async def submit_patch(
             description=(
                 "Title for the new revision: a single line describing the fix, "
                 "as you would write a commit message subject. Do not include "
-                "reviewer annotations (r=... or r?...): reviewer selection is "
-                "handled on the Phabricator side."
+                "reviewer annotations (r=... or r?...): pass requested "
+                "reviewers in the reviewers argument."
             )
         ),
     ],
@@ -100,6 +113,17 @@ async def submit_patch(
             ),
         ),
     ] = None,
+    reviewers: Annotated[
+        list[str] | None,
+        Field(
+            description=(
+                "Reviewers the requester explicitly asked for, as Phabricator "
+                "usernames (not email or Bugzilla names) or #group names. "
+                "Only set this when a reviewer was requested; never choose "
+                "reviewers yourself."
+            ),
+        ),
+    ] = None,
 ) -> str:
     """Submit your fix for review as a new Phabricator revision.
 
@@ -125,6 +149,8 @@ async def submit_patch(
     }
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
+    if reviewers:
+        params["reviewers"] = reviewers
     action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
