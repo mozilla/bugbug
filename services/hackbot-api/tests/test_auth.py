@@ -61,6 +61,7 @@ def test_read_only_service_account_cannot_write(monkeypatch):
         )
 
     call("GET")
+    call("HEAD")
     with pytest.raises(HTTPException) as exc:
         call("POST")
 

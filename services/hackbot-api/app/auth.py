@@ -148,7 +148,7 @@ def require_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Service account not authorized",
         )
-    if role == "read" and request.method != "GET":
+    if role == "read" and request.method not in {"GET", "HEAD"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Read-only access",
