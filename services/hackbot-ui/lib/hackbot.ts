@@ -1,6 +1,11 @@
 import "server-only";
 
 import type { AgentDescriptor, RunAction, RunDoc, RunRef } from "./types";
+import { resolveEnvironment } from "./environment";
+
+const USER_AGENT = `hackbot-ui/${process.env.APP_VERSION} (${resolveEnvironment(
+  process.env.BETTER_AUTH_URL
+)})`;
 
 // Thin server-side client for the hackbot-api. The API key lives here and is
 // never exposed to the browser — every browser request goes through the
@@ -35,6 +40,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: {
       "X-API-Key": apiKey,
       "Content-Type": "application/json",
+      "User-Agent": USER_AGENT,
       ...(init.headers ?? {}),
     },
     // Always hit the upstream fresh; run state changes over time.

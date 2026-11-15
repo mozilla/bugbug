@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+
+const version = readFileSync(new URL("./VERSION", import.meta.url), "utf8").trim();
 import { withSentryConfig } from "@sentry/nextjs/config";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Emit a self-contained server bundle so the Docker image stays small.
   output: "standalone",
   reactStrictMode: true,
+  env: { APP_VERSION: version },
 };
 
 export default withSentryConfig(nextConfig, {
