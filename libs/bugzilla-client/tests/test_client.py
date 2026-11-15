@@ -86,7 +86,9 @@ def _attachment(id: int, bug_id: int, **extra) -> dict:
 
 async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
     handler, requests = _recorder(httpx.Response(200, json={"version": "20260101.1"}))
-    client = bugzilla(handler, url="https://bugzilla.example.com", edge_key="edge")
+    client = bugzilla(
+        handler, api_url="https://bugzilla.example.com/rest", edge_key="edge"
+    )
 
     assert await client.request("GET", "version") == {"version": "20260101.1"}
 
