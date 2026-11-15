@@ -33,7 +33,9 @@ class BrokerInputs(BaseSettings):
 
 def build_app(inputs: BrokerInputs) -> Starlette:
     client = BugzillaClient(
-        BugzillaSettings(url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key)
+        BugzillaSettings(
+            api_url=inputs.bugzilla_api_url, api_key=inputs.bugzilla_api_key
+        )
     )
     ctx = BugzillaContext(client=client)
     sdk_config = build_sdk_server("bugzilla", ctx, bugzilla.TOOLS)

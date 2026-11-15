@@ -68,7 +68,9 @@ def _bugzilla_server():
         return {"type": "http", "url": mcp_url}
     client = BugzillaClient(
         BugzillaSettings(
-            url=os.environ.get("BUGZILLA_API_URL", "https://bugzilla.mozilla.org"),
+            api_url=os.environ.get(
+                "BUGZILLA_API_URL", "https://bugzilla.mozilla.org/rest"
+            ),
             api_key=os.environ.get("BUGZILLA_API_KEY"),
         )
     )
