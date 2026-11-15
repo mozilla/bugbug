@@ -151,17 +151,10 @@ def test_list_runs_ignores_blank_requested_by(client, db, raw):
     assert "WHERE" not in _sql(db.stmt)
 
 
-async def test_list_runs_filters_by_bug_id():
-    db = _CapturingDB([])
-    await runs_router.list_runs(
-        limit=50,
-        offset=0,
-        agent=None,
-        status_filter=None,
-        requested_by=None,
-        bug_id=1846789,
-        db=db,
-    )
+async def test_list_bug_runs_filters_by_bug_id():
+    db = _CapturingDB([_fake_run()])
+    result = await runs_router.list_bug_runs(bug_id=1846789, db=db)
     assert "runs.bug_id =" in _sql(db.stmt)
     params = db.stmt.compile(dialect=postgresql.dialect()).params
     assert 1846789 in params.values()
+    assert len(result.runs) == 1

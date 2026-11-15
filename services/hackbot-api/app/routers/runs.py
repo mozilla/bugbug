@@ -25,6 +25,7 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
+    BugRuns,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -252,10 +253,6 @@ async def list_runs(
         DedupeKey,
         Query(description="Only return runs carrying this dedupe key."),
     ] = None,
-    bug_id: Annotated[
-        int | None,
-        Query(ge=1, description="Only return runs for this Bugzilla bug."),
-    ] = None,
 ) -> list[RunDoc]:
     stmt = select(Run)
     if agent is not None:
@@ -268,8 +265,6 @@ async def list_runs(
         # The trigger's own handle on its run: a caller that keyed the work can
         # find it again without having stored the run id.
         stmt = stmt.where(Run.dedupe_key == dedupe_key)
-    if bug_id is not None:
-        stmt = stmt.where(Run.bug_id == bug_id)
     # created_at is the sort key; run_id is a deterministic tiebreaker so offset
     # paging is stable when timestamps collide. (agent/status/requested_by and
     # created_at are all indexed, so filtering + ordering stay index-backed.)
@@ -280,6 +275,19 @@ async def list_runs(
     )
     result = await db.execute(stmt)
     return [RunDoc.model_validate(r) for r in result.scalars()]
+
+
+@router.get("/bugs/{bug_id}/runs")
+async def list_bug_runs(
+    bug_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> BugRuns:
+    stmt = (
+        select(Run)
+        .where(Run.bug_id == bug_id)
+        .order_by(Run.created_at.desc(), Run.run_id.desc())
+    )
+    result = await db.execute(stmt)
+    return BugRuns(runs=[RunDoc.model_validate(r) for r in result.scalars()])
 
 
 @router.get("/runs/{run_id}")
