@@ -73,7 +73,7 @@ nlp = [
 nn = []
 perf-regression-predictor = [
     "torch==2.14.1",
-    "transformers==5.22.1",
+    "transformers==5.22.2",
 ]
 perf-simulation = [
     "optuna>=5.0.0",
@@ -81,7 +81,7 @@ perf-simulation = [
 
 [dependency-groups]
 test = [
-    "coverage==7.17.1",
+    "coverage==7.17.3",
     "hypothesis==6.170.15",
     "igraph==1.0.0",
     "jsonschema==4.26.0",
