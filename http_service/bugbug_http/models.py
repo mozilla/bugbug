@@ -50,6 +50,7 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
     "perfregressionpredictor",
+    "regressor",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -474,6 +475,119 @@ def classify_perf_regression(branch: str, rev: str) -> str:
 PUSH_CLASSIFIERS = {
     PERF_REGRESSION_PREDICTOR: classify_perf_regression,
 }
+
+# Models that classify single commits (see classify_commits).
+COMMIT_MODELS = ["regressor"]
+
+
+def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
+    if commit["backsout"]:
+        return "backout"
+    if commit["ignored"]:
+        return "ignored"
+    return None
+
+
+def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
+    """Classify commits with a commit model, and store the result of each in Redis.
+
+    The commits, identified by their full hash, are pulled from the
+    hg.mozilla.org repository `branch` (e.g. "integration/autoland" or "try")
+    and mined from the service's local clone, so their features are computed in
+    the same way as during training. Backouts and commits ignored during
+    training (e.g. reformatting commits) are listed with their `ignored_reason`
+    but not scored, unknown revisions and merges are marked as not available.
+    """
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    def store(node: str, data: dict) -> None:
+        job = JobInfo(classify_commits, model_name, branch, node)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    LOGGER.info("Classifying %s @ %s with %s...", revs, branch, model_name)
+
+    # Pull the commits to the local repository, like for test selection.
+    nodes = []
+    for node in dict.fromkeys(revs):
+        try:
+            repository.pull(REPO_DIR, branch, node, update=False)
+            nodes.append(node)
+        except RuntimeError:
+            LOGGER.warning("Could not pull %s @ %s", branch, node)
+            store(node, {"available": False})
+
+    if not nodes:
+        return "OK"
+
+    # The commits are mined in the same way as for the commits DB, but without
+    # storing them (or their contribution to the experience features).
+    commits = repository.download_commits(
+        REPO_DIR,
+        revs=[node.encode("ascii") for node in nodes],
+        branch=None,
+        save=False,
+        include_no_bug=True,
+        include_backouts=True,
+        include_ignored=True,
+    )
+    commits_by_node = {commit["node"]: commit for commit in commits}
+
+    to_score = [commit for commit in commits if _get_ignored_reason(commit) is None]
+
+    model = MODEL_CACHE.get(model_name)
+    model_extra_data = model.get_extra_data()
+
+    results: dict[str, dict] = {}
+    if to_score:
+        probs = model.classify(to_score, probabilities=True)
+        indexes = probs.argmax(axis=-1)
+        classes = model.le.inverse_transform(indexes)
+        for commit, prob, index, class_ in zip(
+            to_score, probs.tolist(), indexes.tolist(), classes.tolist()
+        ):
+            try:
+                risk_band = model.find_risk_band(prob[1])
+            except Exception:
+                # The risk bands are not configured.
+                risk_band = None
+
+            results[commit["node"]] = {
+                "prob": prob,
+                "index": index,
+                "class": class_,
+                "risk_band": risk_band,
+                "ignored_reason": None,
+            }
+
+    for node in nodes:
+        # Merge commits are not mined.
+        mined_commit = commits_by_node.get(node)
+        if mined_commit is None:
+            store(node, {"available": False})
+            continue
+
+        data = results.get(
+            node,
+            {
+                "prob": None,
+                "index": None,
+                "class": None,
+                "risk_band": None,
+                "ignored_reason": _get_ignored_reason(mined_commit),
+            },
+        )
+        store(
+            node,
+            {
+                "node": node,
+                "bug_id": mined_commit["bug_id"],
+                **data,
+                "extra_data": model_extra_data,
+            },
+        )
+
+    return "OK"
 
 
 @lru_cache(maxsize=None)
