@@ -31,6 +31,8 @@ class FakeCloud:
         self.revisions_fail = False
         self.builds: list[dict[str, Any]] = []
         self.tags: dict[str, str] = {}
+        self.calls: list[str] = []
+        self.failing_jobs: set[str] = set()
 
     # --- setup helpers ---
     def apply(
@@ -123,9 +125,17 @@ class FakeCloud:
     def set_job_images(
         self, project: str, region: str, name: str, images: dict[str, str]
     ) -> None:
+        if name not in self.jobs:
+            raise DeployError(f"updating Cloud Run Job {name}: 404 not found")
         for container in self.jobs[name]["template"]["template"]["containers"]:
             container["image"] = images[container["name"]]
         self.updates.append((name, images))
+        self.calls.append(f"set {name}")
+
+    def run_job(self, project: str, region: str, name: str) -> None:
+        self.calls.append(f"run {name}")
+        if name in self.failing_jobs:
+            raise DeployError(f"{name}: execution {name}-x7k2p failed; see its logs")
 
     def get_service(self, project: str, region: str, name: str) -> dict[str, Any]:
         return json.loads(json.dumps(self.services[name]))
@@ -413,11 +423,25 @@ def test_environment_names_match_the_terraform() -> None:
 # --- Services ----------------------------------------------------------------
 
 
+def service_updates(cloud: FakeCloud) -> list[tuple[str, dict[str, str]]]:
+    """Updates to services only, leaving out the migration Jobs'."""
+    return [u for u in cloud.updates if u[0] in cloud.services]
+
+
 @pytest.fixture
 def services() -> FakeCloud:
     fake = FakeCloud()
     for env in (DEV, STAGE):
         fake.service(env, "hackbot-api")
+        fake.service(env, "hackbot-ui")
+        # The API's migration Job, with a container named like the service's.
+        fake.jobs[env.migration_job_name("hackbot-api")] = {
+            "template": {
+                "template": {
+                    "containers": [{"name": "hackbot-api", "image": "placeholder"}]
+                }
+            }
+        }
     return fake
 
 
@@ -435,7 +459,7 @@ def test_service_deploys_without_a_gate(services: FakeCloud) -> None:
 
     assert result.action == "deployed"
     assert result.config_hash is None
-    assert services.updates == [
+    assert service_updates(services) == [
         ("hackbot-api-dev", {"hackbot-api": api_image(services, 1)})
     ]
     record = services.record(DEV, "services/hackbot-api")
@@ -538,7 +562,7 @@ def test_service_rollback_refuses_an_explicit_image(services: FakeCloud) -> None
 
     with pytest.raises(DeployError, match="takes no images"):
         deploy_service(services, "hackbot-api", DEV, first, rollback=True)
-    assert len(services.updates) == 2
+    assert len(service_updates(services)) == 2
 
 
 def test_promote_dispatches_services(services: FakeCloud) -> None:
@@ -988,3 +1012,67 @@ def test_release_plan_reads_the_build_environment(
         )
     assert exit_.value.code == 0
     assert plan.read_text().split()[:3] == ["agents/bug-fix", "1.0.0", "abc123"]
+
+
+def test_an_api_deploy_migrates_with_the_new_image_first(services: FakeCloud) -> None:
+    ref = api_image(services, 1)
+    deploy_service(services, "hackbot-api", DEV, ref)
+    migrate = DEV.migration_job_name("hackbot-api")
+    assert migrate == "hackbot-api-migrate-dev"
+    assert services.updates == [
+        (migrate, {"hackbot-api": ref}),
+        (DEV.service_name("hackbot-api"), {"hackbot-api": ref}),
+    ]
+    assert services.calls == [f"set {migrate}", f"run {migrate}"]
+
+
+def test_a_failed_migration_leaves_the_service_and_record_alone(
+    services: FakeCloud,
+) -> None:
+    services.failing_jobs.add(DEV.migration_job_name("hackbot-api"))
+    with pytest.raises(
+        DeployError, match="hackbot-api-migrate-dev: execution .* failed"
+    ):
+        deploy_service(services, "hackbot-api", DEV, api_image(services, 1))
+    assert [name for name, _ in services.updates] == ["hackbot-api-migrate-dev"]
+    assert (
+        DEV.registry_bucket,
+        "deployments/services/hackbot-api.json",
+    ) not in services.objects
+
+
+def test_a_missing_migration_job_fails_the_deploy(services: FakeCloud) -> None:
+    del services.jobs[DEV.migration_job_name("hackbot-api")]
+    with pytest.raises(DeployError, match="hackbot-api-migrate-dev"):
+        deploy_service(services, "hackbot-api", DEV, api_image(services, 1))
+    assert services.updates == []
+
+
+def test_rollback_and_dry_run_never_migrate(services: FakeCloud) -> None:
+    deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 1, "2026-10-09T10:00:00Z")
+    )
+    deploy_service(
+        services, "hackbot-api", DEV, api_image(services, 2, "2026-10-09T11:00:00Z")
+    )
+    services.calls.clear()
+
+    deploy_service(
+        services,
+        "hackbot-api",
+        DEV,
+        api_image(services, 3, "2026-10-09T12:00:00Z"),
+        dry_run=True,
+    )
+    assert services.calls == []
+
+    result = deploy_service(services, "hackbot-api", DEV, rollback=True)
+    assert result.action == "rolled back"
+    assert services.calls == []
+
+
+def test_services_without_migrations_just_deploy(services: FakeCloud) -> None:
+    ref = f"{REPO}/hackbot-ui@sha256:{1:064x}"
+    services.build(ref, "-")
+    deploy_service(services, "hackbot-ui", DEV, ref)
+    assert services.calls == []

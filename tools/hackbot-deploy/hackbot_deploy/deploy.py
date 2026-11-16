@@ -53,6 +53,12 @@ _IMAGE = re.compile(
 AGENTS = "agents"
 SERVICES = "services"
 
+# Services with schema migrations, and the Cloud Run Job (webservices-infra,
+# api.tf) that runs them. A deploy of one of these runs its Job with the new
+# image first, and updates the service only if that succeeded. Forward only:
+# a rollback never migrates.
+MIGRATIONS = {"hackbot-api": "hackbot-api-migrate"}
+
 # The GitHub environment a prod promotion of each kind waits for approval in.
 PROD_APPROVAL = {AGENTS: "hackbot-prod-agents", SERVICES: "hackbot-prod-services"}
 
@@ -89,6 +95,9 @@ class Environment:
 
     def service_name(self, service: str) -> str:
         return f"{service}{self.name_suffix}"
+
+    def migration_job_name(self, service: str) -> str:
+        return f"{MIGRATIONS[service]}{self.name_suffix}"
 
 
 ENVIRONMENTS = {
@@ -136,6 +145,9 @@ class Cloud(Protocol):
         self, project: str, region: str, name: str, images: dict[str, str]
     ) -> None:
         """Set container images by container name, and wait until done."""
+
+    def run_job(self, project: str, region: str, name: str) -> None:
+        """Run the Job once and wait for it; fail unless the execution succeeded."""
 
     def get_service(self, project: str, region: str, name: str) -> dict[str, Any]: ...
 
@@ -501,7 +513,8 @@ def deploy_service(
     """Put ``image`` on ``service`` in ``env``, or roll back to the last deployment.
 
     Only the image changes; everything else about the service is Terraform's.
-    A new revision is rolled out, and if it never becomes ready Cloud Run keeps
+    A service in MIGRATIONS first runs its migrations with the new image; then
+    a new revision is rolled out, and if it never becomes ready Cloud Run keeps
     serving the old one.
     """
     if rollback and image is not None:
@@ -543,6 +556,10 @@ def deploy_service(
     )
 
     def update() -> None:
+        if service in MIGRATIONS and not rollback:
+            migrate = env.migration_job_name(service)
+            cloud.set_job_images(env.project_id, REGION, migrate, images)
+            cloud.run_job(env.project_id, REGION, migrate)
         cloud.set_service_images(env.project_id, REGION, name, images)
         after = cloud.get_service(env.project_id, REGION, name)
         running = {c["name"]: c["image"] for c in after["template"]["containers"]}

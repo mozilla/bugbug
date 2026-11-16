@@ -26,16 +26,6 @@
 # `plan` runs as the read-only manifest-sync account. Deploys run as the prod
 # deploy account, which only a job in one of the three hackbot-prod-*
 # environments can get, so no deploy skips an environment's protection.
-#
-# Needs, in this repo's settings:
-#   environments `hackbot-prod-agents` and `hackbot-prod-services` (each with
-#                its required reviewers) and `hackbot-prod-rollback`, all
-#                limited to the default branch
-#   vars.HACKBOT_MANIFEST_SYNC_SA     the prod state's manifest_sync_service_account_email output
-#   vars.HACKBOT_PROD_DEPLOY_SA       the prod state's prod_deploy_service_account_email output
-#   secrets.SENTRY_AUTH_TOKEN         in `hackbot-prod-services`, to mark Sentry deploys (optional)
-# The workload identity provider is the platform's organization variable,
-# GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER, so it needs nothing here.
 name: Hackbot prod deploy
 run-name: >-
   ${{ format('{0} {1} in prod{2}', inputs.action, inputs.name, inputs.dry_run && ' (dry run)' || '') }}
@@ -226,10 +216,6 @@ jobs:
         run: |
           if ! grep -q ": deployed" "$RUNNER_TEMP/out.txt"; then
             echo "Nothing was deployed; no Sentry deploy to mark."
-            exit 0
-          fi
-          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
-            echo "::warning::No SENTRY_AUTH_TOKEN secret in hackbot-prod-services; the production deploy isn't marked in Sentry."
             exit 0
           fi
           version=$(jq -r '.version // empty' <<< "$PROMOTION")
