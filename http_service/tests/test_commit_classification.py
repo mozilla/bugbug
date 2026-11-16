@@ -3,13 +3,28 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
+
 import hglib
 import numpy as np
 import orjson
 import zstandard
 
 from bugbug_http import models
-from bugbug_http.app import JobInfo
+from bugbug_http.app import API_TOKEN, JobInfo
+
+REV1 = "a" * 40
+REV2 = "b" * 40
+
+
+def _response_json(response):
+    if response.headers.get("Content-Encoding") == "gzip":
+        return orjson.loads(gzip.decompress(response.data))
+    return response.json
+
+
+def _job_key(rev: str, branch: str = "integration/autoland") -> str:
+    return str(JobInfo(models.classify_commits, "regressor", branch, rev))
 
 
 def _get_result(rev: str, branch: str = "integration/autoland"):
@@ -17,6 +32,92 @@ def _get_result(rev: str, branch: str = "integration/autoland"):
     return orjson.loads(
         zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
     )
+
+
+PREDICTION = {
+    "node": REV2,
+    "bug_id": 123456,
+    "prob": [0.9, 0.1],
+    "index": 0,
+    "class": 0,
+    "risk_band": "l",
+    "ignored_reason": None,
+    "extra_data": {},
+}
+
+
+def test_commit_endpoint(client, jobs, add_result) -> None:
+    endpoint = f"/regressor/predict/commit/autoland/{REV2}"
+
+    assert client.get(endpoint).status_code == 401
+
+    # Only commit models can be used with the commit prediction endpoint.
+    response = client.get(
+        f"/component/predict/commit/autoland/{REV2}", headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 404
+
+    for rev in ("tip", REV2[:12]):
+        response = client.get(
+            f"/regressor/predict/commit/autoland/{rev}", headers={API_TOKEN: "test"}
+        )
+        assert response.status_code == 400
+
+    response = client.get(endpoint, headers={API_TOKEN: "test"})
+    assert response.status_code == 202
+    assert _response_json(response) == {"ready": False}
+    assert [keys[0] for keys in jobs.values()] == [_job_key(REV2)]
+
+    # The commit is not queued again while it is being processed.
+    response = client.get(endpoint, headers={API_TOKEN: "test"})
+    assert response.status_code == 202
+    assert len(jobs) == 1
+
+    add_result(_job_key(REV2), PREDICTION)
+
+    response = client.get(endpoint, headers={API_TOKEN: "test"})
+    assert response.status_code == 200
+    assert _response_json(response) == PREDICTION
+
+
+def test_commits_endpoint(client, jobs, add_result) -> None:
+    endpoint = "/regressor/predict/commits/autoland"
+
+    assert client.post(endpoint, json={"commits": [REV1]}).status_code == 401
+
+    bodies: tuple[object, ...] = (
+        {},
+        {"commits": []},
+        {"commits": ["not a hash"]},
+        {"commits": [REV1[:12]]},
+        {"commits": [REV1] * 101},
+        [REV1],
+    )
+    for body in bodies:
+        response = client.post(endpoint, json=body, headers={API_TOKEN: "test"})
+        assert response.status_code == 400, body
+
+    add_result(_job_key(REV2), PREDICTION)
+
+    response = client.post(
+        endpoint, json={"commits": [REV1, REV2, REV1]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 202
+    assert _response_json(response) == {
+        "commits": {REV1: {"ready": False}, REV2: PREDICTION}
+    }
+    # Only the missing commit is queued.
+    assert [keys[0] for keys in jobs.values()] == [_job_key(REV1)]
+
+    add_result(_job_key(REV1), {"available": False})
+
+    response = client.post(
+        endpoint, json={"commits": [REV1, REV2]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 200
+    assert _response_json(response) == {
+        "commits": {REV1: {"available": False}, REV2: PREDICTION}
+    }
 
 
 class MockRegressorModel:
