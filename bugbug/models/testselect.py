@@ -643,7 +643,7 @@ class TestSelectModel(Model):
         state.pop("row_push_index", None)
         return state
 
-    def get_sample_weights(self, y):
+    def get_sample_weights(self, X, y):
         if not self.balance_with_weights:
             return None
 

@@ -11,8 +11,6 @@ import dateutil.parser
 import numpy as np
 import xgboost
 from dateutil.relativedelta import relativedelta
-from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import CountVectorizer
@@ -210,13 +208,34 @@ class RegressorModel(CommitModel):
             estimator = IsotonicRegressionCalibrator(estimator)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
-        self.clf = ImblearnPipeline(
+        self.clf = Pipeline(
             [
                 ("union", ColumnTransformer(column_transformers)),
-                ("sampler", RandomUnderSampler(random_state=0)),
                 ("estimator", estimator),
             ]
         )
+        self.train_bug_ids: list[int] = []
+
+    def items_gen(self, classes):
+        # Remember the bug of each item, to weight training samples by bug (see get_sample_weights).
+        self.train_bug_ids = []
+        for commit, label in super().items_gen(classes):
+            self.train_bug_ids.append(commit["bug_id"])
+            yield commit, label
+
+    def get_sample_weights(self, X, y):
+        # Labels are per bug (a commit is a regressor if its bug caused a regression), and
+        # predictions are evaluated per bug, so bugs with many commits would otherwise dominate
+        # training: each bug gets the same total weight, split among its commits. The classes
+        # are balanced with weights too (instead of undersampling, which would not keep the
+        # weights aligned with the samples).
+        bug_ids = np.array(self.train_bug_ids)[np.asarray(X.index)]
+        _, inverse, counts = np.unique(bug_ids, return_inverse=True, return_counts=True)
+        sample_weight = 1.0 / counts[inverse]
+        for label in np.unique(y):
+            mask = y == label
+            sample_weight[mask] *= len(y) / (2 * sample_weight[mask].sum())
+        return sample_weight
 
     def get_labels(self):
         classes = {}

@@ -214,7 +214,7 @@ def trained_model(
     assert {r.push_index for r, _ in model.evaluation_regressions} == set(
         range(540, 600, 10)
     )
-    assert len(model.get_sample_weights(y_train)) == len(y_train)
+    assert len(model.get_sample_weights(None, y_train)) == len(y_train)
 
     model.le.fit(y)
     model.fit_classifier(X, model.le.transform(y))
