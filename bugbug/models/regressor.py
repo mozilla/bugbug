@@ -140,7 +140,15 @@ class RegressorModel(CommitModel):
                 ),
             ]
         )
-        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        estimator = xgboost.XGBClassifier(
+            n_estimators=600,
+            learning_rate=0.03,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.5,
+            min_child_weight=5,
+            n_jobs=utils.get_physical_cpu_count(),
+        )
         if calibration:
             estimator = IsotonicRegressionCalibrator(estimator)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
