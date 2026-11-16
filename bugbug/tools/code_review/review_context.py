@@ -225,7 +225,7 @@ def _resolve_group_slugs(slugs: list[str]) -> set[str]:
     for slug in slugs:
         try:
             phid = resolve_project_phid(slug)
-        except (ConduitError, requests.RequestException):
+        except ConduitError, requests.RequestException:
             logger.exception("Could not resolve reviewer group %s", slug)
             continue
         if phid:
