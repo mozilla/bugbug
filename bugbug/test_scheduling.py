@@ -36,7 +36,6 @@ from typing import (
     cast,
 )
 
-import hglib
 import orjson
 from tqdm import tqdm
 
@@ -1467,9 +1466,8 @@ class _RevisionFiles:
         """
         self.repo_dir = repo_dir
         self.rev = rev
-        self._hg: hglib.client.hgclient | None = None
         # The parsed test manifests (None when not a test manifest), by path.
-        self.parsed_manifests: dict[str, dict | None] | None = None
+        self.parsed_manifests: dict[str, dict | None] = {}
         # The test manifests by the paths they include.
         self.manifest_by_path: dict[str, set[str]] | None = None
         # The files changed from the base revision (None if all of them are new).
@@ -1490,12 +1488,11 @@ class _RevisionFiles:
                     files.discard(path)
                 else:
                     files.add(path)
-            if base.parsed_manifests is not None:
-                self.parsed_manifests = {
-                    path: data
-                    for path, data in base.parsed_manifests.items()
-                    if path not in self.changed
-                }
+            self.parsed_manifests = {
+                path: data
+                for path, data in base.parsed_manifests.items()
+                if path not in self.changed
+            }
 
         self._files_set: set[str] = files
         self.files = sorted(files)
@@ -1510,35 +1507,19 @@ class _RevisionFiles:
                 parent = os.path.dirname(parent)
         self.dirs = sorted(self._dirs_set)
 
+    def _hg(self, *args: str) -> bytes:
+        # Not using the command server, as it is slow to read a large output.
+        return subprocess.run(
+            ["hg", *args], cwd=self.repo_dir, check=True, capture_output=True
+        ).stdout
+
     def _run(self, *args: str) -> list[str]:
         """Run a Mercurial command printing NUL-separated paths, relative to the root."""
-        # Not using the command server, as it is slow to read a large output.
-        out = subprocess.run(
-            ["hg", *args],
-            cwd=self.repo_dir,
-            check=True,
-            capture_output=True,
-        ).stdout
         return [
             entry.decode("utf-8", "surrogateescape")
-            for entry in out.split(b"\0")
+            for entry in self._hg(*args).split(b"\0")
             if entry
         ]
-
-    def _command(self, *args, **kwargs) -> bytes:
-        # The command server is kept open until the end of the "with" block using these files, to
-        # avoid starting Mercurial for each command.
-        if self._hg is None:
-            self._hg = hglib.open(self.repo_dir)
-        return self._hg.rawcommand(hglib.util.cmdbuilder(*args, **kwargs))
-
-    def __enter__(self) -> "_RevisionFiles":
-        return self
-
-    def __exit__(self, *exc_info) -> None:
-        if self._hg is not None:
-            self._hg.close()
-            self._hg = None
 
     @staticmethod
     def _under(sorted_paths: list[str], path: str) -> list[str]:
@@ -1560,11 +1541,13 @@ class _RevisionFiles:
         paths = [path for path in paths if path in self._files_set]
         contents: dict[str, bytes] = {}
         for i in range(0, len(paths), 1000):
-            out = self._command(
-                b"cat",
-                *(f"path:{path}".encode("utf-8") for path in paths[i : i + 1000]),
-                rev=self.rev.encode("ascii"),
-                template=b"json",
+            out = self._hg(
+                "cat",
+                "-r",
+                self.rev,
+                "-T",
+                "json",
+                *(f"path:{path}" for path in paths[i : i + 1000]),
             )
             for entry in orjson.loads(out):
                 contents[entry["path"]] = entry["data"].encode(
@@ -1615,145 +1598,111 @@ def _get_repo_files(repo_dir: str, rev: str) -> _RevisionFiles:
 _revision_files: _RevisionFiles | None = None
 
 
-def _parse_test_manifest(path: str, content: bytes) -> dict | None:
-    """Parse a test manifest, returning None if the file is not a test manifest."""
-    try:
-        data = tomllib.loads(content.decode("utf-8"))
-    except UnicodeDecodeError, tomllib.TOMLDecodeError:
-        logger.warning("Failed to parse %s", path)
-        return None
-
-    # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
-    if "DEFAULT" not in data and not any(key.startswith("test") for key in data):
-        return None
-
-    return data
-
-
-def _is_candidate_manifest(path: str) -> bool:
-    parts = path.split("/")
-    # HACK: These are not test manifests, skip them.
-    return not (
-        parts[-1] in ("Cargo.toml", "pyproject.toml")
-        or (len(parts) > 1 and parts[-2] == "test-manifest-toml")
-        or "third_party" in parts
-        or "manifestparser" in parts
-    )
-
-
-def _normalize(path: str) -> str | None:
-    """Normalize a path relative to the root of the repository, None if outside it."""
-    path = os.path.normpath(path)
-    if path == ".." or path.startswith("../"):
-        return None
-    return path
-
-
-def _build_manifest_by_path(
-    files: _RevisionFiles, manifests: dict[str, dict]
-) -> dict[str, set[str]]:
-    result: dict[str, set[str]] = collections.defaultdict(set)
-
-    def add(path: str | None, toml_rel: str) -> None:
-        if path is not None:
-            result[path].add(toml_rel)
-
-    for toml_rel, data in manifests.items():
-        toml_dir = os.path.dirname(toml_rel)
-
-        # The manifest path itself, so we schedule it when it is touched.
-        add(toml_rel, toml_rel)
-
-        # Collect head files.
-        head_value = data.get("DEFAULT", {}).get("head", [])
-        head_files = (
-            head_value if isinstance(head_value, list) else head_value.split(" ")
-        )
-        for head_file in head_files:
-            if not head_file.strip():
-                continue
-
-            add(_normalize(os.path.join(toml_dir, head_file)), toml_rel)
-
-        # Collect support files.
-        def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
-            support_files = value.get("support-files", [])
-            if isinstance(support_files, str):
-                support_files = [support_files]
-
-            for support_file in support_files:
-                if not support_file.strip():
-                    continue
-
-                if support_file.startswith("!"):
-                    support_file = support_file[1:]
-
-                if support_file.startswith("/"):
-                    support_file_path = _normalize(support_file[1:])
-                else:
-                    support_file_path = _normalize(os.path.join(toml_dir, support_file))
-
-                if support_file_path is None:
-                    continue
-
-                if "*" in support_file:
-                    for f in files.glob(support_file_path):
-                        add(f, toml_rel)
-                else:
-                    add(support_file_path, toml_rel)
-
-        collect_support_files(data.get("DEFAULT", {}))
-
-        # Collect test files.
-        for key, val in data.items():
-            if key != "DEFAULT" and isinstance(val, dict):
-                collect_support_files(val)
-
-                add(_normalize(os.path.join(toml_dir, key)), toml_rel)
-
-    return result
-
-
-def _get_manifest_by_path(files: _RevisionFiles) -> dict[str, set[str]]:
-    if files.manifest_by_path is not None:
-        return files.manifest_by_path
-
-    candidates = [p for p in files.toml_files() if _is_candidate_manifest(p)]
-    # Only read the manifests which changed since the revision the files were computed from.
-    if files.parsed_manifests is None:
-        files.parsed_manifests = {}
-    to_read = [p for p in candidates if p not in files.parsed_manifests]
-    contents = files.read(to_read)
-    for path in to_read:
-        content_or_none = contents.get(path)
-        files.parsed_manifests[path] = (
-            _parse_test_manifest(path, content_or_none)
-            if content_or_none is not None
-            else None
-        )
-
-    manifests = {
-        path: data
-        for path in candidates
-        if (data := files.parsed_manifests[path]) is not None
-    }
-
-    files.manifest_by_path = _build_manifest_by_path(files, manifests)
-    return files.manifest_by_path
-
-
 def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[str]:
     """The test manifests and web-platform test directories to run for modified paths.
 
     The files of the repository at revision `rev` are used, read with Mercurial without
     updating the working directory, as it is slow on a large repository.
     """
-    with _get_repo_files(repo_dir, rev) as files:
-        return _find_manifests_for_paths(files, paths)
+    repo_files = _get_repo_files(repo_dir, rev)
 
+    manifest_by_path = repo_files.manifest_by_path
+    if manifest_by_path is None:
+        manifest_by_path = repo_files.manifest_by_path = collections.defaultdict(set)
 
-def _find_manifests_for_paths(files: _RevisionFiles, paths: list[str]) -> set[str]:
-    manifest_by_path = _get_manifest_by_path(files)
+        toml_paths = []
+        for toml_rel in repo_files.toml_files():
+            parts = toml_rel.split("/")
+            # HACK: These are not test manifests, skip them.
+            if (
+                parts[-1] in ("Cargo.toml", "pyproject.toml")
+                or (len(parts) > 1 and parts[-2] == "test-manifest-toml")
+                or "third_party" in parts
+                or "manifestparser" in parts
+            ):
+                continue
+
+            toml_paths.append(toml_rel)
+
+        # Only parse the manifests which changed since the revision the files were computed from.
+        to_parse = [p for p in toml_paths if p not in repo_files.parsed_manifests]
+        for toml_rel, content in repo_files.read(to_parse).items():
+            try:
+                data = tomllib.loads(content.decode("utf-8"))
+            except UnicodeDecodeError, tomllib.TOMLDecodeError:
+                logger.warning("Failed to parse %s", toml_rel)
+                data = None
+
+            # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
+            if data is not None and (
+                "DEFAULT" not in data
+                and not any(key.startswith("test") for key in data)
+            ):
+                data = None
+
+            repo_files.parsed_manifests[toml_rel] = data
+
+        for toml_rel in toml_paths:
+            data = repo_files.parsed_manifests.get(toml_rel)
+            if data is None:
+                continue
+
+            toml_dir = os.path.dirname(toml_rel)
+
+            # The manifest path itself, so we schedule it when it is touched.
+            manifest_by_path[toml_rel].add(toml_rel)
+
+            # Collect head files.
+            head_value = data.get("DEFAULT", {}).get("head", [])
+            head_files = (
+                head_value if isinstance(head_value, list) else head_value.split(" ")
+            )
+            for head_file in head_files:
+                if not head_file.strip():
+                    continue
+
+                manifest_by_path[
+                    os.path.normpath(os.path.join(toml_dir, head_file))
+                ].add(toml_rel)
+
+            # Collect support files.
+            def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
+                support_files = value.get("support-files", [])
+                if isinstance(support_files, str):
+                    support_files = [support_files]
+
+                for support_file in support_files:
+                    if not support_file.strip():
+                        continue
+
+                    if support_file.startswith("!"):
+                        support_file = support_file[1:]
+
+                    if support_file.startswith("/"):
+                        support_file_path = os.path.normpath(support_file[1:])
+                    else:
+                        support_file_path = os.path.normpath(
+                            os.path.join(toml_dir, support_file)
+                        )
+
+                    if "*" in support_file:
+                        files = repo_files.glob(support_file_path)
+                    else:
+                        files = [support_file_path]
+
+                    for f in files:
+                        manifest_by_path[f].add(toml_rel)
+
+            collect_support_files(data.get("DEFAULT", {}))
+
+            # Collect test files.
+            for key, val in data.items():
+                if key != "DEFAULT" and isinstance(val, dict):
+                    collect_support_files(val)
+
+                    manifest_by_path[os.path.normpath(os.path.join(toml_dir, key))].add(
+                        toml_rel
+                    )
 
     manifests = set()
 
@@ -1768,9 +1717,9 @@ def _find_manifests_for_paths(files: _RevisionFiles, paths: list[str]) -> set[st
         elif parent:
             # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
             sibling_manifests: set[str] = set()
-            for sibling in files.subdirs(parent):
+            for sibling in repo_files.subdirs(parent):
                 if repository.is_test(f"/{sibling}/"):
-                    sibling_manifests.update(files.files_in(sibling, ".toml"))
+                    sibling_manifests.update(repo_files.files_in(sibling, ".toml"))
 
             if len(sibling_manifests) <= MAX_SIBLING_MANIFESTS:
                 manifests.update(sibling_manifests)
@@ -1792,8 +1741,8 @@ def _find_manifests_for_paths(files: _RevisionFiles, paths: list[str]) -> set[st
                         return name.endswith((".html", ".any.js", ".worker.js"))
 
                     def has_wpt_files(d: Path) -> bool:
-                        return files.is_dir(str(d)) and any(
-                            is_wpt_file(name) for name in files.children(str(d))
+                        return repo_files.is_dir(str(d)) and any(
+                            is_wpt_file(name) for name in repo_files.children(str(d))
                         )
 
                     while cur_dir != test_root and not has_wpt_files(cur_dir):
@@ -1839,13 +1788,8 @@ def find_tasks_for_paths(
     The files of the repository at revision `rev` are used, read with Mercurial without
     updating the working directory, as it is slow on a large repository.
     """
-    with _get_repo_files(repo_dir, rev) as files:
-        return _find_tasks_for_paths(files, known_tasks, paths)
+    files = _get_repo_files(repo_dir, rev)
 
-
-def _find_tasks_for_paths(
-    files: _RevisionFiles, known_tasks: tuple[str, ...], paths: list[str]
-) -> list[str]:
     select_gtest = False
     select_cppunit = False
     select_rusttests = False
