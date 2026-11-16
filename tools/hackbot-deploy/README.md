@@ -151,6 +151,13 @@ hand in webservices-infra and changes there first. It changes only the image,
 and fails without recording anything if the new revision never becomes ready,
 in which case Cloud Run keeps serving the old one.
 
+A service in `MIGRATIONS` (`hackbot-api`) first runs its schema migrations: the
+new image goes on its migration Job (`hackbot-api-migrate<suffix>`), which runs
+`alembic upgrade head`, and the service is updated only if that execution
+succeeds. A missing Job or a failed execution fails the deploy with nothing
+changed and nothing recorded. A rollback or a dry run never migrates:
+migrations are forward only (docs/hackbot/api.md).
+
 Then it updates the Job or service, reads it back, and writes
 `deployments/<id>.json` (`deployments/agents/bug-fix.json`) with the images,
 version, commit, build time and a deployment history. The write is conditioned on the record's generation, so
@@ -173,8 +180,7 @@ a reviewer in the GitHub environment for its kind: `hackbot-prod-agents` or
 `hackbot-prod-services`. On approval it runs `promote --expect`, which puts on
 exactly the digests that were planned, or reports `superseded` if stage has
 moved on. The approver is recorded as `deployed_by`. For a service, it also
-marks its Sentry release (`<service>@<version>`) deployed to production, with
-the `SENTRY_AUTH_TOKEN` secret of `hackbot-prod-services`.
+marks its Sentry release (`<service>@<version>`) deployed to production.
 
 `rollback` steps prod back through its history in the `hackbot-prod-rollback`
 environment. The prod deploy account is bound to those three environments, so no workflow can

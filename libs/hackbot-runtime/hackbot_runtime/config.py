@@ -7,6 +7,8 @@ can prepare them on the agent's behalf. Per-run inputs and secrets are NOT here
 """
 
 import tomllib
+from functools import cached_property
+from importlib import metadata
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -42,6 +44,18 @@ class HackbotConfig(BaseModel):
 
     source: SourceConfig | None = None
     firefox: FirefoxConfig | None = None
+    # Set by the runtime from the entry point, not read from the toml.
+    agent_name: str | None = None
+
+    @cached_property
+    def agent_version(self) -> str | None:
+        """The version in the agent's pyproject.toml, or None when it isn't installed."""
+        if self.agent_name is None:
+            return None
+        try:
+            return metadata.version(f"hackbot-agent-{self.agent_name}")
+        except metadata.PackageNotFoundError:
+            return None
 
 
 def load_config(path: Path) -> HackbotConfig:

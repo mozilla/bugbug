@@ -37,7 +37,7 @@ dependencies = [
     "mercurial~=7.2",
     "microannotate~=0.0.24",
     "mozci~=2.6.0",
-    "numpy~=2.4.3",
+    "numpy>=2.4.3,<2.6.0",
     "orjson>=3.11.7,<3.14.0",
     "ortools~=9.15.6755",
     "pandas>=3.0.1,<3.2.0",
@@ -72,8 +72,8 @@ nlp = [
 ]
 nn = []
 perf-regression-predictor = [
-    "torch==2.14.1",
-    "transformers==5.22.1",
+    "torch==2.15.0",
+    "transformers==5.22.2",
 ]
 perf-simulation = [
     "optuna>=5.0.0",
@@ -81,7 +81,7 @@ perf-simulation = [
 
 [dependency-groups]
 test = [
-    "coverage==7.17.1",
+    "coverage==7.17.3",
     "hypothesis==6.170.15",
     "igraph==1.0.0",
     "jsonschema==4.26.0",

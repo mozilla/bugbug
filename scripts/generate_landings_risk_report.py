@@ -151,8 +151,8 @@ class LandingsRiskReportGenerator(object):
         )
 
         # Some commits that were already in the DB from the previous run might need
-        # to be updated (e.g. coverage information).
-        repository.update_commits()
+        # to be updated (e.g. coverage information, backouts).
+        repository.update_commits(repo_dir)
 
         logger.info("Downloading revisions database...")
         assert db.download(phabricator.REVISIONS_DB)
