@@ -1,0 +1,6 @@
+services:
+  github-mcp:
+    image: ghcr.io/github/github-mcp-server:v2.0.3
+    command: ["http", "--read-only", "--toolsets=repos,pull_requests,issues"]
+    ports:
+      - "127.0.0.1:8082:8082"
