@@ -243,6 +243,71 @@ def test_hg_modified_files(fake_hg_repo, tmp_path):
     repository.close_component_mapping()
 
 
+def test_refresh_backouts_and_ignored(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, ".hg-annotate-ignore-revs", "")
+    commit(hg, "Bug 1 - Initial commit. r=moz")
+
+    add_file(hg, local, "file1", "1\n2\n3\n")
+    revision1 = commit(hg, "Bug 123 - Prova. r=moz")
+
+    add_file(hg, local, "file2", "1\n2\n3\n")
+    revision2 = commit(hg, "Bug 456 - Prova. r=moz")
+
+    hg.backout(
+        rev=revision1,
+        message=f"Backout {revision1[:12]}",
+        user="sheriff",
+        date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    )
+    revision3 = hg.log(limit=1)[0][1].decode("ascii")
+
+    # The commit is added to .hg-annotate-ignore-revs in a follow-up patch.
+    add_file(hg, local, ".hg-annotate-ignore-revs", f"{revision2}\n")
+    revision4 = commit(hg, "Bug 456 - Ignore the previous commit in annotate. r=moz")
+
+    hg.push(dest=bytes(remote, "ascii"))
+    copy_pushlog_database(remote, local)
+
+    now = str(datetime.utcnow())
+    old = str(datetime.utcnow() - relativedelta(years=2))
+
+    def commit_dict(node, desc, pushdate):
+        # The information as it was when the commit was mined: the backout was
+        # not detected, and the commit was not in .hg-annotate-ignore-revs yet.
+        return {
+            "node": node,
+            "desc": desc,
+            "pushdate": pushdate,
+            "backsout": [],
+            "backedoutby": "",
+            "ignored": False,
+        }
+
+    # Everything is older than the refreshed window, except the last commit: old
+    # backouts that were not detected when mined are repaired anyway (they look like
+    # backouts), and ignore information is refreshed for all commits.
+    commits = [
+        commit_dict(revision1, "Bug 123 - Prova. r=moz", old),
+        commit_dict(revision2, "Bug 456 - Prova. r=moz", old),
+        commit_dict(revision3, f"Backout {revision1[:12]}", old),
+        commit_dict(
+            revision4, "Bug 456 - Ignore the previous commit in annotate. r=moz", now
+        ),
+    ]
+
+    repository.refresh_backouts_and_ignored(local, commits)
+
+    assert commits[2]["backsout"] == [revision1[:12]]
+    assert commits[0]["backedoutby"] == revision3
+    assert commits[0]["ignored"] is False
+    assert commits[1]["backedoutby"] == ""
+    assert commits[1]["backsout"] == []
+    assert commits[1]["ignored"] is True
+    assert commits[3]["ignored"] is False
+
+
 def test_hg_log(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 

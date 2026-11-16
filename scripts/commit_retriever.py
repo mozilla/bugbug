@@ -44,8 +44,8 @@ class Retriever(object):
         logger.info("commit data extracted from repository")
 
         # Some commits that were already in the DB from the previous run might need
-        # to be updated (e.g. coverage information).
-        repository.update_commits()
+        # to be updated (e.g. coverage information, backouts).
+        repository.update_commits(self.repo_dir)
 
         zstd_compress(repository.COMMITS_DB)
         create_tar_zst(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
