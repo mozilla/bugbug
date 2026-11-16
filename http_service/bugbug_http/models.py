@@ -957,6 +957,9 @@ def _analyze_patch(
 
     known_tasks = get_known_tasks()
     modified_paths = list(set(path for commit in commits for path in commit["files"]))
+    # The working directory is not updated to the pushed revisions, as it is slow, so the files
+    # are read at the head of the push.
+    head_rev = revs[-1].decode("ascii")
 
     tasks = (
         testlabelselect_model.select_tests(
@@ -966,7 +969,7 @@ def _analyze_patch(
         else {}
     )
     for task in test_scheduling.find_tasks_for_paths(
-        REPO_DIR, known_tasks, modified_paths
+        REPO_DIR, known_tasks, modified_paths, head_rev
     ):
         tasks[task] = 1.0
     for task in backout_tasks:
@@ -1010,7 +1013,9 @@ def _analyze_patch(
         for group, confidence in groups.items()
         if very_high_confidence is not None and confidence >= very_high_confidence
     }
-    for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
+    for group in test_scheduling.find_manifests_for_paths(
+        REPO_DIR, modified_paths, head_rev
+    ):
         groups[group] = 1.0
         risks[group] = 1.0
         very_likely_groups.add(group)

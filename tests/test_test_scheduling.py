@@ -6,8 +6,9 @@
 import contextlib
 import math
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterator
 
+import hglib
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -1208,7 +1209,43 @@ def test_fallback_on_ini() -> None:
     assert_val("browser.ini", 42)
 
 
+class _Finder:
+    """Calls the functions finding what to run for paths, at a revision with the current files.
+
+    The files are committed and the working directory is emptied before each call, to check
+    that they are only read from the repository store.
+    """
+
+    def __init__(self, tmp_path) -> None:
+        self.repo_dir = str(tmp_path)
+        hglib.init(self.repo_dir)
+
+    @contextlib.contextmanager
+    def _rev(self) -> Iterator[str]:
+        with hglib.open(self.repo_dir) as hg:
+            hg.addremove()
+            if hg.status():
+                hg.commit(message=b"Commit", user=b"bugbug")
+            rev = hg.log(limit=1)[0].node.decode("ascii")
+            hg.update(rev=b"null")
+            try:
+                yield rev
+            finally:
+                hg.update(rev=b"tip")
+
+    def manifests(self, paths: list[str]) -> set[str]:
+        with self._rev() as rev:
+            return test_scheduling.find_manifests_for_paths(self.repo_dir, paths, rev)
+
+    def tasks(self, known_tasks: tuple[str, ...], paths: list[str]) -> list[str]:
+        with self._rev() as rev:
+            return test_scheduling.find_tasks_for_paths(
+                self.repo_dir, known_tasks, paths, rev
+            )
+
+
 def test_find_manifests_for_paths(tmp_path) -> None:
+    find = _Finder(tmp_path)
     (tmp_path / "dom" / "battery" / "test").mkdir(parents=True)
     (tmp_path / "dom" / "battery" / "test" / "mochitest.toml").touch()
     (tmp_path / "dom" / "battery" / "test" / "chrome.toml").touch()
@@ -1242,29 +1279,23 @@ support-files = ""
     (tmp_path / "absolute_path_with_subdirglob" / "asd.js").touch()
     (tmp_path / "absolute_path_with_subdirglob" / "subdir" / "asd.js").touch()
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["dom/battery/BatteryManager.cpp"]
-    ) == {
+    assert find.manifests(["dom/battery/BatteryManager.cpp"]) == {
         "dom/battery/test/mochitest.toml",
         "dom/battery/test/chrome.toml",
     }
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["dom/battery/BatteryManager.cpp", "test/chrome.toml"]
-    ) == {
+    assert find.manifests(["dom/battery/BatteryManager.cpp", "test/chrome.toml"]) == {
         "dom/battery/test/mochitest.toml",
         "dom/battery/test/chrome.toml",
         "test/chrome.toml",
     }
 
-    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["prova.js"]) == {
-        "test/chrome.toml"
-    }
+    assert find.manifests(["prova.js"]) == {"test/chrome.toml"}
 
     # A root-level file that is not referenced by any manifest must not
     # schedule every manifest in the repository.
     (tmp_path / "mach").touch()
-    assert test_scheduling.find_manifests_for_paths(str(tmp_path), ["mach"]) == set()
+    assert find.manifests(["mach"]) == set()
 
     # A file close to too many manifests (e.g. dom/moz.build) must not
     # schedule all of them.
@@ -1275,63 +1306,41 @@ support-files = ""
         (tmp_path / "hub" / f"component{i}" / "test" / "mochitest.toml").touch()
 
     assert (
-        len(test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"]))
-        == test_scheduling.MAX_SIBLING_MANIFESTS
+        len(find.manifests(["hub/moz.build"])) == test_scheduling.MAX_SIBLING_MANIFESTS
     )
 
     (tmp_path / "hub" / "one_more" / "test").mkdir(parents=True)
     (tmp_path / "hub" / "one_more" / "test" / "mochitest.toml").touch()
 
-    assert (
-        test_scheduling.find_manifests_for_paths(str(tmp_path), ["hub/moz.build"])
-        == set()
-    )
+    assert find.manifests(["hub/moz.build"]) == set()
 
     # The cap applies per path, so a narrow file is still scheduled when
     # modified together with a broad one.
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["hub/moz.build", "dom/battery/BatteryManager.cpp"]
-    ) == {
+    assert find.manifests(["hub/moz.build", "dom/battery/BatteryManager.cpp"]) == {
         "dom/battery/test/mochitest.toml",
         "dom/battery/test/chrome.toml",
     }
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["test/test_resolve_uris_ipc.js"]
-    ) == {
+    assert find.manifests(["test/test_resolve_uris_ipc.js"]) == {
         "test/chrome.toml",
         "test/mochitest.toml",
     }
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["test/relative/path.png"]
-    ) == {"test/chrome.toml"}
+    assert find.manifests(["test/relative/path.png"]) == {"test/chrome.toml"}
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["absolute_path_with_glob/asd.js"]
-    ) == {"test/chrome.toml"}
+    assert find.manifests(["absolute_path_with_glob/asd.js"]) == {"test/chrome.toml"}
 
-    assert (
-        test_scheduling.find_manifests_for_paths(
-            str(tmp_path), ["absolute_path_with_glob/asd.png"]
-        )
-        == set()
-    )
+    assert find.manifests(["absolute_path_with_glob/asd.png"]) == set()
 
-    assert (
-        test_scheduling.find_manifests_for_paths(
-            str(tmp_path), ["absolute_path_with_glob/subdir/asd.js"]
-        )
-        == set()
-    )
+    assert find.manifests(["absolute_path_with_glob/subdir/asd.js"]) == set()
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["absolute_path_with_subdirglob/asd.js"]
-    ) == {"test/chrome.toml"}
+    assert find.manifests(["absolute_path_with_subdirglob/asd.js"]) == {
+        "test/chrome.toml"
+    }
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path), ["absolute_path_with_subdirglob/subdir/asd.js"]
-    ) == {"test/chrome.toml"}
+    assert find.manifests(["absolute_path_with_subdirglob/subdir/asd.js"]) == {
+        "test/chrome.toml"
+    }
 
     (tmp_path / "testing/web-platform/tests/html/semantics").mkdir(parents=True)
     (tmp_path / "testing/web-platform/tests/.gitignore").touch()
@@ -1370,46 +1379,44 @@ support-files = ""
         / "testing/web-platform/tests/encrypted-media/content/content-metadata.js"
     ).touch()
 
-    assert (
-        test_scheduling.find_manifests_for_paths(
-            str(tmp_path), ["testing/web-platform/tests/.gitignore"]
-        )
-        == set()
-    )
+    assert find.manifests(["testing/web-platform/tests/.gitignore"]) == set()
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path),
+    assert find.manifests(
         ["testing/web-platform/tests/html/semantics/rellist-feature-detection.html"],
     ) == {"testing/web-platform/tests/html/semantics"}
 
     assert (
-        test_scheduling.find_manifests_for_paths(
-            str(tmp_path), ["testing/web-platform/tests/html/semantics/META.yml"]
-        )
-        == set()
+        find.manifests(["testing/web-platform/tests/html/semantics/META.yml"]) == set()
     )
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path),
+    assert find.manifests(
         [
             "testing/web-platform/tests/html/semantics/interactive-elements/contextmenu-historical.html"
         ],
     ) == {"testing/web-platform/tests/html/semantics/interactive-elements"}
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path),
+    assert find.manifests(
         [
             "testing/web-platform/mozilla/meta/pointerevents/pointerevent_click_during_parent_capture.html.ini"
         ],
     ) == {"testing/web-platform/mozilla/tests/pointerevents"}
 
-    assert test_scheduling.find_manifests_for_paths(
-        str(tmp_path),
+    assert find.manifests(
         ["testing/web-platform/tests/encrypted-media/content/content-metadata.js"],
     ) == {"testing/web-platform/tests/encrypted-media"}
 
+    # The files are updated from the ones at the previous revision: a removed manifest isn't run
+    # anymore, and a modified one is parsed again.
+    (tmp_path / "test" / "mochitest.toml").unlink()
+    (tmp_path / "test" / "chrome.toml").write_text(
+        manifest.replace('"../prova.js"', '""')
+    )
+    assert find.manifests(["test/test_resolve_uris_ipc.js"]) == {"test/chrome.toml"}
+    assert find.manifests(["prova.js"]) == set()
+
 
 def test_find_tasks_for_paths(tmp_path) -> None:
+    find = _Finder(tmp_path)
     known_tasks = (
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-mochitest-browser-chrome-1proc",
@@ -1426,51 +1433,35 @@ def test_find_tasks_for_paths(tmp_path) -> None:
 
     # Non-C/C++ file containing GTest patterns should not trigger gtest selection.
     (tmp_path / "script.py").write_bytes(b"TEST(Foo, Bar) {}")
-    assert (
-        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["script.py"])
-        == []
-    )
+    assert find.tasks(known_tasks, ["script.py"]) == []
 
     # C/C++ file without GTest patterns should not trigger gtest selection.
     (tmp_path / "source.cpp").write_bytes(b"int main() { return 0; }")
-    assert (
-        test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, ["source.cpp"])
-        == []
-    )
+    assert find.tasks(known_tasks, ["source.cpp"]) == []
 
     # C/C++ file with TEST macro selects tasks containing "gtest".
     (tmp_path / "test_foo.cpp").write_bytes(b"TEST(FooTest, Bar) {}\n")
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["test_foo.cpp"]
-    ) == [
+    assert find.tasks(known_tasks, ["test_foo.cpp"]) == [
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-gtest-e10s",
     ]
 
     # C/C++ file with TEST_F macro also triggers gtest selection.
     (tmp_path / "test_fixture.cpp").write_bytes(b"TEST_F(FooFixture, Bar) {}\n")
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["test_fixture.cpp"]
-    ) == [
+    assert find.tasks(known_tasks, ["test_fixture.cpp"]) == [
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-gtest-e10s",
     ]
 
-    # Non-existent C/C++ file raises OSError which is silently skipped.
-    assert (
-        test_scheduling.find_tasks_for_paths(
-            str(tmp_path), known_tasks, ["nonexistent.cpp"]
-        )
-        == []
-    )
+    # Non-existent C/C++ file is skipped.
+    assert find.tasks(known_tasks, ["nonexistent.cpp"]) == []
 
     # No paths -> no tasks selected.
-    assert test_scheduling.find_tasks_for_paths(str(tmp_path), known_tasks, []) == []
+    assert find.tasks(known_tasks, []) == []
 
     # known_tasks without any "gtest" task -> empty even when GTest file present.
     assert (
-        test_scheduling.find_tasks_for_paths(
-            str(tmp_path),
+        find.tasks(
             ("test-linux64/opt-mochitest-browser-chrome-1proc",),
             ["test_foo.cpp"],
         )
@@ -1478,9 +1469,7 @@ def test_find_tasks_for_paths(tmp_path) -> None:
     )
 
     # Two paths: one C/C++ with GTest patterns and one without -> gtest tasks selected.
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["source.cpp", "test_foo.cpp"]
-    ) == [
+    assert find.tasks(known_tasks, ["source.cpp", "test_foo.cpp"]) == [
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-gtest-e10s",
     ]
@@ -1490,18 +1479,14 @@ def test_find_tasks_for_paths(tmp_path) -> None:
     (tmp_path / "dom" / "media" / "gtest" / "TestCubeb.cpp").write_bytes(
         b"// no test macros\n"
     )
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["dom/media/gtest/TestCubeb.cpp"]
-    ) == [
+    assert find.tasks(known_tasks, ["dom/media/gtest/TestCubeb.cpp"]) == [
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-gtest-e10s",
     ]
 
     # File in a folder adjacent to a gtest subfolder triggers gtest selection.
     (tmp_path / "dom" / "media" / "CubebUtils.cpp").write_bytes(b"int foo() {}\n")
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["dom/media/CubebUtils.cpp"]
-    ) == [
+    assert find.tasks(known_tasks, ["dom/media/CubebUtils.cpp"]) == [
         "test-linux64/opt-gtest-1proc",
         "test-linux64/opt-gtest-e10s",
     ]
@@ -1509,44 +1494,40 @@ def test_find_tasks_for_paths(tmp_path) -> None:
     # Rust file triggers rusttests selection.
     (tmp_path / "servo").mkdir()
     (tmp_path / "servo" / "lib.rs").write_bytes(b"pub fn foo() {}\n")
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["servo/lib.rs"]
-    ) == ["test-linux64/opt-rusttests"]
+    assert find.tasks(known_tasks, ["servo/lib.rs"]) == ["test-linux64/opt-rusttests"]
 
     # Non-Rust file does not trigger rusttests selection.
-    assert "test-linux64/opt-rusttests" not in test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["servo/foo.cpp"]
+    assert "test-linux64/opt-rusttests" not in find.tasks(
+        known_tasks, ["servo/foo.cpp"]
     )
 
     # Modifying testing/cppunittest.toml itself triggers cppunit selection.
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["testing/cppunittest.toml"]
-    ) == ["test-linux64/opt-cppunit"]
+    assert find.tasks(known_tasks, ["testing/cppunittest.toml"]) == [
+        "test-linux64/opt-cppunit"
+    ]
 
     # Modifying testing/remotecppunittests.py triggers cppunit selection.
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["testing/remotecppunittests.py"]
-    ) == ["test-linux64/opt-cppunit"]
+    assert find.tasks(known_tasks, ["testing/remotecppunittests.py"]) == [
+        "test-linux64/opt-cppunit"
+    ]
 
     # Modifying testing/runcppunittests.py triggers cppunit selection.
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["testing/runcppunittests.py"]
-    ) == ["test-linux64/opt-cppunit"]
+    assert find.tasks(known_tasks, ["testing/runcppunittests.py"]) == [
+        "test-linux64/opt-cppunit"
+    ]
 
     # A .cpp file whose stem is listed in cppunittest.toml triggers cppunit selection.
-    assert test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["mfbt/TestArrayUtils.cpp"]
-    ) == ["test-linux64/opt-cppunit"]
+    assert find.tasks(known_tasks, ["mfbt/TestArrayUtils.cpp"]) == [
+        "test-linux64/opt-cppunit"
+    ]
 
     # A .cpp file whose stem is not listed in cppunittest.toml does not trigger cppunit.
-    assert "test-linux64/opt-cppunit" not in test_scheduling.find_tasks_for_paths(
-        str(tmp_path), known_tasks, ["mfbt/TestUnknown.cpp"]
+    assert "test-linux64/opt-cppunit" not in find.tasks(
+        known_tasks, ["mfbt/TestUnknown.cpp"]
     )
 
     # Empty known_tasks -> always empty.
-    assert (
-        test_scheduling.find_tasks_for_paths(str(tmp_path), (), ["test_foo.cpp"]) == []
-    )
+    assert find.tasks((), ["test_foo.cpp"]) == []
 
 
 def test_get_suite_test_dirs(tmp_path) -> None:
