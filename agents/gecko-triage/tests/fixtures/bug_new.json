@@ -1,0 +1,43 @@
+{
+  "bugs": [
+    {
+      "id": 9000001,
+      "product": "Core",
+      "component": "Audio/Video: Playback",
+      "summary": "Video playback stutters after the laptop resumes from sleep",
+      "status": "UNCONFIRMED",
+      "resolution": "",
+      "keywords": [],
+      "whiteboard": "",
+      "groups": [],
+      "creator": "reporter@example.com",
+      "creator_detail": {
+        "nick": "reporter",
+        "id": 100001,
+        "email": "reporter@example.com",
+        "real_name": "Rea Porter",
+        "name": "reporter@example.com"
+      },
+      "cf_qa_whiteboard": "",
+      "cc": ["watcher@example.com", "dev@example.org"],
+      "flags": [
+        {
+          "creation_date": "2026-10-13T12:00:00Z",
+          "requestee": "reporter@example.com",
+          "id": 900001,
+          "type_id": 800,
+          "name": "needinfo",
+          "status": "?",
+          "modification_date": "2026-10-13T12:00:00Z",
+          "setter": "dev@example.org"
+        }
+      ],
+      "severity": "--",
+      "priority": "--",
+      "creation_time": "2026-10-09T08:00:00Z",
+      "last_change_time": "2026-10-13T12:00:00Z",
+      "last_change_time_non_bot": "2026-10-13T12:00:00Z"
+    }
+  ],
+  "faults": []
+}

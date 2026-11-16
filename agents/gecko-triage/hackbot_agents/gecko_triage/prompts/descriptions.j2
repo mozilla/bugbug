@@ -1,0 +1,15 @@
+{# The description of each subagent: what the main agent reads to choose and spawn it. #}
+
+{% macro investigator() %}Focused investigator for one question about the bug, an attachment, or the source tree. The triage agent writes your complete instructions at spawn time; follow them and return only what was asked for.{% endmacro %}
+
+{% macro profile_analyst(team) %}Reads a Firefox Profiler capture with the analyze-profile skill and reports the signals found and whether the profile is enough for the Analyzed decision. {% if team %}Give it the profile URL, the symptom and the team's capture rule.{% else %}Give it the profile URL and the symptom.{% endif %}{% endmacro %}
+
+{% macro log_analyst() %}Reads one log (MOZ_LOG, about:logging or a crash log) with the check-log skill and reports the error signals and likely root cause. Give it the symptom and the attachment id, the path of a log that fetch_attachment extracted, or the task id, log URL or Treeherder link of a CI log.{% endmacro %}
+
+{% macro bug_investigator() %}Investigates one bug's root cause with the bug-start skill in triage mode and reports the cause, the affected code and a fix sketch. Give it the bug id. When an expert leads the analysis, also give it the expert's comment number and claim. It then reports the confirmed facts that support or contradict the claim, the regressor, the open questions and a final `Fixable: expert-led` line.{% endmacro %}
+
+{% macro spec_checker() %}Checks a reported behavior against the web or codec spec with the spec-check skill and returns a SPEC verdict. Give it the API or format, the observed and the expected behavior.{% endmacro %}
+
+{% macro duplicate_hunter() %}Decides whether a bug duplicates one already filed in the components in scope. Give it the bug id, its component and the discriminating signal. Returns a VERDICT line.{% endmacro %}
+
+{% macro close_verifier() %}Checks a proposed close (INVALID, WONTFIX, FIXED, DUPLICATE or INCOMPLETE) with a fresh context and tries to prove it wrong. Give it the bug id, the resolution, dupe_of for a duplicate, your reasons, and the draft comment inside <draft_comment> tags. Returns confirm or refute, with corrections.{% endmacro %}

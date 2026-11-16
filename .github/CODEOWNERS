@@ -2,6 +2,7 @@
 
 # Code owners for specific Hackbot agents or tools
 /agents/frontend-triage/             @mozilla/hackbot-frontend
+/agents/gecko-triage/                @mozilla/hackbot-media
 /agents/autowebcompat-repro/         @mozilla/hackbot-webcompat
 /agents/autowebcompat-diagnosis/     @mozilla/hackbot-webcompat
 /agents/autowebcompat-intervention/  @mozilla/hackbot-webcompat
