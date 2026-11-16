@@ -18,7 +18,9 @@ Why the indirection:
 
 The write-action tools are declared in [hackbot_runtime/actions/](../../libs/hackbot-runtime/hackbot_runtime/actions/) — one module per domain,
 using the same `@tool` decorator as [read tools](tools.md). Calling one records the intent
-against the run's `ActionsRecorder` instead of performing it.
+against the run's `ActionsRecorder` instead of performing it. Each recorded action is a
+`RecordedAction` model carrying its `action_id`, `type`, `params`, `reasoning` and any
+`attachments`. Its `confirmation()` is what the tool returns to the agent.
 
 The recorded list becomes `summary.json`'s `actions` array. Any attached files are
 published as run artifacts and referenced by key, since the local path disappears with the
@@ -81,10 +83,11 @@ still exists.
 
 ### Hooks
 
-`ActionsRecorder` supports per-type hooks that run before an action is appended. A hook may
-mutate the action (enrichment) or raise (validation gate — nothing is recorded and no
-attachment is published). They live on the recorder rather than in the tool declarations so
-the runtime can attach cross-cutting behaviour without every handler knowing about it.
+`ActionsRecorder` supports per-type hooks that run before an action is appended. A hook
+receives the `RecordedAction` and may mutate it (enrichment) or raise (validation gate —
+nothing is recorded and no attachment is published). They live on the recorder rather than
+in the tool declarations so the runtime can attach cross-cutting behaviour without every
+handler knowing about it.
 
 The Searchfox permalink expansion on `bugzilla.add_comment` is the working example: the
 agent writes `{{searchfox.permalink}}/path/to/file.js#412`, the hook expands it at record

@@ -16,8 +16,8 @@ async def test_submit_records_test_plan():
         summary="Details",
     )
     action = rec.actions[0]
-    assert action["type"] == "phabricator.submit_patch"
-    assert action["params"] == {
+    assert action.type == "phabricator.submit_patch"
+    assert action.params == {
         "bug_id": 1,
         "title": "Fix the thing",
         "summary": "Details",
@@ -31,8 +31,8 @@ async def test_submit_records_the_parent_revision_only_when_stacked():
         rec, bug_id=1, title="Fix", reasoning="r", parent_revision_id=325120
     )
     await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
-    assert rec.actions[0]["params"]["parent_revision_id"] == 325120
-    assert "parent_revision_id" not in rec.actions[1]["params"]
+    assert rec.actions[0].params["parent_revision_id"] == 325120
+    assert "parent_revision_id" not in rec.actions[1].params
 
 
 @pytest.mark.parametrize(
@@ -77,7 +77,7 @@ async def test_submit_accepts_safe_summary(summary):
         summary=summary,
     )
 
-    assert rec.actions[0]["params"]["summary"] == summary
+    assert rec.actions[0].params["summary"] == summary
 
 
 async def test_submit_requires_title():
@@ -89,16 +89,16 @@ async def test_submit_requires_title():
 async def test_submit_accepts_missing_test_plan():
     rec = ActionsRecorder()
     await phabricator.submit_patch(rec, bug_id=1, title="Fix", reasoning="r")
-    assert rec.actions[0]["params"]["test_plan"] is None
+    assert rec.actions[0].params["test_plan"] is None
 
 
 async def test_update_records_only_the_revision_id():
     rec = ActionsRecorder()
     await phabricator.update_patch(rec, revision_id=12345, reasoning="r")
     action = rec.actions[0]
-    assert action["type"] == "phabricator.update_patch"
+    assert action.type == "phabricator.update_patch"
     # Without new fields, nothing about the revision itself changes.
-    assert action["params"] == {"revision_id": 12345}
+    assert action.params == {"revision_id": 12345}
 
 
 async def test_update_records_only_the_given_fields():
@@ -106,7 +106,7 @@ async def test_update_records_only_the_given_fields():
     await phabricator.update_patch(
         rec, revision_id=42, title="Bug 1 - Better title", reasoning="r"
     )
-    assert rec.actions[0]["params"] == {
+    assert rec.actions[0].params == {
         "revision_id": 42,
         "title": "Bug 1 - Better title",
     }
@@ -117,7 +117,7 @@ async def test_update_ignores_empty_fields():
     await phabricator.update_patch(
         rec, revision_id=42, title="", summary="", test_plan="", reasoning="r"
     )
-    assert rec.actions[0]["params"] == {"revision_id": 42}
+    assert rec.actions[0].params == {"revision_id": 42}
 
 
 async def test_update_rejects_test_plan_headers():
@@ -168,6 +168,6 @@ async def test_add_comment_records_revision_and_text():
         rec, revision_id=42, text="Here is the answer.", reasoning="r"
     )
     action = rec.actions[0]
-    assert action["type"] == "phabricator.add_comment"
-    assert action["params"]["revision_id"] == 42
-    assert action["params"]["text"].startswith("Here is the answer.")
+    assert action.type == "phabricator.add_comment"
+    assert action.params["revision_id"] == 42
+    assert action.params["text"].startswith("Here is the answer.")

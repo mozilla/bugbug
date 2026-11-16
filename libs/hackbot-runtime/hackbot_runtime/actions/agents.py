@@ -16,7 +16,7 @@ from weakref import WeakKeyDictionary
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTION_TYPE = "agents.start_run"
 
@@ -49,7 +49,7 @@ async def start_run(
             + (", ".join(sorted(allowed)) or "none")
         )
     action = recorder.record(ACTION_TYPE, {"agent": agent}, reasoning=reasoning)
-    return confirmation(action)
+    return action.confirmation()
 
 
 TOOLS = tools_in(__name__)

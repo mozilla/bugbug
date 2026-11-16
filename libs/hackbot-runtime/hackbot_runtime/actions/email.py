@@ -19,7 +19,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder, RecordedAction
 
 ACTION_TYPE = "email.send"
 
@@ -100,7 +100,7 @@ async def send(
     action = recorder.record(
         ACTION_TYPE, _params(to, subject, body_markdown), reasoning=reasoning
     )
-    return confirmation(action)
+    return action.confirmation()
 
 
 def record_email(
@@ -110,7 +110,7 @@ def record_email(
     subject: str,
     body_markdown: str,
     attach_patch: bool = False,
-) -> dict:
+) -> RecordedAction:
     """Record a report the agent was never asked to decide on.
 
     For a run whose outcome is always worth reporting: the wording is code, not a

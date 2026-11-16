@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from agent_tools.registry import tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTION_TYPE = "feedback.report_problem"
 
@@ -54,7 +54,7 @@ async def report_problem(
     action = recorder.record(
         ACTION_TYPE, {"severity": severity, "title": title, "message": message}
     )
-    return confirmation(action)
+    return action.confirmation()
 
 
 TOOLS = tools_in(__name__)

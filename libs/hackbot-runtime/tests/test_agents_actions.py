@@ -16,11 +16,12 @@ def _recorder(*allowed):
 async def test_start_run_records_an_allowed_agent():
     rec = _recorder("next-agent")
     await agents.start_run(rec, agent=" next-agent ", reasoning="worth continuing")
-    assert rec.actions == [
+    assert [a.model_dump(exclude={"action_id"}) for a in rec.actions] == [
         {
             "type": "agents.start_run",
             "params": {"agent": "next-agent"},
             "reasoning": "worth continuing",
+            "attachments": [],
         }
     ]
 

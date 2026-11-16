@@ -17,7 +17,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
 UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
@@ -126,7 +126,7 @@ async def submit_patch(
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
     action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
-    return confirmation(action)
+    return action.confirmation()
 
 
 @tool
@@ -201,7 +201,7 @@ async def update_patch(
     if test_plan:
         params["test_plan"] = test_plan
     action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
-    return confirmation(action)
+    return action.confirmation()
 
 
 @tool
@@ -227,7 +227,7 @@ async def add_comment(
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )
-    return confirmation(action)
+    return action.confirmation()
 
 
 TOOLS = tools_in(__name__)

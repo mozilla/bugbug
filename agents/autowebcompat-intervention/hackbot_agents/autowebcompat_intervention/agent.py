@@ -29,7 +29,7 @@ from autowebcompat_tools.task import RunTracker, StructuredTask, TaskConfig
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
 from hackbot_runtime import ActionsRecorder
-from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME, RecordedAction
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BaseModel
@@ -501,7 +501,7 @@ async def run_autowebcompat_intervention(
         )
         base = git(source_repo, "rev-parse", "HEAD").strip()
 
-        def reject_unexpected_changes(action: dict) -> None:
+        def reject_unexpected_changes(action: RecordedAction) -> None:
             unexpected = unexpected_changes(changed_files(source_repo, base))
             if unexpected:
                 raise ToolError(
@@ -524,7 +524,7 @@ async def run_autowebcompat_intervention(
         else:
             script_path = intervention_task.script_path
             to_verify = any(
-                action["type"] in PATCH_ACTION_TYPES
+                action.type in PATCH_ACTION_TYPES
                 for action in actions_recorder.list_actions()
             )
 
@@ -545,8 +545,8 @@ async def run_autowebcompat_intervention(
             intervention_result.failure_reason = failure_reason
             patch_dropped = False
             for action in actions_recorder.list_actions():
-                if action["type"] in PATCH_ACTION_TYPES:
-                    actions_recorder.remove_action(action["action_id"])
+                if action.type in PATCH_ACTION_TYPES:
+                    actions_recorder.remove_action(action.action_id)
                     patch_dropped = True
 
             # What a follow-up tells the reviewer when its update is dropped after the

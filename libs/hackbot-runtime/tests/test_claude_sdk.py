@@ -76,8 +76,8 @@ async def test_call_records_action():
         {"bug_id": 7, "changes": {"severity": "S2"}, "reasoning": "rule X"},
     )
     assert result.isError is False
-    assert recorder.actions[0]["type"] == "bugzilla.update_bug"
-    assert recorder.actions[0]["params"] == {
+    assert recorder.actions[0].type == "bugzilla.update_bug"
+    assert recorder.actions[0].params == {
         "bug_id": 7,
         "changes": {"severity": "S2"},
     }
@@ -130,7 +130,7 @@ async def test_action_records_tools_list_and_remove_complete_action():
         "bugzilla.update_bug",
         {"bug_id": 7, "changes": {"severity": "S2"}},
         reasoning="rule X",
-    )["action_id"]
+    ).action_id
     srv = _server(recorder)
 
     listed_result = await _call(srv, "action_records_list_actions", {})

@@ -18,7 +18,11 @@ from hackbot_runtime.actions import (
     testrail,
     try_server,
 )
-from hackbot_runtime.actions.recorder import ActionHook, ActionsRecorder
+from hackbot_runtime.actions.recorder import (
+    ActionHook,
+    ActionsRecorder,
+    RecordedAction,
+)
 
 ACTIONS_SERVER_NAME = "actions"
 
@@ -26,6 +30,7 @@ __all__ = [
     "ACTIONS_SERVER_NAME",
     "ActionHook",
     "ActionsRecorder",
+    "RecordedAction",
     "action_records",
     "agents",
     "bugzilla",

@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 ACTION_TYPE = "testrail.submit_test_plan"
 
@@ -189,7 +189,7 @@ async def submit_test_plan(
     The apply step creates the suite, creates a section in it, and uploads all
     supplied test cases. Nothing is sent to TestRail during the agent run.
     """
-    if any(action["type"] == ACTION_TYPE for action in recorder.actions):
+    if any(action.type == ACTION_TYPE for action in recorder.actions):
         raise ToolError(
             "a test plan is already recorded for this run; do not call "
             "submit_test_plan again"
@@ -200,7 +200,7 @@ async def submit_test_plan(
         summary=summary,
     )
     action = recorder.record(ACTION_TYPE, params)
-    return confirmation(action)
+    return action.confirmation()
 
 
 TOOLS = tools_in(__name__)

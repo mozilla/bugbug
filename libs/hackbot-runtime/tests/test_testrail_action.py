@@ -30,10 +30,10 @@ async def test_submit_test_plan_tool_records_deferred_action():
 
     assert message == (
         f"Recorded testrail.submit_test_plan "
-        f"(ID: {recorder.list_actions()[0]['action_id']})."
+        f"(ID: {recorder.list_actions()[0].action_id})."
     )
-    assert recorder.actions[0]["type"] == ACTION_TYPE
-    assert recorder.actions[0]["params"] == {
+    assert recorder.actions[0].type == ACTION_TYPE
+    assert recorder.actions[0].params == {
         "feature": "Feature",
         "generated_test_cases": [
             {
@@ -124,7 +124,7 @@ async def test_submit_test_plan_tool_rejects_a_second_submission():
         )
 
     assert "already recorded" in str(exc.value)
-    assert [action["params"]["feature"] for action in recorder.actions] == ["Feature"]
+    assert [action.params["feature"] for action in recorder.actions] == ["Feature"]
 
 
 async def test_submit_test_plan_tool_rejects_more_than_thirty_cases():
@@ -162,7 +162,7 @@ async def test_submit_test_plan_tool_preserves_blank_expectations():
         ],
     )
 
-    assert recorder.actions[0]["params"]["generated_test_cases"][0]["steps"] == [
+    assert recorder.actions[0].params["generated_test_cases"][0]["steps"] == [
         {"action": "Open the PDF", "expectation": ""},
         {"action": "Select text", "expectation": "Text is selected."},
     ]
@@ -178,12 +178,12 @@ async def test_submit_test_plan_tool_records_execution_results():
         summary="All executable cases passed.",
     )
 
-    assert recorder.actions[0]["params"]["generated_test_cases"][0]["result"] == {
+    assert recorder.actions[0].params["generated_test_cases"][0]["result"] == {
         "status": "passed",
         "summary": "Worked.",
         "failure_reason": None,
     }
-    assert recorder.actions[0]["params"]["summary"] == "All executable cases passed."
+    assert recorder.actions[0].params["summary"] == "All executable cases passed."
 
 
 async def test_submit_test_plan_tool_rejects_missing_case_result():

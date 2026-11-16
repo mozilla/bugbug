@@ -170,11 +170,11 @@ def test_an_auto_applied_run_records_one_slack_action():
     action = record_notification(recorder, _result(), run_id=RUN_ID)
 
     assert action is not None
-    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
-    assert action["params"]["channel"] == "#hnt-dev-triage"
-    assert action["params"]["text"] == build_message(_result(), run_id=RUN_ID)
+    assert [a.type for a in recorder.actions] == ["slack.post_message"]
+    assert action.params["channel"] == "#hnt-dev-triage"
+    assert action.params["text"] == build_message(_result(), run_id=RUN_ID)
     # The layout travels with the text, which stays the fallback.
-    assert action["params"]["blocks"] == build_blocks(_result(), run_id=RUN_ID)
+    assert action.params["blocks"] == build_blocks(_result(), run_id=RUN_ID)
 
 
 # --- the Block Kit layout ---
@@ -331,9 +331,7 @@ def _container(comment: str = COMMENT + FOOTER, is_private: bool = False, **over
         {"bug_id": BUG_ID, "text": comment, "is_private": is_private},
     )
     action = record_notification(recorder, _result(**overrides), run_id=RUN_ID)
-    return next(
-        (b for b in action["params"]["blocks"] if b["type"] == "container"), None
-    )
+    return next((b for b in action.params["blocks"] if b["type"] == "container"), None)
 
 
 def test_the_comment_starts_collapsed_as_mrkdwn_without_its_footer():
@@ -365,7 +363,7 @@ def test_the_comment_sits_above_the_button():
     recorder = ActionsRecorder()
     recorder.record("bugzilla.add_comment", {"bug_id": BUG_ID, "text": COMMENT})
     action = record_notification(recorder, _result(), run_id=RUN_ID)
-    kinds = [b["type"] for b in action["params"]["blocks"]]
+    kinds = [b["type"] for b in action.params["blocks"]]
     assert kinds == ["section", "section", "container", "actions", "context"]
 
 
@@ -375,7 +373,7 @@ def test_a_private_comment_stays_out_of_slack():
 
 def test_no_comment_means_no_container():
     action = record_notification(ActionsRecorder(), _result(), run_id=RUN_ID)
-    assert all(b["type"] != "container" for b in action["params"]["blocks"])
+    assert all(b["type"] != "container" for b in action.params["blocks"])
 
 
 def test_a_long_comment_is_cut_to_fit_and_links_the_rest():
@@ -480,8 +478,8 @@ def test_a_run_with_nothing_to_fix_still_reports():
     )
 
     assert action is not None
-    assert [a["type"] for a in recorder.actions] == ["slack.post_message"]
-    assert HELD_NOTE in action["params"]["text"]
+    assert [a.type for a in recorder.actions] == ["slack.post_message"]
+    assert HELD_NOTE in action.params["text"]
 
 
 def test_a_run_that_reported_no_verdict_still_reports():

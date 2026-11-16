@@ -14,28 +14,28 @@ async def test_push_records_tasks_and_title():
         title="Bug 1 - verify on Linux",
     )
     action = rec.actions[0]
-    assert action["type"] == "try_server.push"
-    assert action["params"] == {
+    assert action.type == "try_server.push"
+    assert action.params == {
         "tasks": ["build-linux64/opt"],
         "auto": False,
         "title": "Bug 1 - verify on Linux",
     }
     # No test_paths key at all when none were asked for, so the handler can
     # tell "not narrowed" from "narrowed to nothing".
-    assert "test_paths" not in action["params"]
+    assert "test_paths" not in action.params
 
 
 async def test_push_strips_blank_task_labels():
     rec = ActionsRecorder()
     await try_server.push(rec, tasks=[" build-linux64/opt ", "", "  "], reasoning="r")
-    assert rec.actions[0]["params"]["tasks"] == ["build-linux64/opt"]
+    assert rec.actions[0].params["tasks"] == ["build-linux64/opt"]
 
 
 async def test_push_records_an_auto_selection():
     rec = ActionsRecorder()
     await try_server.push(rec, auto=True, reasoning="r")
 
-    params = rec.actions[0]["params"]
+    params = rec.actions[0].params
     assert params["auto"] is True
     assert params["tasks"] is None
 
@@ -68,7 +68,7 @@ async def test_push_records_validated_test_paths():
         reasoning="r",
     )
 
-    assert rec.actions[0]["params"]["test_paths"] == {
+    assert rec.actions[0].params["test_paths"] == {
         "mochitest-browser-chrome": ["browser/base/test"]
     }
 
@@ -182,14 +182,14 @@ def test_validate_test_paths_accepts_any_plausible_suite_name():
 async def test_push_records_a_rebuild_count():
     rec = ActionsRecorder()
     await try_server.push(rec, tasks=["perftest-a55"], rebuild=10, reasoning="r")
-    assert rec.actions[0]["params"]["rebuild"] == 10
+    assert rec.actions[0].params["rebuild"] == 10
 
 
 @pytest.mark.parametrize("rebuild", [None, 1])
 async def test_push_records_no_rebuild_for_a_single_run(rebuild):
     rec = ActionsRecorder()
     await try_server.push(rec, tasks=["perftest-a55"], rebuild=rebuild, reasoning="r")
-    assert "rebuild" not in rec.actions[0]["params"]
+    assert "rebuild" not in rec.actions[0].params
 
 
 @pytest.mark.parametrize("rebuild", [0, -1, try_server.MAX_REBUILD + 1])

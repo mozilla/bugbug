@@ -23,7 +23,7 @@ mentions severity at all.
 import logging
 import re
 
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, RecordedAction
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL, record_message
 from hackbot_runtime.slack_kit import create_start_agent_run_button
 from slack_sdk.models.blocks import ConfirmObject
@@ -116,17 +116,17 @@ def build_message(result: FrontendTriageResult, *, run_id: str) -> str:
     return "\n".join(lines)
 
 
-def comment_from(actions: list[dict]) -> str | None:
+def comment_from(actions: list[RecordedAction]) -> str | None:
     """The comment this run wrote for the bug, or None if Slack shouldn't show it.
 
     Read off the recorded action, after the recorder's hooks have expanded its
     Searchfox placeholders, without the feedback footer. A private comment is left
     out: the channel is a wider audience than the bug's insiders.
     """
-    comments = [a for a in actions if a["type"] == "bugzilla.add_comment"]
-    if not comments or comments[-1]["params"].get("is_private"):
+    comments = [a for a in actions if a.type == "bugzilla.add_comment"]
+    if not comments or comments[-1].params.get("is_private"):
         return None
-    text = comments[-1]["params"].get("text") or ""
+    text = comments[-1].params.get("text") or ""
     body, _, _ = text.rpartition(_FOOTER_SEPARATOR)
     return (body or text).strip() or None
 

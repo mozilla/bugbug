@@ -15,8 +15,9 @@ before the agent runs, and expanding early means the comment awaiting review in
 
 import logging
 import re
-from collections.abc import Callable
 from pathlib import Path
+
+from hackbot_runtime.actions.recorder import ActionHook, RecordedAction
 
 log = logging.getLogger(__name__)
 
@@ -160,9 +161,7 @@ def expand_placeholders(
     return _BARE_PLACEHOLDER_RE.sub(_bare, text)
 
 
-def permalink_hook(
-    prefix: str, repo_root: Path | None = None
-) -> Callable[[dict], None]:
+def permalink_hook(prefix: str, repo_root: Path | None = None) -> ActionHook:
     """An action hook that expands permalink placeholders in a comment's text.
 
     Register for ``bugzilla.add_comment``; the recorded comment then carries real
@@ -171,12 +170,11 @@ def permalink_hook(
     :func:`expand_placeholders`).
     """
 
-    def hook(action: dict) -> None:
-        params = action.get("params")
-        if not isinstance(params, dict):
-            return
-        text = params.get("text")
+    def hook(action: RecordedAction) -> None:
+        text = action.params.get("text")
         if isinstance(text, str):
-            params["text"] = expand_placeholders(text, prefix, repo_root=repo_root)
+            action.params["text"] = expand_placeholders(
+                text, prefix, repo_root=repo_root
+            )
 
     return hook
