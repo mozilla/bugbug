@@ -164,7 +164,7 @@ async def _dispatch(
     params: dict,
     attachments: list[dict],
     hackbot_client: HackbotClient,
-    action_id: str | None,
+    action_id: int | None,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -306,8 +306,8 @@ async def _apply_pending_rows(
                 for member in member_rows
             ]
             # The group carries at most one comment, which keeps its own ID.
-            comment_id = next(
-                (m.ref for m in member_rows if m.type == "bugzilla.add_comment"),
+            comment_action_id = next(
+                (m.id for m in member_rows if m.type == "bugzilla.add_comment"),
                 None,
             )
             outcome = await _dispatch(
@@ -316,13 +316,13 @@ async def _apply_pending_rows(
                 merge_resolved(entries),
                 [],
                 hackbot_client,
-                comment_id,
+                comment_action_id,
             )
         else:
             member_rows = [row]
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(
-                run, row.type, params, attachments, hackbot_client, row.ref
+                run, row.type, params, attachments, hackbot_client, row.id
             )
 
         # Only stamp applied_at on a real success, so a failed row isn't

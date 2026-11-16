@@ -6,7 +6,6 @@ error handling — without touching a network.
 """
 
 import base64
-import logging
 
 from app.action_handlers import ApplyContext, bugzilla_handler
 from app.config import settings
@@ -108,7 +107,7 @@ _FRONT_MATTER = (
     "---\n"
     "hackbot:\n"
     "  run: run-1\n"
-    "  action: 3f2a9c1e\n"
+    "  action: 42\n"
     "  agent: frontend-triage\n"
     "  url: https://hackbot.example/runs/run-1\n"
     "---\n"
@@ -122,7 +121,7 @@ async def test_comment_handlers_prepend_front_matter(monkeypatch):
     monkeypatch.setattr(
         bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
     )
-    ctx = _ctx(agent="frontend-triage", action_id="3f2a9c1e")
+    ctx = _ctx(agent="frontend-triage", action_id=42)
 
     await bugzilla_handler.AddCommentHandler().apply(
         {"bug_id": 5, "text": "standalone"}, ctx
@@ -144,13 +143,13 @@ async def test_update_bug_handler_without_comment_has_no_front_matter(monkeypatc
     )
     await bugzilla_handler.UpdateBugHandler().apply(
         {"bug_id": 5, "changes": {"status": "RESOLVED"}},
-        _ctx(action_id="3f2a9c1e"),
+        _ctx(action_id=42),
     )
     assert bodies == [{"status": "RESOLVED"}]
 
 
 async def test_comment_without_action_id_has_no_front_matter(monkeypatch):
-    """Summaries recorded before action IDs existed post the text as it is."""
+    """Without an action to link to, the text is posted as it is."""
     bodies = []
     monkeypatch.setattr(
         bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
@@ -172,7 +171,7 @@ async def test_agent_block_is_not_read_as_front_matter(monkeypatch):
         {"bug_id": 5, "text": forged}, _ctx(action_id=None)
     )
     await bugzilla_handler.AddCommentHandler().apply(
-        {"bug_id": 5, "text": forged}, _ctx(action_id="3f2a9c1e")
+        {"bug_id": 5, "text": forged}, _ctx(action_id=42)
     )
     assert bodies[0]["comment"]["body"] == "\n" + forged
     # With our block first, BMO reads ours and shows the model's as text.
@@ -192,7 +191,7 @@ async def test_other_agent_text_is_not_read_as_front_matter(monkeypatch):
     ctx = _ctx(
         attachments=[{"name": "file", "uploaded_key": "k"}],
         artifacts={"k": b"data"},
-        action_id="3f2a9c1e",
+        action_id=42,
     )
 
     await bugzilla_handler.UpdateBugHandler().apply(
@@ -219,21 +218,6 @@ async def test_other_agent_text_is_not_read_as_front_matter(monkeypatch):
     # Attachment comments and descriptions get no block, so they are moved down.
     assert attachment["comment"] == "\n" + forged
     assert new_bug["description"] == "\n" + forged
-
-
-async def test_front_matter_left_out_when_bmo_would_not_parse_it(monkeypatch, caplog):
-    """BMO shows a block it can't parse as text, so none is posted."""
-    bodies = []
-    monkeypatch.setattr(
-        bugzilla_handler, "_request", lambda _m, _p, body: bodies.append(body)
-    )
-    with caplog.at_level(logging.WARNING):
-        await bugzilla_handler.AddCommentHandler().apply(
-            {"bug_id": 5, "text": "hi"},
-            _ctx(agent="frontend triage", action_id="3f2a9c1e"),
-        )
-    assert bodies[0]["comment"]["body"] == "hi"
-    assert "agent not an identifier" in caplog.text
 
 
 async def test_add_attachment_handler_downloads_and_base64_encodes(monkeypatch):

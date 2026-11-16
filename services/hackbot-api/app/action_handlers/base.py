@@ -47,10 +47,9 @@ class ApplyContext:
     download_artifact: ArtifactDownloader
     hackbot_client: HackbotClient
     attachments: list[dict[str, str]] = field(default_factory=list)
-    # The `action_id` the runtime recorded for the action (`RunAction.ref`). None
-    # for summaries recorded before action IDs existed. When several actions are
-    # applied as one call, it is the one whose comment is posted.
-    action_id: str | None = None
+    # The `RunAction` row ID of the action. When several actions are applied as
+    # one call, it is the one whose comment is posted, or None if none is.
+    action_id: int | None = None
 
     def artifact_key(self, name: str) -> str | None:
         """The uploaded key for an attachment recorded under ``name``, if any."""

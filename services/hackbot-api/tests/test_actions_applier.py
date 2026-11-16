@@ -689,21 +689,18 @@ async def test_handlers_get_the_action_id_of_the_comment_they_post(monkeypatch):
         "pending",
         action_type="bugzilla.update_bug",
         params={"bug_id": 5, "changes": {"status": "RESOLVED"}},
-        ref="update-id",
     )
     comment = _row(
         1,
         "pending",
         action_type="bugzilla.add_comment",
         params={"bug_id": 5, "text": "done"},
-        ref="comment-id",
     )
     other = _row(
         2,
         "pending",
         action_type="bugzilla.add_comment",
         params={"bug_id": 99, "text": "different bug"},
-        ref="other-id",
     )
     rows = [(update, []), (comment, []), (other, [])]
 
@@ -711,7 +708,8 @@ async def test_handlers_get_the_action_id_of_the_comment_they_post(monkeypatch):
         _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
     )
 
-    assert handler.action_ids == ["comment-id", "other-id"]
+    # Row IDs: the update is 1, its comment 2, the other bug's comment 3.
+    assert handler.action_ids == [2, 3]
 
 
 async def test_lone_same_type_actions_on_different_bugs_not_merged(monkeypatch):

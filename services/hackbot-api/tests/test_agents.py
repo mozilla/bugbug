@@ -1,6 +1,7 @@
 """Tests for the agent registry and generic env serialization."""
 
 import json
+import re
 
 import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
@@ -15,6 +16,12 @@ from app.schemas import (
     TestPlanGeneratorInputs as PlanGeneratorInputs,
 )
 from pydantic import ValidationError
+
+
+def test_agent_names_are_identifiers():
+    """BMO reads the agent name from a comment's front matter only if it is one."""
+    for name in AGENT_REGISTRY:
+        assert re.fullmatch(r"[A-Za-z0-9._-]+", name), name
 
 
 def test_model_to_env_uppercases_and_stringifies():
