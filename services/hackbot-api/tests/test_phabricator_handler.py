@@ -161,6 +161,43 @@ async def test_submit_patch_stacks_on_the_parent_revision(monkeypatch):
     assert transactions["parents.set"] == ["PHID-REV-PARENT"]
 
 
+async def test_submit_patch_sets_requested_reviewers(monkeypatch):
+    fake, calls = _fake_conduit(
+        {
+            "differential.creatediff": {"phid": "PHID-DIFF-1", "diffid": 1},
+            "differential.revision.edit": {"object": {"id": 555, "phid": "PHID-REV-1"}},
+            "user.search": {
+                "data": [{"phid": "PHID-USER-1", "fields": {"username": "jdoe"}}]
+            },
+            "project.search": {
+                "maps": {
+                    "slugMap": {
+                        "spidermonkey-reviewers": {"projectPHID": "PHID-PROJ-1"}
+                    }
+                }
+            },
+        }
+    )
+    monkeypatch.setattr(phabricator_handler, "_conduit_request", fake)
+    monkeypatch.setattr(
+        phabricator_handler, "_repository_phid", AsyncMock(return_value="PHID-REPO-1")
+    )
+
+    result = await phabricator_handler.SubmitPatchHandler().apply(
+        {
+            "bug_id": 1,
+            "title": "Fix",
+            "reviewers": ["#spidermonkey-reviewers", "jdoe"],
+        },
+        _ctx(),
+    )
+
+    assert result.status == "applied"
+    edit_call = next(c for c in calls if c[0] == "differential.revision.edit")
+    transactions = {t["type"]: t.get("value") for t in edit_call[1]["transactions"]}
+    assert transactions["reviewers.set"] == ["PHID-PROJ-1", "PHID-USER-1"]
+
+
 async def test_submit_patch_files_unstacked_when_the_parent_is_unknown(monkeypatch):
     fake, calls = _fake_conduit(
         {
