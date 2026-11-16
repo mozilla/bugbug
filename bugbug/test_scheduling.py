@@ -169,6 +169,21 @@ def filter_runnables(
         )
 
 
+def normalize_group(group: str) -> str:
+    """Convert a group name from Treeherder or the taskgraph to the name used by the models."""
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import wpt_workaround
+
+    # WPT groups are relative to the root of the WPT suite (sometimes prefixed with
+    # ":"), while the models use the names normalized by mozci.
+    if group.startswith(("/", ":/")):
+        return wpt_workaround(group)
+
+    # Manifests included by another manifest are reported as "manifest:parent".
+    return group.split(":")[0]
+
+
 def rename_task(task: str) -> str:
     # https://bugzilla.mozilla.org/show_bug.cgi?id=1602863
     task = task.replace("test-linux64", "test-linux1804-64")

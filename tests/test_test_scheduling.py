@@ -1782,3 +1782,20 @@ def test_get_config_select_regressions_window_is_capped(monkeypatch) -> None:
 )
 def test_config_dimensions(config: str, dimensions: dict[str, str]) -> None:
     assert test_scheduling.config_dimensions(config) == dimensions
+
+
+@pytest.mark.parametrize(
+    "group, expected",
+    [
+        ("test-group1", "test-group1"),
+        ("test-group1:test-group-parent", "test-group1"),
+        ("/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (":/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
+        (
+            "/_mozilla/fetch/api/request",
+            "testing/web-platform/mozilla/tests/fetch/api/request",
+        ),
+    ],
+)
+def test_normalize_group(group: str, expected: str) -> None:
+    assert test_scheduling.normalize_group(group) == expected
