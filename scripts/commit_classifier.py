@@ -633,7 +633,8 @@ class CommitClassifier(object):
             "probs": probs[0].tolist(),
         }
         if self.model_name == "regressor":
-            results["risk_band"] = RegressorModel.find_risk_band(probs[0][1])
+            assert isinstance(self.model, RegressorModel)
+            results["risk_band"] = self.model.find_risk_band(probs[0][1])
 
         with open("results.json", "w") as f:
             json.dump(results, f)
