@@ -36,14 +36,18 @@ services:
       - MODEL
       - MAX_TURNS
       - EFFORT
-      # A bare entry with the host variable unset overrides the Dockerfile ENV
-      # with an empty value, so default it to the image's copy.
-      - PERF_TRIAGE_PATH=${PERF_TRIAGE_PATH:-/app/perf_triage.py}
+      # Unset or empty means the installed calculator package.
+      - PERF_TRIAGE_PATH
+      # The internal rankings: production downloads them from GCS; locally the
+      # host file in $PERF_TRIAGE_TOP_SITES is mounted below.
+      - PERF_TRIAGE_TOP_SITES_URI
+      - PERF_TRIAGE_TOP_SITES=/data/top_sites.json
       - BROKER_URL=http://perf-triage-broker:8765
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
       - ARTIFACTS_DIR=/artifacts
     volumes:
       - ${HOME}/hackbot/artifacts:/artifacts
+      - ${PERF_TRIAGE_TOP_SITES:?set PERF_TRIAGE_TOP_SITES to the internal top_sites.json}:/data/top_sites.json:ro
     depends_on:
       perf-triage-broker:
         condition: service_started

@@ -1,11 +1,11 @@
 from dataclasses import asdict
 
-from hackbot_agents.perf_triage.calculator.perf_triage import calculate_impact
 from hackbot_agents.perf_triage.triage.stability import (
     args_from_selections,
     check_stability,
     emittable_keywords,
 )
+from perf_triage_calculator.perf_triage import calculate_impact
 
 # The selections step 1 returned for bug 1839859 on 2026-10-21 (low, 7.2),
 # copied from that run's summary.json.

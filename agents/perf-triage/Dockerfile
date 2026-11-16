@@ -93,16 +93,6 @@ COPY agents/perf-triage/hackbot_agents/perf_triage/skills/profiler-analysis \
 COPY agents/perf-triage/hackbot_agents/perf_triage/skills/triage-perf-bug \
      /app/.claude/skills/triage-perf-bug
 
-# The calculator the skill shells out to. Vendored at the same revision, and
-# REQUIRED: the skill resolves $PERF_TRIAGE_PATH first and otherwise falls back
-# to its own repository root, which does not exist in this image -- so an unset
-# PERF_TRIAGE_PATH means step 1 cannot run. Setting it here rather than in
-# compose.yml makes the image self-sufficient; compose still passes it through
-# so a local run can point at a working checkout instead.
-COPY agents/perf-triage/hackbot_agents/perf_triage/calculator/perf_triage.py /app/perf_triage.py
-# --classify-domain reads the pages-affected tiers from beside the script.
-COPY agents/perf-triage/hackbot_agents/perf_triage/calculator/top_sites.json /app/top_sites.json
-ENV PERF_TRIAGE_PATH=/app/perf_triage.py
 
 # hackbot.toml lives at the agent root; the runtime discovers it in the cwd.
 COPY agents/perf-triage/hackbot.toml /app/hackbot.toml

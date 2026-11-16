@@ -17,12 +17,18 @@ from hackbot_agents.perf_triage.tasks import RunTracker, Task, TaskConfig
 from hackbot_agents.perf_triage.triage.prompt import SKILL_NAME, TRIAGE_TASK_DETAILS
 from hackbot_agents.perf_triage.triage.result import TriageResult
 from hackbot_agents.perf_triage.vendored import PROFILER_ANALYSIS_SKILL
+from perf_triage_calculator import perf_triage as calc
 
-# Where the skill expects to find the calculator. The skill resolves
-# $PERF_TRIAGE_PATH first (Patricia's 5092b9f), which is the only reason this
-# task can run in a container at all -- before that it required the process cwd
-# to be the calculator's own repository root.
+# Where the skill finds the calculator script. It resolves $PERF_TRIAGE_PATH
+# first and otherwise looks in its own repository root, which does not exist
+# here, so the task always sets it: to the env value when one is given (to test
+# an unreleased calculator), else to the installed package's module.
 PERF_TRIAGE_PATH_ENV = "PERF_TRIAGE_PATH"
+
+
+def calculator_path() -> str:
+    return os.environ.get(PERF_TRIAGE_PATH_ENV) or calc.__file__
+
 
 # Agent mode switches the skill's Step 5 to a single JSON object (and its Step 3
 # is governed by PERF_TRIAGE_SKIP_PROFILE below). WITHOUT IT the skill runs interactive mode: it walks the profile a
@@ -84,7 +90,11 @@ class PerfTriage(Task):
         # invisible: the skill would quietly run interactive mode and this task
         # would fail to parse its Markdown, after paying for a profile walk it
         # was told to skip. Belt to compose's braces.
-        env = {**(options.env or {}), PERF_TRIAGE_AGENT_MODE_ENV: "1"}
+        env = {
+            **(options.env or {}),
+            PERF_TRIAGE_AGENT_MODE_ENV: "1",
+            PERF_TRIAGE_PATH_ENV: calculator_path(),
+        }
         if not self.analyse_profile:
             env[PERF_TRIAGE_SKIP_PROFILE_ENV] = "1"
         options.env = env
@@ -115,17 +125,14 @@ class PerfTriage(Task):
                 "Bugzilla MCP tools rather than bmo-to-md, which is not installed "
                 "here."
             )
-        # Tell the model where the calculator is when the environment already
-        # knows. The skill falls back to its own repository root, which is
-        # correct in an interactive checkout and wrong in a container, so being
-        # explicit costs one line and removes a whole class of failure.
-        path = os.environ.get(PERF_TRIAGE_PATH_ENV)
-        if path:
-            lines += [
-                "",
-                f"The calculator is at {path} (also in ${PERF_TRIAGE_PATH_ENV}). "
-                "Run it from there; do not search for it.",
-            ]
+        # Tell the model where the calculator is. The skill would otherwise fall
+        # back to its own repository root, which does not exist in a container.
+        path = calculator_path()
+        lines += [
+            "",
+            f"The calculator is at {path} (also in ${PERF_TRIAGE_PATH_ENV}). "
+            "Run it from there; do not search for it.",
+        ]
         if self.analyse_profile and self.profile_urls:
             lines += ["", "Profiles linked from this bug (analyse them in Step 3):"]
             lines += [f"- {u}" for u in self.profile_urls]

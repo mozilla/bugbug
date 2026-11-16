@@ -31,7 +31,7 @@ harness/attribute_leverage.py.
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
-from hackbot_agents.perf_triage.calculator import perf_triage as calc
+from perf_triage_calculator import perf_triage as calc
 
 # Selection key, its value prefix, and the calculate_impact parameter it feeds.
 _RADIO = {
@@ -161,7 +161,7 @@ def value_label(name: str, value: object) -> str:
 
 
 def emittable_keywords() -> frozenset[str]:
-    """Every keyword the vendored calculator can emit: the write allow-list."""
+    """Every keyword the calculator can emit: the write allow-list."""
     tables = [
         calc.BROWSER_IMPACT,
         calc.SITE_IMPACT,

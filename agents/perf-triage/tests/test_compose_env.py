@@ -25,8 +25,11 @@ def test_every_agent_input_is_passed_through():
     assert not missing
 
 
-def test_calculator_path_defaults_to_the_image_copy():
-    assert _env()["PERF_TRIAGE_PATH"] == "${PERF_TRIAGE_PATH:-/app/perf_triage.py}"
+def test_calculator_and_rankings_are_passed_through():
+    env = _env()
+    assert "PERF_TRIAGE_PATH" in env
+    assert "PERF_TRIAGE_TOP_SITES_URI" in env
+    assert env["PERF_TRIAGE_TOP_SITES"] == "/data/top_sites.json"
 
 
 def test_every_module_the_dockerfile_runs_exists():

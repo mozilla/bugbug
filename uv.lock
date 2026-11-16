@@ -2651,8 +2651,10 @@ source = { editable = "agents/perf-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
     { name = "claude-agent-sdk" },
+    { name = "google-cloud-storage" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
+    { name = "performance-triage-calculator" },
     { name = "pydantic" },
 ]
 
@@ -2667,8 +2669,10 @@ dev = [
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "performance-triage-calculator", git = "https://github.com/mozilla/performance-triage-calculator?rev=53c8dcf4ab84750d6d9a423f90823b4e5275bfaa" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
@@ -4998,6 +5002,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/34/a4/5cec1112009f0439a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/8b/28c4eaec9d6b036a52cb44720408f26b1a143ca9bce76cc19e8f5de00ab4/pdfminer_six-20260107-py3-none-any.whl", hash = "sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9", size = 6592252, upload-time = "2026-01-07T13:29:10.742Z" },
 ]
+
+[[package]]
+name = "performance-triage-calculator"
+version = "0.1.0"
+source = { git = "https://github.com/mozilla/performance-triage-calculator?rev=53c8dcf4ab84750d6d9a423f90823b4e5275bfaa#53c8dcf4ab84750d6d9a423f90823b4e5275bfaa" }
 
 [[package]]
 name = "phabricator-client"

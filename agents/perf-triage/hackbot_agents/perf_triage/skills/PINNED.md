@@ -81,20 +81,10 @@ another run. `ec4f454` only adds a symlink note to Step 0 (moot here:
 reads its attribute rules from it, so the skill is broken without it. The
 Dockerfile copies the whole directory, so it ships with the skill.
 
-`perf_triage.py` is vendored alongside it (unchanged between `9bca4f4` and `478e3d3`), into
-`hackbot_agents/perf_triage/calculator/`. The skill shells out to it and cannot work without it.
-Stdlib only (`json`, `sys`, `argparse`, `urllib.parse`, `typing`), so it needs no
-packaging beyond the copy.
-
-## `top_sites.json` — pages-affected from Firefox traffic (`a88861b`)
-
-`criteria.md` now has the skill look up `--pages-affected` with
-`perf_triage.py --classify-domain <host> --platforms ...` instead of judging it
-against a hard-coded top-50 list. The lookup reads `top_sites.json` from the
-script's own directory, so it is vendored into `calculator/` beside it and the
-Dockerfile copies it to `/app/` next to `/app/perf_triage.py`. Without it the
-lookup exits 1 and the skill has no way to pick a tier. The data is a snapshot
-(`generated` inside the file); refreshing it is an upstream re-pin, not an edit here.
+The calculator itself (`perf_triage.py` and `top_sites.json`) is not vendored:
+the agent depends on the `performance-triage-calculator` package at a pinned
+commit (`pyproject.toml`), and `PerfTriage` points `$PERF_TRIAGE_PATH` at the
+installed module. Bump that pin together with this one.
 
 ## Re-pinned from an unmerged branch — breaking change for callers
 
