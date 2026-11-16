@@ -849,8 +849,8 @@ class PhabricatorPatch(Patch):
         ]
 
     @property
-    def author_username(self) -> str | None:
-        """The revision author's Phabricator username (email), if resolvable."""
+    def author_email(self) -> str | None:
+        """The revision author's email, if resolvable."""
         return self._users_info.get(self.author_phid, {}).get("email")
 
     @property

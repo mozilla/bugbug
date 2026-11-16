@@ -17,9 +17,11 @@ import re
 import time
 from dataclasses import dataclass
 from logging import getLogger
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import httpx
+import requests
+from libmozdata.phabricator import ConduitError
 from pydantic import BaseModel
 from unidiff import PatchSet
 
@@ -49,9 +51,10 @@ from bugbug.tools.code_review.review_context_schema import (
     tomllib,
 )
 from bugbug.tools.core.connection import get_github_api_headers, get_http_client
-
-if TYPE_CHECKING:
-    from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
+from bugbug.tools.core.platforms.phabricator import (
+    PhabricatorPatch,
+    resolve_project_phid,
+)
 
 logger = getLogger(__name__)
 
@@ -164,10 +167,10 @@ class ReviewInfo:
     blocking_reviewer_groups: frozenset[str] = frozenset()
 
 
-def build_review_info(patch: "PhabricatorPatch") -> ReviewInfo:
+def build_review_info(patch: PhabricatorPatch) -> ReviewInfo:
     """Build a ReviewInfo from a patch's reviewer and author data."""
     return ReviewInfo(
-        author=patch.author_username,
+        author=patch.author_email,
         reviewer_groups=frozenset(patch.reviewer_project_phids),
         blocking_reviewer_groups=frozenset(patch.blocking_reviewer_project_phids),
     )
@@ -213,12 +216,18 @@ def _bugzilla_matches(
 
 
 def _resolve_group_slugs(slugs: list[str]) -> set[str]:
-    """Resolve reviewer-group slugs to project PHIDs (cached, best-effort)."""
-    from bugbug.tools.core.platforms import phabricator as phab
+    """Resolve reviewer-group slugs to project PHIDs.
 
+    A slug whose lookup fails is logged and left out, so the facet fails closed
+    rather than aborting the whole external-content load.
+    """
     resolved = set()
     for slug in slugs:
-        phid = phab.resolve_project_phid(slug)
+        try:
+            phid = resolve_project_phid(slug)
+        except (ConduitError, requests.RequestException):
+            logger.exception("Could not resolve reviewer group %s", slug)
+            continue
         if phid:
             resolved.add(phid)
     return resolved

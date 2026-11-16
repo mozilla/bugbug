@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from libmozdata.phabricator import ConduitError
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
@@ -29,6 +30,7 @@ from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.code_review.review_context import (
     ReviewInfo,
     _merge_rules,
+    _resolve_group_slugs,
     build_review_info,
     external_content_manifest,
     format_external_content,
@@ -1254,9 +1256,22 @@ def test_rule_bugzilla_component_matches():
 
 def _patch_resolver(monkeypatch, slug_to_phid):
     monkeypatch.setattr(
-        "bugbug.tools.core.platforms.phabricator.resolve_project_phid",
+        "bugbug.tools.code_review.review_context.resolve_project_phid",
         lambda slug: slug_to_phid.get(slug),
     )
+
+
+def test_resolve_group_slugs_drops_failed_lookups(monkeypatch):
+    def resolve(slug):
+        if slug == "broken":
+            raise ConduitError("boom")
+        return "PHID-PROJ-ok" if slug == "ok" else None
+
+    monkeypatch.setattr(
+        "bugbug.tools.code_review.review_context.resolve_project_phid", resolve
+    )
+
+    assert _resolve_group_slugs(["broken", "ok", "missing"]) == {"PHID-PROJ-ok"}
 
 
 def test_rule_review_reviewer_group_matches(monkeypatch):
@@ -1319,12 +1334,10 @@ def test_rule_review_author():
 
 
 def test_build_review_info_from_patch():
-    from types import SimpleNamespace
-
     patch = SimpleNamespace(
         reviewer_project_phids=["PHID-PROJ-ip", "PHID-PROJ-newtab"],
         blocking_reviewer_project_phids=["PHID-PROJ-ip"],
-        author_username="alice@mozilla.com",
+        author_email="alice@mozilla.com",
     )
     info = build_review_info(patch)
     assert info.author == "alice@mozilla.com"
