@@ -2594,7 +2594,7 @@ version = "0.1.0"
 source = { editable = "agents/gecko-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
-    { name = "bugsy" },
+    { name = "bugzilla-client" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "jinja2" },
@@ -2612,7 +2612,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla", "searchfox", "vcs"], editable = "libs/agent-tools" },
-    { name = "bugsy" },
+    { name = "bugzilla-client", editable = "libs/bugzilla-client" },
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "jinja2", specifier = ">=3.1" },
