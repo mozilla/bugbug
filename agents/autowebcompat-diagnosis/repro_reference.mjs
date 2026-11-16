@@ -18,7 +18,7 @@
 //   1 = the reported functionality did not work (breakage reproduced in this browser)
 //   2 = no verdict because the browser or script failed
 
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
 
 const { BROWSER, BROWSER_BIN } = process.env;
 if (BROWSER !== "firefox" && BROWSER !== "chrome") {

@@ -13,6 +13,11 @@ from typing import Any
 from autowebcompat_tools.browser import ChromeBrowsers, FirefoxBrowsers
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.mcp_servers import (
+    NODE_MODULES,
+    build_chrome_devtools_server,
+    build_firefox_devtools_server,
+)
 from autowebcompat_tools.result import ResultT
 from autowebcompat_tools.task import RunTracker, TaskConfig
 from autowebcompat_tools.task import Task as BaseTask
@@ -20,7 +25,6 @@ from claude_agent_sdk import McpServerConfig
 from pydantic import BaseModel
 
 from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
-from .mcp_servers import build_chrome_devtools_server, build_firefox_devtools_server
 from .result import (
     RESULT_SERVER_NAME,
     DiagnosisPlanResult,
@@ -31,11 +35,7 @@ from .result import (
 
 HERE = Path(__file__).resolve().parent
 
-# Where the pinned npm deps (puppeteer, the DevTools MCP servers) are installed
-# in the image; the agent runs the reproduction script with this on NODE_PATH so
-# its `import puppeteer` resolves.
 WORK_DIR = Path("/app/diagnosis")
-NODE_MODULES = WORK_DIR / "node_modules"
 
 logger = logging.getLogger("autowebcompat-diagnosis")
 
