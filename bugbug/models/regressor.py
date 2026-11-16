@@ -56,7 +56,7 @@ class RegressorModel(CommitModel):
         self,
         calibration: bool = True,
         lemmatization: bool = False,
-        interpretable: bool = True,
+        interpretable: bool = False,
         use_finder: bool = False,
         exclude_finder: bool = True,
         finder_regressions_only: bool = False,
