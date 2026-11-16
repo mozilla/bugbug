@@ -101,7 +101,7 @@ class BugzillaClient:
         if self._settings.edge_key:
             headers["Mozilla-Edge-Key"] = self._settings.edge_key
         self._http = httpx.AsyncClient(
-            base_url=f"{self.base_url}/rest/",
+            base_url=f"{self.api_url}/",
             headers=headers,
             timeout=self._settings.timeout_seconds,
         )
@@ -126,11 +126,12 @@ class BugzillaClient:
         await self.close()
 
     @property
-    def base_url(self) -> str:
-        return self._settings.url.rstrip("/")
+    def api_url(self) -> str:
+        return self._settings.api_url.rstrip("/")
 
     def bug_url(self, bug_id: int) -> str:
-        return f"{self.base_url}/show_bug.cgi?id={bug_id}"
+        site = self.api_url.removesuffix("/rest")
+        return f"{site}/show_bug.cgi?id={bug_id}"
 
     @retry(
         retry=_should_retry,
@@ -148,7 +149,7 @@ class BugzillaClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Call a REST endpoint (relative to ``/rest/``) and return its JSON body.
+        """Call a REST endpoint (relative to ``api_url``) and return its JSON body.
 
         Rate limits and gateway errors are retried with exponential backoff.
         Reads are also retried on network errors; writes only when the
