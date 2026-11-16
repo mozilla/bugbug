@@ -841,7 +841,7 @@ def test_group_model_balances_with_weights() -> None:
     assert "sampler" not in model.clf.named_steps
     config_group_model = testselect.TestConfigGroupSelectModel()
     assert "sampler" in config_group_model.clf.named_steps
-    assert config_group_model.get_sample_weights(np.array([1, 0])) is None
+    assert config_group_model.get_sample_weights(None, np.array([1, 0])) is None
 
     rng = np.random.default_rng(0)
     y = (rng.random(200) < 0.2).astype(int)
@@ -928,7 +928,7 @@ def test_group_model_sample_weights() -> None:
     model.row_push_failures = [10, 10, 1, 1, 1, 1]
     model.row_non_run = [False] * 6
     model.row_push_index = [0] * 6
-    assert list(model.get_sample_weights(y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
+    assert list(model.get_sample_weights(None, y)) == [0.5, 0.5, 1.0, 0.5, 0.5, 0.5]
 
     # Non-run negatives (when enabled) get a lower weight, and don't count when balancing the
     # classes.
@@ -938,7 +938,7 @@ def test_group_model_sample_weights() -> None:
     model.row_push_failures = [1, 1, 1, 1]
     model.row_non_run = [False, False, True, True]
     model.row_push_index = [0] * 4
-    assert list(model.get_sample_weights(y)) == [1.0, 1.0, 0.3, 0.3]
+    assert list(model.get_sample_weights(None, y)) == [1.0, 1.0, 0.3, 0.3]
 
 
 def test_group_model_uses_manifest_suite() -> None:
@@ -1152,8 +1152,8 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
     weights = []
     orig_weights = model_class.get_sample_weights
 
-    def get_sample_weights(self, y):
-        w = orig_weights(self, y)
+    def get_sample_weights(self, X, y):
+        w = orig_weights(self, X, y)
         weights.append((len(y), w))
         return w
 
