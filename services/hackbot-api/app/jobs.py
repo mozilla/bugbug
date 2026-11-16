@@ -3,7 +3,7 @@ import logging
 from enum import Enum
 from functools import lru_cache
 
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import NotFound, ServiceUnavailable
 from google.cloud import run_v2
 
 from app.config import settings
@@ -65,8 +65,27 @@ def _trigger_sync(
         name=_job_resource_name(job_name),
         overrides=overrides,
     )
-    operation = _jobs_client().run_job(request=request)
-    return operation.metadata.name
+    try:
+        return _jobs_client().run_job(request=request).metadata.name
+    except ServiceUnavailable:
+        run_id = env_overrides["RUN_ID"]
+        log.warning("run_job unavailable for run %s, checking executions", run_id)
+        existing = _find_execution_for_run(request.name, run_id)
+        if existing:
+            return existing
+        return _jobs_client().run_job(request=request).metadata.name
+
+
+def _find_execution_for_run(job_resource: str, run_id: str) -> str | None:
+    request = run_v2.ListExecutionsRequest(parent=job_resource, page_size=20)
+    response = _executions_client().list_executions(request=request)
+    for execution in response.executions:
+        for container in execution.template.containers:
+            if container.name != _AGENT_CONTAINER_NAME:
+                continue
+            if any(e.name == "RUN_ID" and e.value == run_id for e in container.env):
+                return execution.name
+    return None
 
 
 async def trigger_execution(
