@@ -34,7 +34,7 @@ recorded-actions path instead. **Per-execution env overrides target the `agent` 
 name**, which is what stops a run's inputs from reaching or altering the broker's
 environment.
 
-Today `bug-fix`, `build-repair`, `frontend-triage`, `autowebcompat-repro`,
+Today `bug-fix`, `build-repair`, `frontend-triage`, `gecko-triage`, `autowebcompat-repro`,
 `autowebcompat-diagnosis` and `uplift-resolve` run a broker.
 `test-repair` reaches an MCP server via an injected `BUGZILLA_MCP_URL` instead, and
 `test-plan-generator` needs no credentialed reads at all. The invariant holds in every case:
