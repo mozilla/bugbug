@@ -191,21 +191,20 @@ class RegressorModel(CommitModel):
             if push_date > datetime.utcnow() - relativedelta(months=EVALUATION_MONTHS):
                 continue
 
+            # Only use the last two years of data, for both classes. The clean set can't go
+            # further back anyway, as "Regressed by" data is only reliable since then (see
+            # https://groups.google.com/g/mozilla.dev.platform/c/SjjW6_O-FqM/m/G-CrIVT2BAAJ).
+            # Taking regressors from a longer period than clean commits would let the model
+            # learn "old-looking patch" (e.g. lower experience counts) instead of "risky patch".
+            if push_date < datetime.utcnow() - relativedelta(years=2):
+                continue
+
             node = commit_data["node"]
             if commit_data["bug_id"] in regressor_bugs or (
                 self.use_finder and node in regressors
             ):
                 classes[node] = 1
             elif not self.exclude_finder or node not in regressors:
-                # The labels we have are only from two years ago (see https://groups.google.com/g/mozilla.dev.platform/c/SjjW6_O-FqM/m/G-CrIVT2BAAJ).
-                # While we can go further back with the regressor finder script, it isn't remotely
-                # as precise as the "Regressed By" data.
-                # In the future, we might want to re-evaluate this limit (e.g. extend ), but we
-                # have to be careful (using too old patches might cause worse results as patch
-                # characteristics evolve over time).
-                if push_date < datetime.utcnow() - relativedelta(years=2):
-                    continue
-
                 # We remove the last 3 months, as there could be regressions which haven't been
                 # filed yet. While it is true that some regressions might not be found for a long
                 # time, more than 3 months seems overly conservative.
