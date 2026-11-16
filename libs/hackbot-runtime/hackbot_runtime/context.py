@@ -27,7 +27,7 @@ from hackbot_runtime.actions.phabricator import (
     PATCH_ACTION_TYPES,
     SUBMIT_PATCH_ACTION_TYPE,
 )
-from hackbot_runtime.actions.recorder import ActionsRecorder
+from hackbot_runtime.actions.recorder import ActionsRecorder, RecordedAction
 from hackbot_runtime.actions.try_server import TRY_ACTION_TYPES, TRY_PUSH_ACTION_TYPE
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.providers import AnthropicAuth
@@ -51,12 +51,12 @@ def _default_run_id() -> str:
     return f"local-{stamp}-{uuid.uuid4().hex[:6]}"
 
 
-def _wip_commit_message(actions: list[dict]) -> str:
+def _wip_commit_message(actions: list[RecordedAction]) -> str:
     """The patch title, else the try push title, for the agent's uncommitted work."""
     for action_type in (SUBMIT_PATCH_ACTION_TYPE, TRY_PUSH_ACTION_TYPE):
         for action in actions:
-            if action["type"] == action_type and action["params"]["title"]:
-                return action["params"]["title"]
+            if action.type == action_type and action.params["title"]:
+                return action.params["title"]
     return changes.WIP_MESSAGE
 
 
@@ -325,7 +325,7 @@ class HackbotContext(BaseSettings):
         )
         self.publish_json(meta_key, change_set.metadata)
 
-        recorded_types = {action["type"] for action in self.actions.actions}
+        recorded_types = {action.type for action in self.actions.actions}
 
         if recorded_types & PATCH_ACTION_TYPES:
             diff_payload = changes.build_phabricator_diff(

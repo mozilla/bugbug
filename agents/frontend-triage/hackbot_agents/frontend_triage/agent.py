@@ -31,7 +31,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import SystemPromptFile
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
-from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME, RecordedAction
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
 from hackbot_runtime.searchfox import (
@@ -84,18 +84,15 @@ _PATCH_REQUEST = (
 )
 
 
-def feedback_tags_hook(action: dict) -> None:
+def feedback_tags_hook(action: RecordedAction) -> None:
     """Offer the feedback tags and the patch request below the runtime's footer.
 
     The patch request takes a blank line: the comment is Markdown, where a lone
     newline would fold it onto the end of the tag list.
     """
-    params = action.get("params")
-    if not isinstance(params, dict):
-        return
-    text = params.get("text")
+    text = action.params.get("text")
     if isinstance(text, str):
-        params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
+        action.params["text"] = f"{text.rstrip()}\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
 
 
 class SeverityAssessment(BaseModel):

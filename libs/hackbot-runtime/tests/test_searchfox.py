@@ -1,5 +1,6 @@
 """Tests for Searchfox permalink placeholder expansion and revision lookup."""
 
+from hackbot_runtime.actions import RecordedAction
 from hackbot_runtime.searchfox import (
     PLACEHOLDER,
     expand_placeholders,
@@ -163,32 +164,32 @@ def test_without_repo_root_every_path_is_linked(tmp_path):
 def test_permalink_hook_applies_the_existence_check(tmp_path):
     root = _checkout(tmp_path, PATH)
     missing = "browser/base/content/nope.js"
-    action = {
-        "type": "bugzilla.add_comment",
-        "params": {
+    action = RecordedAction(
+        action_id="a",
+        type="bugzilla.add_comment",
+        params={
             "bug_id": 1,
             "text": f"[a]({PLACEHOLDER}/{PATH}) [b]({PLACEHOLDER}/{missing})",
         },
-    }
+    )
     permalink_hook(PINNED, root)(action)
-    assert action["params"]["text"] == f"[a]({PINNED}/{PATH}) `b`"
+    assert action.params["text"] == f"[a]({PINNED}/{PATH}) `b`"
 
 
 def test_permalink_hook_expands_a_comment_in_place():
-    action = {
-        "type": "bugzilla.add_comment",
-        "params": {"bug_id": 1, "text": f"See {PLACEHOLDER}/{PATH}#9"},
-    }
+    action = RecordedAction(
+        action_id="a",
+        type="bugzilla.add_comment",
+        params={"bug_id": 1, "text": f"See {PLACEHOLDER}/{PATH}#9"},
+    )
     permalink_hook(PINNED)(action)
-    assert action["params"]["text"] == f"See {PINNED}/{PATH}#9"
+    assert action.params["text"] == f"See {PINNED}/{PATH}#9"
 
 
 def test_permalink_hook_tolerates_a_missing_or_odd_payload():
     # The hook must never be the reason an action fails to record.
-    for action in [
-        {"type": "bugzilla.add_comment"},
-        {"type": "bugzilla.add_comment", "params": None},
-        {"type": "bugzilla.add_comment", "params": {}},
-        {"type": "bugzilla.add_comment", "params": {"text": None}},
-    ]:
+    for params in [{}, {"text": None}, {"text": 7}]:
+        action = RecordedAction(
+            action_id="a", type="bugzilla.add_comment", params=params
+        )
         permalink_hook(PINNED)(action)

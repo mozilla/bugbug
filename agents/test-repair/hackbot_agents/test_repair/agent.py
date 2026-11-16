@@ -25,7 +25,7 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
-from hackbot_runtime.actions import ACTIONS_SERVER_NAME
+from hackbot_runtime.actions import ACTIONS_SERVER_NAME, RecordedAction
 from hackbot_runtime.actions.agents import ACTION_TYPE as START_RUN_ACTION_TYPE
 from hackbot_runtime.actions.agents import allow_agents
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
@@ -310,11 +310,11 @@ def _publish_handoff(
         publish_file(str(path.relative_to(scratch_out)), path, "text/plain")
 
 
-def _fix_requests(recorder: ActionsRecorder) -> list[dict]:
+def _fix_requests(recorder: ActionsRecorder) -> list[RecordedAction]:
     return [
         action
         for action in recorder.list_actions()
-        if action["type"] == START_RUN_ACTION_TYPE
+        if action.type == START_RUN_ACTION_TYPE
     ]
 
 
@@ -421,7 +421,7 @@ async def run_test_repair(
     if fix_requests and not result.culprit_commit:
         print("[test-repair] no culprit to fix; not handing off", file=sys.stderr)
         for action in fix_requests:
-            actions_recorder.remove_action(action["action_id"])
+            actions_recorder.remove_action(action.action_id)
         fix_requests = []
     if fix_requests and publish_file is not None:
         _publish_handoff(scratch_out, publish_file)

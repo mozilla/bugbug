@@ -242,7 +242,7 @@ def test_a_hand_off_publishes_what_the_fix_works_from(tmp_path, monkeypatch):
         published=published,
     )
     assert result.culprit_commit == head
-    assert [a["type"] for a in recorder.actions] == ["agents.start_run"]
+    assert [a.type for a in recorder.actions] == ["agents.start_run"]
     assert {
         "summary.md",
         "analysis.md",

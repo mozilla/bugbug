@@ -16,7 +16,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder, RecordedAction
 
 ACTION_TYPE = "slack.post_message"
 HACKBOT_UI_URL = "https://hackbot.moz.tools"
@@ -76,7 +76,7 @@ async def post_message(
     Recorded into the run summary for human review -- does not post to Slack.
     """
     action = recorder.record(ACTION_TYPE, _params(channel, text), reasoning=reasoning)
-    return confirmation(action)
+    return action.confirmation()
 
 
 def record_message(
@@ -86,7 +86,7 @@ def record_message(
     blocks: list[dict] | None = None,
     *,
     unfurl: bool = False,
-) -> dict:
+) -> RecordedAction:
     """Record a notification the agent was never asked to decide on.
 
     For a run whose outcome is always worth reporting: the wording is code, not

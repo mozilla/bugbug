@@ -18,7 +18,7 @@ from hackbot_agents.frontend_triage.hooks import (
     component_guidance_hook,
     severity_block_hook,
 )
-from hackbot_runtime.actions import ActionsRecorder
+from hackbot_runtime.actions import ActionsRecorder, RecordedAction
 from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
 BUG = 2014702
@@ -36,6 +36,10 @@ def _comment(rec, bug_id=BUG, **params):
         {"bug_id": bug_id, "text": "hi", **params},
         reasoning="rule X",
     )
+
+
+def _action(params):
+    return RecordedAction(action_id="a", type="bugzilla.add_comment", params=params)
 
 
 def test_the_agent_is_given_no_tool_that_changes_a_bug_field():
@@ -56,7 +60,7 @@ def test_a_private_comment_is_refused():
 def test_a_public_comment_is_recorded():
     rec = _recorder()
     _comment(rec, is_private=False)
-    assert rec.actions[0]["type"] == "bugzilla.add_comment"
+    assert rec.actions[0].type == "bugzilla.add_comment"
 
 
 def test_a_comment_against_another_bug_is_refused():
@@ -92,17 +96,17 @@ def test_a_comment_may_declare_its_severity_only_once():
     block = "\n\nSuggested severity: S4. Cosmetic only, no functional impact."
 
     # Absent is deliberate — a run with low severity confidence omits the block.
-    severity_block_hook({"params": {"text": plan}})
-    severity_block_hook({"params": {"text": plan + block}})
+    severity_block_hook(_action({"text": plan}))
+    severity_block_hook(_action({"text": plan + block}))
 
     # An ordinary mention is not a declaration; the agent quotes reporters and argues
     # about levels in its analysis, and only a line *starting* the declaration counts.
     severity_block_hook(
-        {"params": {"text": "The reporter argues this is S1, but see below." + block}}
+        _action({"text": "The reporter argues this is S1, but see below." + block})
     )
 
     with pytest.raises(ToolError):
-        severity_block_hook({"params": {"text": plan + block + block}})
+        severity_block_hook(_action({"text": plan + block + block}))
 
 
 def _cite(path: str) -> str:
@@ -112,7 +116,7 @@ def _cite(path: str) -> str:
 
 def _guidance_hook(*loaded: str):
     hook = component_guidance_hook(set(loaded))
-    return lambda text: hook({"params": {"bug_id": BUG, "text": text}})
+    return lambda text: hook(_action({"bug_id": BUG, "text": text}))
 
 
 def test_a_comment_citing_an_unloaded_component_is_refused():
@@ -140,9 +144,9 @@ def test_a_component_loaded_mid_run_passes():
     hook = component_guidance_hook(loaded)
     body = _cite("browser/installer/windows/nsis/installer.nsi")
     with pytest.raises(ToolError):
-        hook({"params": {"bug_id": BUG, "text": body}})
+        hook(_action({"bug_id": BUG, "text": body}))
     loaded.add("Firefox :: Installer")
-    hook({"params": {"bug_id": BUG, "text": body}})
+    hook(_action({"bug_id": BUG, "text": body}))
 
 
 def test_a_comment_citing_no_owned_path_passes():
@@ -153,8 +157,8 @@ def test_a_comment_citing_no_owned_path_passes():
 
 
 def test_the_footer_asks_for_a_patch_needinfo_in_its_own_paragraph():
-    action = {"params": {"bug_id": BUG, "text": "Fix plan.\n\n---\n\nreaction footer"}}
+    action = _action({"bug_id": BUG, "text": "Fix plan.\n\n---\n\nreaction footer"})
     feedback_tags_hook(action)
-    assert action["params"]["text"] == (
+    assert action.params["text"] == (
         f"Fix plan.\n\n---\n\nreaction footer\n{_FEEDBACK_TAGS}\n\n{_PATCH_REQUEST}"
     )

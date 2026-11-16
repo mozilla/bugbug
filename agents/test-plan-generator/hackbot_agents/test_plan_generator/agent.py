@@ -116,8 +116,7 @@ async def run_test_plan_generator(
             f"{result_msg.result or result_msg.subtype}"
         )
     if not any(
-        action["type"] == TESTRAIL_SUBMIT_TEST_PLAN
-        for action in actions_recorder.actions
+        action.type == TESTRAIL_SUBMIT_TEST_PLAN for action in actions_recorder.actions
     ):
         raise AgentError(
             f"{subject}: agent finished without recording a TestRail test plan action"

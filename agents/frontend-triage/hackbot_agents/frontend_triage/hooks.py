@@ -20,7 +20,7 @@ now, which is what left that tool with no caller.
 import re
 
 from agent_tools.registry import ToolError
-from hackbot_runtime.actions import ActionHook, ActionsRecorder
+from hackbot_runtime.actions import ActionHook, ActionsRecorder, RecordedAction
 
 from .config import owners_for_path
 
@@ -30,7 +30,7 @@ from .config import owners_for_path
 _SEVERITY_DECLARATION = re.compile(r"^Suggested severity:", re.MULTILINE)
 
 
-def severity_block_hook(action: dict) -> None:
+def severity_block_hook(action: RecordedAction) -> None:
     """Refuse a comment that declares its severity more than once.
 
     The prompt asks for one block at the end. Nothing stops the model from also
@@ -38,7 +38,7 @@ def severity_block_hook(action: dict) -> None:
     declarations that can disagree. Absence is fine and deliberate -- a run with low
     severity confidence omits the block -- so this only fires on a second one.
     """
-    text = (action.get("params") or {}).get("text")
+    text = action.params.get("text")
     if isinstance(text, str) and len(_SEVERITY_DECLARATION.findall(text)) > 1:
         raise ToolError(
             "your comment declares a severity more than once; keep the single "
@@ -72,8 +72,8 @@ def component_guidance_hook(loaded: set[str]) -> ActionHook:
     satisfy.
     """
 
-    def hook(action: dict) -> None:
-        text = (action.get("params") or {}).get("text")
+    def hook(action: RecordedAction) -> None:
+        text = action.params.get("text")
         if not isinstance(text, str):
             return
 
@@ -105,7 +105,7 @@ def _check_no_comment_yet(recorder: ActionsRecorder) -> None:
     # The rules ask for a single comment, but nothing else caps the count, and the
     # agent reads every comment on the bug as untrusted input. A run told to write
     # "a single brief comment" could record fifty.
-    if any(action["type"] == "bugzilla.add_comment" for action in recorder.actions):
+    if any(action.type == "bugzilla.add_comment" for action in recorder.actions):
         raise ToolError(
             "you have already recorded a comment; record one per run, "
             "revising it rather than adding another"
@@ -128,8 +128,8 @@ def add_comment_hook(recorder: ActionsRecorder, bug_id: int) -> ActionHook:
     unattended run concluded — and the developers on the bug are the audience for it.
     """
 
-    def hook(action: dict) -> None:
-        params = action.get("params") or {}
+    def hook(action: RecordedAction) -> None:
+        params = action.params
         _check_no_comment_yet(recorder)
         _check_target_bug(params, bug_id)
 

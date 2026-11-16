@@ -104,7 +104,7 @@ def _record_patch_email(
 ) -> None:
     """Email the patch to the culprit's author, and to the team apply-side."""
     pending = next(
-        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
+        (a for a in ctx.actions.actions if a.type in PATCH_ACTION_TYPES), None
     )
     culprit_author = resolve_culprit_author(source_repo, result.culprit_commit)
     classification = sheriff_classification(investigation.project, task_id)
@@ -117,7 +117,7 @@ def _record_patch_email(
         culprit_author=culprit_author,
         classification=classification,
         revision_pending=pending is not None,
-        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
+        parent_revision=pending.params.get("parent_revision_id") if pending else None,
     )
     record_email(
         ctx.actions,

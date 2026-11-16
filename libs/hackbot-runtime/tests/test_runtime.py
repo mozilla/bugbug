@@ -77,7 +77,7 @@ def test_removed_action_is_absent_from_summary(tmp_path):
         {"bug_id": 1, "text": "Corrected assessment"},
         reasoning="corrected",
     )
-    ctx.actions.remove_action(inaccurate["action_id"])
+    ctx.actions.remove_action(inaccurate.action_id)
 
     code = _finish(ctx, HackbotAgentResult(num_turns=1))
 
@@ -90,7 +90,8 @@ def test_removed_action_is_absent_from_summary(tmp_path):
             "type": "bugzilla.add_comment",
             "params": {"bug_id": 1, "text": "Corrected assessment"},
             "reasoning": "corrected",
-            "action_id": corrected["action_id"],
+            "action_id": corrected.action_id,
+            "attachments": [],
         }
     ]
 

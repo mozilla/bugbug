@@ -1,25 +1,46 @@
-import copy
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from agent_tools.registry import ToolError
+from pydantic import BaseModel
 
 from hackbot_runtime.artifacts import publish_file
 from hackbot_runtime.uploader import SignedPolicyUploader
 
+
+class RecordedAttachment(BaseModel):
+    """A file attached to an action, stored under ``uploaded_key``."""
+
+    name: str
+    uploaded_key: str
+
+
+class RecordedAction(BaseModel):
+    """An action an agent decided to take, collected by :class:`ActionsRecorder`.
+
+    Serialised with :meth:`model_dump` into the ``actions`` array of
+    ``summary.json``.
+    """
+
+    action_id: str
+    type: str
+    params: dict[str, Any]
+    reasoning: str | None = None
+    attachments: list[RecordedAttachment] = []
+
+    def confirmation(self) -> str:
+        """Return the agent-facing confirmation for this recorded action."""
+        return f"Recorded {self.type} (ID: {self.action_id})."
+
+
 # Callback run on an action of one type before it is recorded. It receives the
-# action dict (``type``/``params``/``reasoning``) and
-# may mutate it in place; the return value is ignored. Raising aborts the
-# recording (nothing is appended and no attachment is published), so a hook
-# doubles as a validation gate: raise ``ToolError`` to report the reason back to
-# the agent.
-ActionHook = Callable[[dict], None]
-
-
-def confirmation(action: dict) -> str:
-    """Return the agent-facing confirmation for a recorded action."""
-    return f"Recorded {action['type']} (ID: {action['action_id']})."
+# :class:`RecordedAction` and may mutate it in place; the return value is
+# ignored. Raising aborts the recording (nothing is appended and no attachment is
+# published), so a hook doubles as a validation gate: raise ``ToolError`` to
+# report the reason back to the agent.
+ActionHook = Callable[[RecordedAction], None]
 
 
 class ActionsRecorder:
@@ -46,7 +67,7 @@ class ActionsRecorder:
         artifacts_dir: Path | None = None,
         hooks: Mapping[str, Sequence[ActionHook]] = {},
     ) -> None:
-        self._actions: dict[str, dict] = {}
+        self._actions: dict[str, RecordedAction] = {}
         self._uploader = uploader
         self._artifacts_dir = artifacts_dir
         self._hooks = {
@@ -69,7 +90,7 @@ class ActionsRecorder:
         *,
         reasoning: str | None = None,
         attachments: dict[str, Path] | None = None,
-    ) -> dict:
+    ) -> RecordedAction:
         """Record an action and return a detached copy with its ID.
 
         ``action_type`` uses ``<domain>.<verb>`` (e.g. ``bugzilla.update_bug``,
@@ -93,54 +114,49 @@ class ActionsRecorder:
         hook that raises propagates to the caller and the action is not
         recorded. Hooks run before ``attachments`` are published, so an aborted
         recording leaves nothing behind: the action the hooks see carries no
-        ``attachments`` key yet.
+        ``attachments`` yet.
         """
         action_id = uuid.uuid4().hex
-        action: dict = {
-            "type": action_type,
-            "params": params,
-            "reasoning": reasoning,
-        }
+        action = RecordedAction(
+            action_id=action_id,
+            type=action_type,
+            params=params,
+            reasoning=reasoning,
+        )
 
         for hook in self._hooks.get(action_type, ()):
             hook(action)
 
         if attachments:
-            recorded_attachments: list[dict] = []
-            for name, path in attachments.items():
-                key = publish_file(
-                    self._uploader,
-                    self._artifacts_dir,
-                    f"attachments/{action_id}/{name}",
-                    path,
+            action.attachments = [
+                RecordedAttachment(
+                    name=name,
+                    uploaded_key=publish_file(
+                        self._uploader,
+                        self._artifacts_dir,
+                        f"attachments/{action_id}/{name}",
+                        path,
+                    ),
                 )
-                recorded_attachments.append({"name": name, "uploaded_key": key})
-            action["attachments"] = recorded_attachments
+                for name, path in attachments.items()
+            ]
 
         self._actions[action_id] = action
-        return _detach(action_id, action)
+        return action.model_copy(deep=True)
 
-    def list_actions(self) -> list[dict]:
-        """Return complete copies of the current actions with stable in-run IDs."""
-        return [
-            _detach(action_id, action) for action_id, action in self._actions.items()
-        ]
+    def list_actions(self) -> list[RecordedAction]:
+        """Return detached copies of the current actions with stable in-run IDs."""
+        return [action.model_copy(deep=True) for action in self._actions.values()]
 
-    def remove_action(self, action_id: str) -> dict:
-        """Remove the action with the given ID and return a copy of it."""
+    def remove_action(self, action_id: str) -> RecordedAction:
+        """Remove the action with the given ID and return it."""
         action = self._actions.get(action_id)
         if action is None:
             raise ToolError(f"No recorded action with ID {action_id!r}.")
 
-        removed = _detach(action_id, action)
         del self._actions[action_id]
-        return removed
+        return action
 
     @property
-    def actions(self) -> list[dict]:
+    def actions(self) -> list[RecordedAction]:
         return list(self._actions.values())
-
-
-def _detach(action_id: str, action: dict) -> dict:
-    """Return a detached copy of an action with its ID."""
-    return {**copy.deepcopy(action), "action_id": action_id}

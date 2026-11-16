@@ -91,7 +91,7 @@ def _record_analysis_email(
 
     blamed_author = resolve_author_email(ctx.repo_path, result.blamed_commit)
     pending = next(
-        (a for a in ctx.actions.actions if a["type"] in PATCH_ACTION_TYPES), None
+        (a for a in ctx.actions.actions if a.type in PATCH_ACTION_TYPES), None
     )
     subject, body = build_email(
         result,
@@ -100,7 +100,7 @@ def _record_analysis_email(
         run_id=ctx.run_id,
         has_patch=has_patch,
         revision_pending=pending is not None,
-        parent_revision=(pending or {}).get("params", {}).get("parent_revision_id"),
+        parent_revision=pending.params.get("parent_revision_id") if pending else None,
         blamed_author=blamed_author,
     )
     record_email(

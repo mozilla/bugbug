@@ -8,9 +8,9 @@ from hackbot_runtime.actions import ActionsRecorder, bugzilla
 async def test_add_comment_appends_footer():
     rec = ActionsRecorder()
     await bugzilla.add_comment(rec, bug_id=1, text="Looks invalid.", reasoning="r")
-    text = rec.actions[0]["params"]["text"]
+    text = rec.actions[0].params["text"]
     assert text == "Looks invalid.\n\n---\n\n" + bugzilla._COMMENT_FOOTER
-    assert rec.actions[0]["params"]["is_private"] is False
+    assert rec.actions[0].params["is_private"] is False
 
 
 async def test_add_attachment_patch_forces_text_plain(tmp_path):
@@ -20,7 +20,7 @@ async def test_add_attachment_patch_forces_text_plain(tmp_path):
     await bugzilla.add_attachment(
         rec, bug_id=1, file_path=str(src), reasoning="r", is_patch=True, comment="fix"
     )
-    params = rec.actions[0]["params"]
+    params = rec.actions[0].params
     assert params["content_type"] == "text/plain"
     assert params["is_patch"] is True
     assert params["file_name"] == "fix.patch"
@@ -31,7 +31,7 @@ async def test_add_attachment_guesses_mime(tmp_path):
     src.write_text("hi")
     rec = ActionsRecorder(artifacts_dir=tmp_path / "a")
     await bugzilla.add_attachment(rec, bug_id=1, file_path=str(src), reasoning="r")
-    assert rec.actions[0]["params"]["content_type"] == "text/plain"
+    assert rec.actions[0].params["content_type"] == "text/plain"
 
 
 async def test_add_attachment_missing_file_raises():
@@ -55,7 +55,7 @@ async def test_create_bug_merges_extra_top_level_wins():
         reasoning="r",
         extra={"severity": "S3", "product": "IGNORED"},
     )
-    body = rec.actions[0]["params"]
+    body = rec.actions[0].params
     assert body["severity"] == "S3"
     assert body["product"] == "Core"  # explicit arg wins over extra
     # BMO's POST /bug rejects `is_markdown` with a 400, so it is never recorded.

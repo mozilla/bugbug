@@ -27,9 +27,9 @@ async def list_actions(recorder: ActionsRecorder) -> str:
 
     rows = ["| ID | Action | Reasoning |", "| --- | --- | --- |"]
     rows.extend(
-        f"| {_table_cell(action['action_id'])} "
-        f"| {_table_cell(action['type'])} "
-        f"| {_table_cell(action.get('reasoning'))} |"
+        f"| {_table_cell(action.action_id)} "
+        f"| {_table_cell(action.type)} "
+        f"| {_table_cell(action.reasoning)} |"
         for action in actions
     )
     return "\n".join(rows)

@@ -5,7 +5,7 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
-from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
+from hackbot_runtime.actions.recorder import ActionsRecorder
 
 TRY_PUSH_ACTION_TYPE = "try_server.push"
 
@@ -160,7 +160,7 @@ async def push(
         params["rebuild"] = rebuild
 
     action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning)
-    return confirmation(action)
+    return action.confirmation()
 
 
 TOOLS = tools_in(__name__)

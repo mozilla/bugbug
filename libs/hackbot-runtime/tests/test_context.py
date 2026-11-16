@@ -166,7 +166,7 @@ def test_results_plumbing(tmp_path):
     assert written.read_text() == "hello"
 
     hb.actions.record("bugzilla.update_bug", {"bug_id": 1}, reasoning="r")
-    assert hb.actions.actions[0]["type"] == "bugzilla.update_bug"
+    assert hb.actions.actions[0].type == "bugzilla.update_bug"
 
 
 def _hb_with_source(tmp_path, monkeypatch):

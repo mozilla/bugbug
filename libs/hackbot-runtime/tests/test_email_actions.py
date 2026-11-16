@@ -15,9 +15,9 @@ def test_record_email_records_the_action():
         body_markdown="  # Analysis  ",
         attach_patch=True,
     )
-    assert len(action.pop("action_id")) == 32
+    assert len(action.action_id) == 32
     assert rec.actions == [action]
-    assert action == {
+    assert action.model_dump(exclude={"action_id"}) == {
         "type": "email.send",
         "params": {
             "to": ["dev@mozilla.com"],
@@ -26,6 +26,7 @@ def test_record_email_records_the_action():
             "attach_patch": True,
         },
         "reasoning": None,
+        "attachments": [],
     }
 
 
@@ -37,14 +38,14 @@ def test_recipients_are_deduped_and_blanks_dropped():
         subject="s",
         body_markdown="b",
     )
-    assert action["params"]["to"] == ["dev@mozilla.com", "author@mozilla.com"]
+    assert action.params["to"] == ["dev@mozilla.com", "author@mozilla.com"]
 
 
 def test_a_report_concerning_no_individual_still_records():
     # The handler addresses the team; an empty recipient list is not an error.
     rec = ActionsRecorder()
     action = email.record_email(rec, subject="s", body_markdown="b")
-    assert action["params"]["to"] == []
+    assert action.params["to"] == []
 
 
 @pytest.mark.parametrize(
@@ -71,15 +72,15 @@ def test_the_body_can_carry_the_patch_without_attaching_it():
     action = email.record_email(
         rec, subject="s", body_markdown=f"```diff\n{email.PATCH_PLACEHOLDER}\n```"
     )
-    assert action["params"]["attach_patch"] is False
-    assert email.PATCH_PLACEHOLDER in action["params"]["body_markdown"]
+    assert action.params["attach_patch"] is False
+    assert email.PATCH_PLACEHOLDER in action.params["body_markdown"]
 
 
 def test_a_patch_can_be_attached_without_appearing_in_the_body():
     rec = ActionsRecorder()
     action = email.record_email(rec, subject="s", body_markdown="b", attach_patch=True)
-    assert action["params"]["attach_patch"] is True
-    assert email.PATCH_PLACEHOLDER not in action["params"]["body_markdown"]
+    assert action.params["attach_patch"] is True
+    assert email.PATCH_PLACEHOLDER not in action.params["body_markdown"]
 
 
 async def test_send_records_the_action():
@@ -92,9 +93,9 @@ async def test_send_records_the_action():
         reasoning="the pusher has to back this out",
     )
     assert confirmation == (
-        f"Recorded email.send (ID: {rec.list_actions()[0]['action_id']})."
+        f"Recorded email.send (ID: {rec.list_actions()[0].action_id})."
     )
-    assert rec.actions == [
+    assert [a.model_dump(exclude={"action_id"}) for a in rec.actions] == [
         {
             "type": "email.send",
             "params": {
@@ -104,6 +105,7 @@ async def test_send_records_the_action():
                 "attach_patch": False,
             },
             "reasoning": "the pusher has to back this out",
+            "attachments": [],
         }
     ]
 
