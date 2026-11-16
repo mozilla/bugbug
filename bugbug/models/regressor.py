@@ -49,8 +49,65 @@ db.register(
 EVALUATION_MONTHS = 3
 
 
+# Risk bands, as (name, share of bugs in the band). The model separates patches much better
+# at the high end of the risk scale than at the low end, so the bands get narrower as the
+# risk increases.
+RISK_BAND_SHARES = (
+    ("l", 0.5),  # Lower than average risk.
+    ("a", 0.3),  # Average risk.
+    ("h", 0.15),  # Higher than average risk.
+    ("v", 0.05),  # Very high risk.
+)
+
+
+def compute_risk_bands(risks: np.ndarray) -> list[tuple[str, float, float]]:
+    """Split the risk scale into contiguous bands holding the RISK_BAND_SHARES of risks.
+
+    Calibrated risks take few distinct values, so a plain quantile could fall in a large
+    group of tied risks and leave a band almost empty. Instead, each threshold is the
+    distinct risk value whose share of risks at or below it is closest to the target.
+    A risk equal to a threshold belongs to the lower band.
+    """
+    values, counts = np.unique(risks, return_counts=True)
+    # Share of risks lower than or equal to each distinct value.
+    cumulative = np.cumsum(counts) / counts.sum()
+    targets = np.cumsum([share for _, share in RISK_BAND_SHARES[:-1]])
+
+    thresholds = [
+        0.0,
+        *[float(values[np.argmin(np.abs(cumulative - target))]) for target in targets],
+        1.0,
+    ]
+
+    return [
+        (name, thresholds[i], thresholds[i + 1])
+        for i, (name, _) in enumerate(RISK_BAND_SHARES)
+    ]
+
+
+def log_risk_bands(
+    risk_bands: list[tuple[str, float, float]],
+    risks: np.ndarray,
+    is_regressor: np.ndarray,
+) -> None:
+    logger.info("Average regression rate is %0.3f", is_regressor.mean())
+
+    lower_bound = -1.0
+    for name, start, end in risk_bands:
+        mask = (risks > lower_bound) & (risks <= end)
+        lower_bound = end
+        logger.info(
+            "Risk band %s (%0.4f-%0.4f): %d bugs, regression rate %0.3f",
+            name,
+            start,
+            end,
+            mask.sum(),
+            is_regressor[mask].mean() if mask.any() else 0.0,
+        )
+
+
 class RegressorModel(CommitModel):
-    RISK_BANDS = None
+    risk_bands: list[tuple[str, float, float]] | None = None
 
     def __init__(
         self,
@@ -235,23 +292,11 @@ class RegressorModel(CommitModel):
 
         return classes, [0, 1]
 
-    @staticmethod
-    def find_risk_band(risk: float) -> str:
-        if RegressorModel.RISK_BANDS is None:
+    def find_risk_band(self, risk: float) -> str:
+        risk_bands = self.risk_bands
+        assert risk_bands is not None, "The risk bands are computed at training time"
 
-            def _parse_risk_band(risk_band: str) -> tuple[str, float, float]:
-                name, start, end = risk_band.split("-")
-                return (name, float(start), float(end))
-
-            RegressorModel.RISK_BANDS = sorted(
-                (
-                    _parse_risk_band(risk_band)
-                    for risk_band in utils.get_secret("REGRESSOR_RISK_BANDS").split(";")
-                ),
-                key=lambda x: x[1],
-            )
-
-        for name, start, end in RegressorModel.RISK_BANDS:
+        for name, start, end in risk_bands:
             if start <= risk <= end:
                 return name
 
@@ -273,7 +318,7 @@ class RegressorModel(CommitModel):
 
             push_date = dateutil.parser.parse(commit_data["pushdate"])
 
-            # Use the past two months of data (make sure it is not also used for training!).
+            # Use the past months of data (make sure it is not also used for training!).
             if push_date < datetime.utcnow() - relativedelta(months=EVALUATION_MONTHS):
                 continue
 
@@ -286,107 +331,22 @@ class RegressorModel(CommitModel):
         # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
         commits.sort(key=lambda x: x["bug_id"])
 
-        results = []
+        risks = []
+        is_regressor = []
         for bug_id, commit_iter in itertools.groupby(commits, lambda x: x["bug_id"]):
             probs = self.classify(list(commit_iter), probabilities=True)
-            results.append((max(probs[:, 1]), bug_id in bug_regressors))
+            risks.append(max(probs[:, 1]))
+            is_regressor.append(bug_id in bug_regressors)
 
-        # Let's define the risk bands relatively to average risk.
-        # On average, around 1 out of 8 (13%) patches cause regressions.
-        # Risk band 1 - around 1 out of 15 (7%) patches within this risk band cause regressions.
-        # Risk band 2 - around 1 out of 7 (15%) patches within this risk band cause regressions.
-        # Risk bank 3 - around 1 out of 3 (35%) patches within this risk band cause regressions.
+        if len(risks) == 0:
+            logger.warning("No bugs in the evaluation set, risk bands not computed")
+            return
 
-        # Step 1. Calculate % of patches which cause regressions.
-        total_landings = len(results)
-        total_regressions = sum(is_reg for _, is_reg in results)
-        average_regression_rate = total_regressions / total_landings
+        self.risk_bands = compute_risk_bands(np.array(risks))
 
-        logger.info("Average risk is %0.2f", average_regression_rate)
-
-        MIN_SAMPLE = 200
-
-        # Step 2. Define risk band 1 (half than average risk).
-        max_band1_prob = 1.0
-        total_landings = 0
-        total_regressions = 0
-        results.sort(key=lambda x: x[0])
-        for prob, is_reg in results:
-            total_landings += 1
-            if is_reg:
-                total_regressions += 1
-
-            if total_landings < MIN_SAMPLE:
-                continue
-
-            print(
-                f"{total_regressions} out of {total_landings} patches with risk lower than {prob} caused regressions ({total_regressions / total_landings}"
-            )
-
-            # No need to go further, since we are interested in half than average risk.
-            if (
-                total_regressions / total_landings
-                >= (average_regression_rate / 2) + 0.01
-            ):
-                max_band1_prob = prob
-                break
-
-        print("\n\n")
-
-        # Step 3. Define risk band 3 (double than average risk).
-        min_band3_prob = 0.0
-        total_landings = 0
-        total_regressions = 0
-        results.sort(key=lambda x: x[0], reverse=True)
-        for prob, is_reg in results:
-            total_landings += 1
-            if is_reg:
-                total_regressions += 1
-
-            if total_landings < MIN_SAMPLE:
-                continue
-
-            print(
-                f"{total_regressions} out of {total_landings} patches with risk higher than {prob} caused regressions ({total_regressions / total_landings}"
-            )
-
-            # No need to go further, since we are interested in double than average risk.
-            if (
-                total_regressions / total_landings
-                <= (average_regression_rate * 2) - 0.01
-            ):
-                min_band3_prob = prob
-                break
-
-        print("\n\n")
-
-        # Step 4. Define risk band 2 (average risk).
-        results.sort(key=lambda x: x[0])
-        for prob_start in np.arange(max_band1_prob / 2, max_band1_prob + 0.02, 0.01):
-            for prob_end in np.arange(min_band3_prob - 0.02, 0.99, 0.01):
-                total_landings = 0
-                total_regressions = 0
-                for prob, is_reg in results:
-                    if prob < prob_start or prob > prob_end:
-                        continue
-
-                    total_landings += 1
-                    if is_reg:
-                        total_regressions += 1
-
-                if total_landings < MIN_SAMPLE:
-                    continue
-
-                if (
-                    (average_regression_rate / 2) + 0.01
-                    > total_regressions / total_landings
-                    > (average_regression_rate * 2) - 0.01
-                ):
-                    continue
-
-                print(
-                    f"{total_regressions} out of {total_landings} patches with risk between {prob_start} and {prob_end} caused regressions ({total_regressions / total_landings}"
-                )
+        # Regressions for recent patches might not have been filed yet, so the rates are
+        # lower than the actual ones, but their ratios between bands are still meaningful.
+        log_risk_bands(self.risk_bands, np.array(risks), np.array(is_regressor))
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()

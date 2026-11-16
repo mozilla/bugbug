@@ -546,17 +546,11 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
         for commit, prob, index, class_ in zip(
             to_score, probs.tolist(), indexes.tolist(), classes.tolist()
         ):
-            try:
-                risk_band = model.find_risk_band(prob[1])
-            except Exception:
-                # The risk bands are not configured.
-                risk_band = None
-
             results[commit["node"]] = {
                 "prob": prob,
                 "index": index,
                 "class": class_,
-                "risk_band": risk_band,
+                "risk_band": model.find_risk_band(prob[1]),
                 "ignored_reason": None,
             }
 
