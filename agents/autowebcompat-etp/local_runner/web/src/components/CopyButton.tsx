@@ -7,7 +7,7 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
     <button
       type="button"
       className="copy"
-      title={`Copy ${text}`}
+      title={text.length > 80 ? "Copy to clipboard" : `Copy ${text}`}
       onClick={async () => {
         await navigator.clipboard.writeText(text);
         setCopied(true);
