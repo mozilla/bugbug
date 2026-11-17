@@ -130,7 +130,7 @@ def require_api_key(
         claims = id_token.verify_oauth2_token(
             authorization.removeprefix("Bearer "),
             google_requests.Request(),
-            audience=settings.hackbot_api_url,
+            audience=settings.service_account_audience,
         )
     except ValueError, google_auth_exceptions.GoogleAuthError:
         log.warning("Rejected request with invalid OIDC credentials")

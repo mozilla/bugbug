@@ -341,9 +341,9 @@ async def test_trigger_run_with_service_account_auth(monkeypatch):
         mock_from_service_account_file,
     )
 
-    client = _client(api_key="", key_file="/path/key.json")
+    client = _client(api_key="", key_file="/path/key.json", audience="hackbot-audience")
     await client.trigger_run("bug-fix", {"bug_id": 1234})
 
     assert captured["filename"] == "/path/key.json"
-    assert captured["audience"] == "https://hackbot.example"
+    assert captured["audience"] == "hackbot-audience"
     assert captured["headers"] == {"Authorization": "Bearer fake.jwt.token"}
