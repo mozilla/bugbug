@@ -14,6 +14,16 @@ from bugbug.utils import get_secret, zstd_compress
 
 logger = getLogger(__name__)
 
+# Fields of the bugs already in the DB needed to decide which bugs to download.
+DB_SUMMARY_FIELDS = (
+    "id",
+    "product",
+    "component",
+    "regressed_by",
+    "regressions",
+    "blocks",
+)
+
 
 class Retriever(object):
     def retrieve_bugs(self, limit: int | None = None) -> None:
@@ -47,12 +57,18 @@ class Retriever(object):
 
         all_components = set(bugzilla.fetch_components_list())
 
-        deleted_component_ids = set(
-            bug["id"]
+        # Reading the whole DB is slow, so read the few fields we need in a single pass.
+        db_bugs = [
+            bugzilla.BugDict({field: bug[field] for field in DB_SUMMARY_FIELDS})
             for bug in bugzilla.get_bugs(
                 include_invalid=True,
                 include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
             )
+        ]
+
+        deleted_component_ids = set(
+            bug["id"]
+            for bug in db_bugs
             if (bug["product"], bug["component"]) not in all_components
         )
         logger.info(
@@ -98,7 +114,7 @@ class Retriever(object):
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
         regression_related_ids = get_regression_related_ids(
-            bugzilla.get_bugs(include_additional_products=bugzilla.ADDITIONAL_PRODUCTS)
+            bug for bug in db_bugs if bug["product"] != "Invalid Bugs"
         )
         if limit:
             regression_related_ids = regression_related_ids[-limit:]
@@ -133,8 +149,10 @@ class Retriever(object):
         bugzilla.delete_bugs(
             lambda bug: bug["id"] in changed_ids or bug["id"] not in all_ids_set
         )
+        kept_ids = ({bug["id"] for bug in db_bugs} & all_ids_set) - changed_ids
+        del db_bugs
 
-        new_bugs = bugzilla.download_bugs(all_ids)
+        new_bugs = bugzilla.download_bugs(all_ids, existing_ids=kept_ids)
         requested_ids = set(all_ids_set)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
@@ -178,7 +196,9 @@ class Retriever(object):
                 len(inconsistent_bug_ids),
             )
             bugzilla.delete_bugs(lambda bug, ids=inconsistent_bug_ids: bug["id"] in ids)
-            bugs_to_check = bugzilla.download_bugs(inconsistent_bug_ids)
+            bugs_to_check = bugzilla.download_bugs(
+                inconsistent_bug_ids, existing_ids=()
+            )
         else:
             logger.info(
                 "%d bugs are still inconsistent after re-downloading",
@@ -238,7 +258,7 @@ def handle_missing_fields(
             trial_number,
             max_tries,
         )
-        bugzilla.download_bugs(missing_field_bug_ids)
+        bugzilla.download_bugs(missing_field_bug_ids, existing_ids=())
 
         return handle_missing_fields(fields, trial_number + 1, max_tries)
 
