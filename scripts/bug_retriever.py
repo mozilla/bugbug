@@ -97,18 +97,8 @@ class Retriever(object):
 
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
-        regression_related_ids: list[int] = list(
-            set(
-                sum(
-                    (
-                        bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                        for bug in bugzilla.get_bugs(
-                            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS
-                        )
-                    ),
-                    [],
-                )
-            )
+        regression_related_ids = get_regression_related_ids(
+            bugzilla.get_bugs(include_additional_products=bugzilla.ADDITIONAL_PRODUCTS)
         )
         if limit:
             regression_related_ids = regression_related_ids[-limit:]
@@ -148,17 +138,7 @@ class Retriever(object):
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
         for _ in range(7):
-            regression_related_ids = list(
-                set(
-                    sum(
-                        (
-                            bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                            for bug in new_bugs
-                        ),
-                        [],
-                    )
-                )
-            )
+            regression_related_ids = get_regression_related_ids(new_bugs)
             logger.info(
                 "%d bugs which caused regressions fixed by commits.",
                 len(regression_related_ids),
@@ -204,6 +184,18 @@ class Retriever(object):
         handle_missing_fields(["history", "comments"])
 
         zstd_compress(bugzilla.BUGS_DB)
+
+
+def get_regression_related_ids(bugs: Iterable[bugzilla.BugDict]) -> list[int]:
+    """Get IDs of bugs which regressed, were regressed by or are blocked by the given bugs."""
+    return list(
+        {
+            bug_id
+            for bug in bugs
+            for field in ("regressed_by", "regressions", "blocks")
+            for bug_id in bug[field]
+        }
+    )
 
 
 def handle_missing_fields(
