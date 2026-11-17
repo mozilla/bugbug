@@ -17,7 +17,12 @@ from app.main import app
 from app.routers import webhooks
 from app.slack.app import build_request_handler
 from fastapi.testclient import TestClient
-from hackbot_client import RunStatus, TriggeredRun
+from hackbot_client import (
+    ApplyActionsResponse,
+    RunAction,
+    RunStatus,
+    TriggeredRun,
+)
 from slack_sdk.signature import SignatureVerifier
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
@@ -37,6 +42,12 @@ class _FakeHackbotClient:
         self.calls.append((agent_name, inputs))
         return TriggeredRun(
             run_id=RUN_ID, agent=agent_name, status=RunStatus.pending, is_new=True
+        )
+
+    async def apply_actions(self, run_id):
+        self.calls.append(("apply", {"run_id": str(run_id)}))
+        return ApplyActionsResponse(
+            [RunAction(idx=0, type="bugzilla.add_comment", params={}, status="applied")]
         )
 
 
@@ -200,6 +211,16 @@ def test_any_agent_in_the_family_routes_here(client, hackbot_client):
 
     assert resp.status_code == 200
     assert len(hackbot_client.calls) == 1
+
+
+def test_a_post_only_click_reaches_its_listener(client, hackbot_client):
+    resp = _post(
+        client,
+        _payload(action_id=f"apply_run_actions:{RUN_ID}", value={"run_id": RUN_ID}),
+    )
+
+    assert resp.status_code == 200
+    assert hackbot_client.calls == [("apply", {"run_id": RUN_ID})]
 
 
 def test_an_action_id_outside_the_family_is_not_routed_here(client, hackbot_client):

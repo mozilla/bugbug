@@ -49,3 +49,26 @@ def create_start_agent_run_button(
         style=style,
         confirm=confirm,
     )
+
+
+def create_apply_run_actions_button(
+    label: str,
+    *,
+    run_id: str,
+    confirm: ConfirmObject | None = None,
+    style: str | None = None,
+) -> ButtonElement:
+    """A button that applies ``run_id``'s pending actions and starts nothing.
+
+    For a result held for review whose approval should not also start an agent.
+    Applying is idempotent, so a repeated click is harmless. The ``action_id``
+    names the run, so a ``create_start_agent_run_button`` click that applies the
+    same run can find this button and remove it.
+    """
+    return ButtonElement(
+        text=label,
+        action_id=f"apply_run_actions:{run_id}",
+        value=json.dumps({"run_id": run_id}),
+        style=style,
+        confirm=confirm,
+    )
