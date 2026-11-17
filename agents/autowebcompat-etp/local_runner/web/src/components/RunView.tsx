@@ -3,6 +3,7 @@ import { useSnapshot } from "valtio";
 import { store } from "../store";
 import { ActionsForm } from "./ActionsForm";
 import { CompareResultView } from "./CompareResultView";
+import { CopyButton } from "./CopyButton";
 import { LogView } from "./LogView";
 import { Progress } from "./Progress";
 import { ResultView } from "./ResultView";
@@ -27,7 +28,12 @@ export function RunView() {
             rel="noreferrer"
           >
             {`${config.bugzilla}/show_bug.cgi?id=${info.params.bug_id}`}
-          </a>
+          </a>{" "}
+          <CopyButton
+            text={`${config.bugzilla}/show_bug.cgi?id=${info.params.bug_id}`}
+            label="copy link"
+          />{" "}
+          <CopyButton text={String(info.params.bug_id)} label="copy bug ID" />
         </p>
       )}
       {info ? (
