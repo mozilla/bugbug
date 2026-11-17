@@ -5,6 +5,7 @@
 
 import bisect
 import collections
+import dataclasses
 import glob
 import itertools
 import logging
@@ -1450,12 +1451,20 @@ def get_suite_test_dirs(repo_dir: str) -> dict[str, tuple[str, ...]]:
 MAX_SIBLING_MANIFESTS = 42
 
 
-# The sorted files at the last revision analyzed, to compute the ones at the next revision from them.
-_files_at_rev: tuple[str, str, list[str]] | None = None
-# The test manifests parsed at the last revision analyzed (None when not a test manifest), by path.
-_parsed_manifests: dict[str, dict | None] = {}
-# The test manifests at the last revision analyzed, by the paths they include.
-manifest_by_path: dict[str, set[str]] | None = None
+@dataclasses.dataclass
+class _RepoFiles:
+    """The files of a repository at the last revision analyzed, to compute the ones at the next one."""
+
+    rev: str = ""
+    # The files at the revision, sorted.
+    files: list[str] = dataclasses.field(default_factory=list)
+    # The test manifests parsed at the revision (None when not a test manifest), by path.
+    parsed_manifests: dict[str, dict | None] = dataclasses.field(default_factory=dict)
+    # The test manifests at the revision, by the paths they include.
+    manifest_by_path: dict[str, set[str]] | None = None
+
+
+_files_by_repo: dict[str, _RepoFiles] = collections.defaultdict(_RepoFiles)
 
 
 def _hg(repo_dir: str, *args: str) -> bytes:
@@ -1472,33 +1481,32 @@ def _get_files(repo_dir: str, rev: str) -> list[str]:
     large repository. They are computed from the files at the last revision analyzed and the
     files changed between the two revisions, which is faster than listing them all.
     """
-    global _files_at_rev, manifest_by_path
+    cached = _files_by_repo[repo_dir]
+    if rev == cached.rev:
+        return cached.files
 
-    if _files_at_rev is not None and _files_at_rev[:2] == (repo_dir, rev):
-        return _files_at_rev[2]
-
-    if _files_at_rev is None or _files_at_rev[0] != repo_dir:
+    if not cached.rev:
         out = _hg(repo_dir, "files", "-r", rev, "-0")
         files = set(out.decode("utf-8", "surrogateescape").split("\0"))
-        _parsed_manifests.clear()
     else:
-        files = set(_files_at_rev[2])
-        out = _hg(
-            repo_dir, "status", "--rev", _files_at_rev[1], "--rev", rev, "-amr", "-0"
-        )
+        files = set(cached.files)
+        out = _hg(repo_dir, "status", "--rev", cached.rev, "--rev", rev, "-amr", "-0")
         for entry in out.decode("utf-8", "surrogateescape").split("\0"):
-            if entry:
-                status, path = entry.split(" ", 1)
-                _parsed_manifests.pop(path, None)
-                if status == "R":
-                    files.discard(path)
-                else:
-                    files.add(path)
+            if not entry:
+                continue
+
+            status, path = entry.split(" ", 1)
+            cached.parsed_manifests.pop(path, None)
+            if status == "R":
+                files.discard(path)
+            else:
+                files.add(path)
 
     files.discard("")
-    _files_at_rev = (repo_dir, rev, sorted(files))
-    manifest_by_path = None
-    return _files_at_rev[2]
+    cached.rev = rev
+    cached.files = sorted(files)
+    cached.manifest_by_path = None
+    return cached.files
 
 
 def _files_under(files: list[str], path: str) -> list[str]:
@@ -1511,14 +1519,24 @@ def _files_under(files: list[str], path: str) -> list[str]:
     return files[start:end]
 
 
+def _glob(files: list[str], pattern: str) -> list[str]:
+    """The files matching a recursive glob pattern, from a sorted list of files."""
+    regex = re.compile(glob.translate(pattern, recursive=True))
+    # Only the files in the folder before the first wildcard can match.
+    folder = os.path.dirname(pattern.split("*", 1)[0])
+    return [f for f in _files_under(files, folder) if regex.match(f)]
+
+
+def _is_in(files: list[str], path: str) -> bool:
+    """Whether a path is in a sorted list of files."""
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
+
+
 def _read_files(repo_dir: str, rev: str, paths: list[str]) -> dict[str, bytes]:
     """The contents of files at a revision, skipping the ones which don't exist."""
     files = _get_files(repo_dir, rev)
-    paths = [
-        path
-        for path in paths
-        if (i := bisect.bisect_left(files, path)) < len(files) and files[i] == path
-    ]
+    paths = [path for path in paths if _is_in(files, path)]
     if not paths:
         return {}
 
@@ -1535,12 +1553,12 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
     The files of the repository at revision `rev` are used, read with Mercurial without
     updating the working directory, as it is slow on a large repository.
     """
-    global manifest_by_path
-
     repo_files = _get_files(repo_dir, rev)
+    cached = _files_by_repo[repo_dir]
 
+    manifest_by_path = cached.manifest_by_path
     if manifest_by_path is None:
-        manifest_by_path = collections.defaultdict(set)
+        manifest_by_path = cached.manifest_by_path = collections.defaultdict(set)
 
         toml_paths = []
         for toml_rel in repo_files:
@@ -1560,7 +1578,7 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
             toml_paths.append(toml_rel)
 
         # Only parse the manifests which changed since the revision the files were computed from.
-        to_parse = [p for p in toml_paths if p not in _parsed_manifests]
+        to_parse = [p for p in toml_paths if p not in cached.parsed_manifests]
         for toml_rel, content in _read_files(repo_dir, rev, to_parse).items():
             try:
                 data = tomllib.loads(content.decode("utf-8"))
@@ -1575,10 +1593,10 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
             ):
                 data = None
 
-            _parsed_manifests[toml_rel] = data
+            cached.parsed_manifests[toml_rel] = data
 
         for toml_rel in toml_paths:
-            data = _parsed_manifests.get(toml_rel)
+            data = cached.parsed_manifests.get(toml_rel)
             if data is None:
                 continue
 
@@ -1621,15 +1639,7 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
                         )
 
                     if "*" in support_file:
-                        regex = re.compile(
-                            glob.translate(support_file_path, recursive=True)
-                        )
-                        prefix_dir = os.path.dirname(support_file_path.split("*", 1)[0])
-                        files = [
-                            f
-                            for f in _files_under(repo_files, prefix_dir)
-                            if regex.match(f)
-                        ]
+                        files = _glob(repo_files, support_file_path)
                     else:
                         files = [support_file_path]
 
@@ -1689,12 +1699,11 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
                         return name.endswith((".html", ".any.js", ".worker.js"))
 
                     def has_wpt_files(d: Path) -> bool:
-                        # The names of the files and folders directly in the folder.
-                        names = (
-                            f[len(str(d)) + 1 :].split("/", 1)[0]
+                        # Check the names of the files and folders directly in the folder.
+                        return any(
+                            is_wpt_file(f.removeprefix(f"{d}/").split("/")[0])
                             for f in _files_under(repo_files, str(d))
                         )
-                        return any(is_wpt_file(name) for name in names)
 
                     while cur_dir != test_root and not has_wpt_files(cur_dir):
                         cur_dir = cur_dir.parent

@@ -1415,6 +1415,30 @@ support-files = ""
     assert find.manifests(["prova.js"]) == set()
 
 
+def test_find_manifests_for_paths_cached_by_repo(tmp_path, monkeypatch) -> None:
+    finders = {}
+    for name in ("a", "b"):
+        (tmp_path / name / "test").mkdir(parents=True)
+        (tmp_path / name / "test" / "mochitest.toml").write_text(
+            f'["test_{name}.html"]\n'
+        )
+        finders[name] = _Finder(tmp_path / name)
+
+    assert finders["a"].manifests(["test/test_a.html"]) == {"test/mochitest.toml"}
+    assert finders["b"].manifests(["test/test_a.html"]) == set()
+
+    # Going back to the first repository doesn't need to read its files again.
+    with finders["a"]._rev() as rev:
+
+        def hg(*args):
+            raise AssertionError("Mercurial should not be run")
+
+        monkeypatch.setattr(test_scheduling, "_hg", hg)
+        assert test_scheduling.find_manifests_for_paths(
+            finders["a"].repo_dir, ["test/test_a.html"], rev
+        ) == {"test/mochitest.toml"}
+
+
 def test_find_tasks_for_paths(tmp_path) -> None:
     find = _Finder(tmp_path)
     known_tasks = (
