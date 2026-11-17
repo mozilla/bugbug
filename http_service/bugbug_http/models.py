@@ -50,6 +50,7 @@ MODELS_NAMES = [
     "worksforme",
     "fenixcomponent",
     "perfregressionpredictor",
+    "regressor",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -475,6 +476,113 @@ PUSH_CLASSIFIERS = {
     PERF_REGRESSION_PREDICTOR: classify_perf_regression,
 }
 
+# Models that classify single commits (see classify_commits).
+COMMIT_MODELS = ["regressor"]
+
+
+def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
+    if commit["backsout"]:
+        return "backout"
+    if commit["ignored"]:
+        return "ignored"
+    return None
+
+
+def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
+    """Classify commits with a commit model, and store the result of each in Redis.
+
+    The commits, identified by their full hash, are pulled from the
+    hg.mozilla.org repository `branch` (e.g. "integration/autoland" or "try")
+    and mined from the service's local clone, so their features are computed in
+    the same way as during training. Backouts and commits ignored during
+    training (e.g. reformatting commits) are listed with their `ignored_reason`
+    but not scored, unknown revisions and merges are marked as not available.
+    """
+    from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
+
+    def store(node: str, data: dict) -> None:
+        job = JobInfo(classify_commits, model_name, branch, node)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    LOGGER.info("Classifying %s @ %s with %s...", revs, branch, model_name)
+
+    # Pull the commits to the local repository, like for test selection.
+    nodes = []
+    for node in dict.fromkeys(revs):
+        try:
+            repository.pull(REPO_DIR, branch, node, update=False)
+            nodes.append(node)
+        except RuntimeError:
+            LOGGER.warning("Could not pull %s @ %s", branch, node)
+            store(node, {"available": False})
+
+    if not nodes:
+        return "OK"
+
+    # The commits are mined in the same way as for the commits DB, but without
+    # storing them (or their contribution to the experience features).
+    commits = repository.download_commits(
+        REPO_DIR,
+        revs=[node.encode("ascii") for node in nodes],
+        branch=None,
+        save=False,
+        include_no_bug=True,
+        include_backouts=True,
+        include_ignored=True,
+    )
+    commits_by_node = {commit["node"]: commit for commit in commits}
+
+    to_score = [commit for commit in commits if _get_ignored_reason(commit) is None]
+
+    model = MODEL_CACHE.get(model_name)
+    model_extra_data = model.get_extra_data()
+
+    results: dict[str, dict] = {}
+    if to_score:
+        probs = model.classify(to_score, probabilities=True)
+        indexes = probs.argmax(axis=-1)
+        classes = model.le.inverse_transform(indexes)
+        for commit, prob, index, class_ in zip(
+            to_score, probs.tolist(), indexes.tolist(), classes.tolist()
+        ):
+            results[commit["node"]] = {
+                "prob": prob,
+                "index": index,
+                "class": class_,
+                "risk_band": model.find_risk_band(prob[1]),
+                "ignored_reason": None,
+            }
+
+    for node in nodes:
+        # Merge commits are not mined.
+        mined_commit = commits_by_node.get(node)
+        if mined_commit is None:
+            store(node, {"available": False})
+            continue
+
+        data = results.get(
+            node,
+            {
+                "prob": None,
+                "index": None,
+                "class": None,
+                "risk_band": None,
+                "ignored_reason": _get_ignored_reason(mined_commit),
+            },
+        )
+        store(
+            node,
+            {
+                "node": node,
+                "bug_id": mined_commit["bug_id"],
+                **data,
+                "extra_data": model_extra_data,
+            },
+        )
+
+    return "OK"
+
 
 @lru_cache(maxsize=None)
 def get_known_tasks() -> tuple[str, ...]:
@@ -646,21 +754,6 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     return "OK"
 
 
-def _normalize_group(group: str) -> str:
-    """Convert a group name from Treeherder to the name used by the group model."""
-    # mozci.data needs to be imported before mozci.task to avoid a circular import.
-    import mozci.data  # noqa: F401
-    from mozci.task import wpt_workaround
-
-    # WPT groups are relative to the root of the WPT suite (sometimes prefixed with
-    # ":"), while the group model uses the names normalized by mozci.
-    if group.startswith(("/", ":/")):
-        return wpt_workaround(group)
-
-    # Manifests included by another manifest are reported as "manifest:parent".
-    return group.split(":")[0]
-
-
 def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     """Get the tasks and manifests which failed recently on a Treeherder project.
 
@@ -761,7 +854,11 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
             for task in map(test_scheduling.rename_task, tasks)
             if task in known_tasks
         },
-        {group for group in map(_normalize_group, groups) if group in known_groups},
+        {
+            group
+            for group in map(test_scheduling.normalize_group, groups)
+            if group in known_groups
+        },
     )
 
 
@@ -843,6 +940,9 @@ def _analyze_patch(
 
     known_tasks = get_known_tasks()
     modified_paths = list(set(path for commit in commits for path in commit["files"]))
+    # The working directory is not updated to the pushed revisions, as it is slow, so the files
+    # are read at the head of the push.
+    head_rev = revs[-1].decode("ascii")
 
     tasks = (
         testlabelselect_model.select_tests(
@@ -852,7 +952,7 @@ def _analyze_patch(
         else {}
     )
     for task in test_scheduling.find_tasks_for_paths(
-        REPO_DIR, known_tasks, modified_paths
+        REPO_DIR, known_tasks, modified_paths, head_rev
     ):
         tasks[task] = 1.0
     for task in backout_tasks:
@@ -896,7 +996,9 @@ def _analyze_patch(
         for group, confidence in groups.items()
         if very_high_confidence is not None and confidence >= very_high_confidence
     }
-    for group in test_scheduling.find_manifests_for_paths(REPO_DIR, modified_paths):
+    for group in test_scheduling.find_manifests_for_paths(
+        REPO_DIR, modified_paths, head_rev
+    ):
         groups[group] = 1.0
         risks[group] = 1.0
         very_likely_groups.add(group)

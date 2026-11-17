@@ -23,8 +23,10 @@ from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox import FirefoxContext
 from agent_tools.registry import ToolError
+from autowebcompat_tools.browser import FirefoxBrowsers
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
+from autowebcompat_tools.mcp_servers import NODE_MODULES, build_firefox_devtools_server
 from autowebcompat_tools.task import RunTracker, StructuredTask, TaskConfig
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from claude_agent_sdk.types import SystemPromptPreset
@@ -34,7 +36,6 @@ from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_to
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
 from pydantic import BaseModel
 
-from .browser import FirefoxBrowsers
 from .config import (
     BUGZILLA_READ_TOOLS,
     DEVTOOLS_TOOLS,
@@ -42,7 +43,6 @@ from .config import (
     FOLLOW_UP_ACTIONS,
     INTERVENTION_ACTIONS,
 )
-from .mcp_servers import build_firefox_devtools_server
 from .result import (
     InterventionPlanResult,
     InterventionResult,
@@ -54,7 +54,6 @@ logger = logging.getLogger("autowebcompat-intervention")
 HERE = Path(__file__).resolve().parent
 
 WORK_DIR = Path("/app/autowebcompat-intervention")
-NODE_MODULES = WORK_DIR / "node_modules"
 
 
 class PromptLibrary:

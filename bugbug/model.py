@@ -370,12 +370,12 @@ class Model:
         """Subclasses can return boolean masks over the test set, to also report metrics on those subsets."""
         return {}
 
-    def get_sample_weights(self, y) -> np.ndarray | None:
+    def get_sample_weights(self, X, y) -> np.ndarray | None:
         """Subclasses can return a weight for each training sample, passed to the estimator."""
         return None
 
     def fit_classifier(self, X, y):
-        sample_weight = self.get_sample_weights(y)
+        sample_weight = self.get_sample_weights(X, y)
         if sample_weight is None:
             self.clf.fit(X, y)
         else:
@@ -419,8 +419,21 @@ class Model:
             if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
+            # The folds are weighted like the final model (see fit_classifier); the
+            # weights are computed once on the whole training set and split with it.
+            cv_y = self.le.transform(y_train)
+            sample_weight = self.get_sample_weights(X_train, cv_y)
             scores = cross_validate(
-                self.clf, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+                self.clf,
+                X_train,
+                cv_y,
+                scoring=scorings,
+                cv=5,
+                params=(
+                    {"estimator__sample_weight": sample_weight}
+                    if sample_weight is not None
+                    else None
+                ),
             )
 
             logger.info("Cross Validation scores:")

@@ -55,11 +55,11 @@ RUN apt-get update \
 
 # Install the DevTools MCP servers and Puppeteer from the pinned
 # package.json/lockfile.
-COPY agents/autowebcompat-repro/package.json \
-     agents/autowebcompat-repro/package-lock.json \
-     agents/autowebcompat-repro/repro_reference.mjs \
-     /app/repro/
-RUN cd /app/repro && npm ci --omit=dev
+COPY libs/autowebcompat-tools/package.json \
+     libs/autowebcompat-tools/package-lock.json \
+     /app/
+RUN cd /app && npm ci --omit=dev
+COPY agents/autowebcompat-repro/repro_reference.mjs /app/repro/
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.

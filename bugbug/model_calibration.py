@@ -7,6 +7,7 @@
 
 from typing import Sequence
 
+import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
@@ -39,12 +40,15 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
             base_clf, cv="prefit", method="isotonic"
         )
 
-    def fit(self, X_train, y_train):
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train, y_train, test_size=0.2, random_state=42
+    def fit(self, X_train, y_train, sample_weight=None):
+        if sample_weight is None:
+            sample_weight = np.ones(len(y_train))
+
+        X_train, X_val, y_train, y_val, w_train, w_val = train_test_split(
+            X_train, y_train, sample_weight, test_size=0.2, random_state=42
         )
-        self.base_clf.fit(X_train, y_train)
-        self.calibrated_clf.fit(X_val, y_val)
+        self.base_clf.fit(X_train, y_train, sample_weight=w_train)
+        self.calibrated_clf.fit(X_val, y_val, sample_weight=w_val)
 
     def predict(self, X):
         return self.calibrated_clf.predict(X)

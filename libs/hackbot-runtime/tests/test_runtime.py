@@ -8,6 +8,7 @@ from hackbot_runtime import (
     AgentError,
     HackbotAgentResult,
     HackbotContext,
+    config,
     run_async,
     runtime,
 )
@@ -226,6 +227,21 @@ def test_run_async_exits_zero_and_writes_summary(tmp_path, monkeypatch):
     summary = json.loads((tmp_path / "t" / "summary.json").read_text())
     assert summary["status"] == "ok"
     assert summary["findings"] == {"num_turns": 1, "total_cost_usd": None}
+
+
+def test_run_async_records_agent_version(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    versions = {"hackbot-agent-tests": "1.2.3"}
+    monkeypatch.setattr(config.metadata, "version", versions.__getitem__)
+
+    async def main(ctx):
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit):
+        run_async(main)
+
+    summary = json.loads((tmp_path / "t" / "summary.json").read_text())
+    assert summary["agent_version"] == "1.2.3"
 
 
 def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):

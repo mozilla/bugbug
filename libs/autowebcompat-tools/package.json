@@ -1,0 +1,12 @@
+{
+  "name": "autowebcompat-tools-npm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP servers and Puppeteer the autowebcompat agents drive.",
+  "dependencies": {
+    "@mozilla/firefox-devtools-mcp-moz": "0.9.12",
+    "chrome-devtools-mcp": "1.5.0",
+    "puppeteer": "npm:puppeteer-core@25.4.0",
+    "puppeteer-core": "25.4.0"
+  }
+}

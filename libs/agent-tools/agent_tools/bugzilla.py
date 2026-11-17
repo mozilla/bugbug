@@ -333,11 +333,66 @@ async def get_bugs(
 async def get_bug_comments(
     ctx: BugzillaContext,
     bug_id: Annotated[int, Field(description="Bug ID.")],
+    start: Annotated[
+        int,
+        Field(
+            ge=0,
+            description=(
+                "The number of the first comment to return, as Bugzilla numbers "
+                "them. Comment 0 is the description."
+            ),
+        ),
+    ] = 0,
+    limit: Annotated[
+        int | None,
+        Field(
+            ge=1,
+            description=(
+                "The maximum number of comments to return. To get all of them, do "
+                "not give it. Read a long thread in pages, so that each result stays "
+                "small."
+            ),
+        ),
+    ] = None,
 ) -> dict:
-    """Fetch all comments for a single bug."""
+    """Fetch the comments of a single bug, all of them or one page.
+
+    `total` is the number of comments. `next_start` is the `start` of the next page,
+    and null on the last page.
+    """
     result = _request(ctx, f"bug/{bug_id}/comment")
     comments = result.get("bugs", {}).get(str(bug_id), {}).get("comments", [])
-    return {"bug_id": bug_id, "count": len(comments), "comments": comments}
+    later = [c for c in comments if c.get("count", 0) >= start]
+    page = later if limit is None else later[:limit]
+    more = len(page) < len(later)
+    return {
+        "bug_id": bug_id,
+        "total": len(comments),
+        "start": start,
+        "next_start": page[-1]["count"] + 1 if more else None,
+        "count": len(page),
+        "comments": page,
+    }
+
+
+@tool
+async def get_bug_history(
+    ctx: BugzillaContext,
+    bug_id: Annotated[int, Field(description="Bug ID.")],
+    new_since: Annotated[
+        str | None,
+        Field(description="Only changes after this time (`2026-10-13T18:01:21Z`)."),
+    ] = None,
+) -> dict:
+    """Who changed which fields of a bug, and when.
+
+    Each entry has `when`, `who` and `changes`. Each change has `field_name`, `added`
+    and `removed`.
+    """
+    params = {"new_since": new_since} if new_since else {}
+    result = _request(ctx, f"bug/{bug_id}/history", params)
+    history = (result.get("bugs") or [{}])[0].get("history") or []
+    return {"bug_id": bug_id, "count": len(history), "history": history}
 
 
 @tool
