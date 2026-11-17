@@ -16,6 +16,8 @@ Then address each quoted comment by taking the matching path:
 - If it asks to change the commit message (the revision's title or summary) or its test plan: call phabricator_update_patch with revision_id={revision_id}, passing only the new title, summary, or test_plan. This needs no code change, so leave the working tree as it is unless the code must change too; make one call that carries both.
 - If it is only a question or a request for clarification (no code change is warranted): do not edit the source or submit a patch. Investigate, then reply on the revision by calling phabricator_add_comment with revision_id={revision_id}. This posts on D{revision_id} itself; do not answer via a Bugzilla comment.
 
+To comment on specific lines of the diff, call phabricator_add_inline_comment for each one.
+
 A single review can mix these: make the code changes and commit message edits it asks for and answer the questions it raises in the same run.
 
 If you are unsure, prefer answering with a comment over making speculative code changes.
