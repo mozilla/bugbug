@@ -135,6 +135,7 @@ class Retriever(object):
         )
 
         new_bugs = bugzilla.download_bugs(all_ids)
+        requested_ids = set(all_ids_set)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
         for _ in range(7):
@@ -146,11 +147,15 @@ class Retriever(object):
             if limit:
                 regression_related_ids = regression_related_ids[-limit:]
 
-            # If we got all bugs we needed, break.
-            if set(regression_related_ids).issubset(all_ids):
+            # If we already requested all bugs we needed, break.
+            missing_ids = set(regression_related_ids) - requested_ids
+            if not missing_ids:
                 break
 
-            new_bugs = bugzilla.download_bugs(regression_related_ids)
+            requested_ids |= missing_ids
+            # The DB only contains bugs we requested, so these are not in the DB
+            # and we can avoid scanning it.
+            new_bugs = bugzilla.download_bugs(missing_ids, existing_ids=())
 
         # Bugzilla sometimes returns bad data, which is correct on another attempt,
         # so try to re-download inconsistent bugs, up to twice.
