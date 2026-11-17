@@ -712,6 +712,63 @@ async def test_handlers_get_the_action_id_of_the_comment_they_post(monkeypatch):
     assert handler.action_ids == [2, 3]
 
 
+async def test_merged_updates_carry_the_id_of_the_comment_in_their_changes(
+    monkeypatch,
+):
+    """Without an add_comment, the ID is the update whose comment is posted."""
+    handler = _ContextRecordingHandler()
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+
+    rows = [
+        (
+            _row(
+                idx,
+                "pending",
+                action_type="bugzilla.update_bug",
+                params={"bug_id": 5, "changes": changes},
+            ),
+            [],
+        )
+        for idx, changes in enumerate(
+            [
+                {"status": "RESOLVED"},
+                {"comment": {"body": "fixed"}},
+                {"resolution": "FIXED"},
+            ]
+        )
+    ]
+    rows.append(
+        (
+            _row(
+                3,
+                "pending",
+                action_type="bugzilla.update_bug",
+                params={"bug_id": 6, "changes": {"a": 1}},
+            ),
+            [],
+        )
+    )
+    rows.append(
+        (
+            _row(
+                4,
+                "pending",
+                action_type="bugzilla.update_bug",
+                params={"bug_id": 6, "changes": {"b": 2}},
+            ),
+            [],
+        )
+    )
+
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, _CLIENT
+    )
+
+    # Bug 5's comment came from the second update (row 2). Bug 6 posts no
+    # comment and gets its last update's ID (row 5), which nothing reads.
+    assert handler.action_ids == [2, 5]
+
+
 async def test_lone_same_type_actions_on_different_bugs_not_merged(monkeypatch):
     handler = _RecordingHandler(
         SimpleNamespace(status="applied", result={}, error=None)

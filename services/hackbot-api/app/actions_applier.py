@@ -164,7 +164,7 @@ async def _dispatch(
     params: dict,
     attachments: list[dict],
     hackbot_client: HackbotClient,
-    action_id: int | None,
+    action_id: int,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -305,10 +305,20 @@ async def _apply_pending_rows(
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
-            # The group carries at most one comment, which keeps its own ID.
+            # The front matter names the row whose comment is posted: the
+            # group's `add_comment`, or else the last update with a comment in
+            # its `changes` (later changes win). With no comment, nothing reads
+            # the ID, so the anchor's own will do.
             comment_action_id = next(
                 (m.id for m in member_rows if m.type == "bugzilla.add_comment"),
-                None,
+                next(
+                    (
+                        m.id
+                        for m in reversed(member_rows)
+                        if "comment" in (m.params.get("changes") or {})
+                    ),
+                    row.id,
+                ),
             )
             outcome = await _dispatch(
                 run,

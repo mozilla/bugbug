@@ -48,7 +48,7 @@ class ApplyContext:
     hackbot_client: HackbotClient
     attachments: list[dict[str, str]] = field(default_factory=list)
     # The `RunAction` row ID of the action. When several actions are applied as
-    # one call, it is the one whose comment is posted, or None if none is.
+    # one call, it is the one whose comment is posted.
     action_id: int | None = None
 
     def artifact_key(self, name: str) -> str | None:
