@@ -306,4 +306,13 @@ def boot_worker() -> None:
         clone_autoland_future.result()
         retrieve_build_platforms_future.result()
 
+    # Parse the test manifests once, before the worker forks for each job, so jobs only need to
+    # parse the manifests which changed since then.
+    try:
+        with hglib.open(REPO_DIR) as hg:
+            tip = hg.log(revrange=b"tip")[0].node.decode("ascii")
+        test_scheduling.find_manifests_for_paths(REPO_DIR, [], tip)
+    except Exception:
+        logger.exception("Failed to parse the test manifests")
+
     logger.info("Worker boot done")

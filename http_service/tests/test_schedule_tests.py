@@ -480,7 +480,7 @@ def test_schedule_config_selection_risk(
     monkeypatch.setattr(
         models.test_scheduling,
         "find_manifests_for_paths",
-        lambda repo_dir, paths: ["test-group3"],
+        lambda repo_dir, paths, rev: ["test-group3"],
     )
 
     assert models.schedule_tests("mozilla-central", rev) == "OK"
