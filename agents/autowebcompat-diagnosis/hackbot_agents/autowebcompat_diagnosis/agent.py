@@ -1,20 +1,28 @@
 """Firefox web-compatibility diagnosis agent."""
 
+import functools
 import json
 import logging
 import os
 import subprocess
 import tempfile
+import threading
 from collections.abc import Callable
+from contextlib import ExitStack
 from enum import Enum
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from autowebcompat_tools import android_emulator
+from autowebcompat_tools.android_browser import AndroidBrowser, AndroidEnvironment
 from autowebcompat_tools.browser import ChromeBrowsers, FirefoxBrowsers
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
 from autowebcompat_tools.mcp_servers import (
     NODE_MODULES,
+    build_android_chrome_devtools_server,
+    build_android_firefox_devtools_server,
     build_chrome_devtools_server,
     build_firefox_devtools_server,
 )
@@ -22,6 +30,7 @@ from autowebcompat_tools.result import ResultT
 from autowebcompat_tools.task import RunTracker, TaskConfig
 from autowebcompat_tools.task import Task as BaseTask
 from claude_agent_sdk import McpServerConfig
+from claude_agent_sdk.types import McpStdioServerConfig
 from pydantic import BaseModel
 
 from .config import BUGZILLA_READ_TOOLS, CHROME_DEVTOOLS_TOOLS, DEVTOOLS_TOOLS
@@ -41,6 +50,40 @@ logger = logging.getLogger("autowebcompat-diagnosis")
 
 PublishFile = Callable[[str, Path, str | None], str]
 
+Browser = Path | AndroidBrowser
+
+TESTCASE_PORT = 8000
+
+
+def browser_bin(browser: Browser) -> str:
+    """BROWSER_BIN for scripts: an executable, or an Android debug endpoint."""
+    return browser.endpoint if isinstance(browser, AndroidBrowser) else str(browser)
+
+
+def firefox_server(browser: Browser, *, headless: bool) -> McpStdioServerConfig:
+    if isinstance(browser, AndroidBrowser):
+        return build_android_firefox_devtools_server(browser)
+    return build_firefox_devtools_server(
+        firefox_path=browser,
+        headless=headless,
+        enable_script=True,
+        enable_privileged_context=False,
+    )
+
+
+def chrome_server(browser: Browser, *, headless: bool) -> McpStdioServerConfig:
+    if isinstance(browser, AndroidBrowser):
+        return build_android_chrome_devtools_server(browser)
+    return build_chrome_devtools_server(chrome_path=browser, headless=headless)
+
+
+def serve_to_device(directory: Path, port: int = TESTCASE_PORT) -> None:
+    """Serve a directory to the emulator, which can't open container files."""
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(directory))
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    android_emulator.adb("reverse", f"tcp:{port}", f"tcp:{port}")
+
 
 class FirefoxChannel(Enum):
     nightly = "nightly"
@@ -59,27 +102,38 @@ class AutowebcompatDiagnosisResult(BaseModel):
 class Task(BaseTask[ResultT]):
     result_server_name = RESULT_SERVER_NAME
 
-    def __init__(self, task_config: TaskConfig, run_tracker: RunTracker):
+    def __init__(
+        self,
+        task_config: TaskConfig,
+        run_tracker: RunTracker,
+        firefox: Browser | None = None,
+    ):
         super().__init__(task_config, run_tracker)
         self.allowed_tools.insert(1, "Write")
+        self.android = isinstance(firefox, AndroidBrowser)
 
     def system_prompt(self) -> str:
-        return (HERE / "prompts" / "system.md").read_text()
+        prompt = (HERE / "prompts" / "system.md").read_text()
+        if self.android:
+            prompt += (HERE / "prompts" / "android.md").read_text()
+        return prompt
 
 
 def run_script(
-    script_path: Path, browser: str, browser_path: Path, headless: bool
+    script_path: Path, browser_name: str, browser: Browser, headless: bool
 ) -> int | None:
     """Run the reproduction script in one browser; return its exit code.
 
     Returns ``None`` if the script timed out, i.e. gave no verdict.
     """
     script_timeout = 5 * 60
+    if isinstance(browser, AndroidBrowser):
+        browser.start(fresh=True)
     env = {
         **os.environ,
         "NODE_PATH": str(NODE_MODULES),
-        "BROWSER": browser,
-        "BROWSER_BIN": str(browser_path),
+        "BROWSER": browser_name,
+        "BROWSER_BIN": browser_bin(browser),
     }
     if headless:
         env["HEADLESS"] = "1"
@@ -93,12 +147,12 @@ def run_script(
             timeout=script_timeout,
         )
     except subprocess.TimeoutExpired:
-        logger.warning("%s run timed out after %ss", browser, script_timeout)
+        logger.warning("%s run timed out after %ss", browser_name, script_timeout)
         return None
 
     logger.info(
         "%s run exited %s\nstdout:\n%s\nstderr:\n%s",
-        browser,
+        browser_name,
         proc.returncode,
         proc.stdout,
         proc.stderr,
@@ -107,7 +161,7 @@ def run_script(
 
 
 def run_confirmation_script(
-    script_path: Path, firefox_path: Path, chrome_path: Path, headless: bool
+    script_path: Path, firefox: Browser, chrome: Browser, headless: bool
 ) -> ReproScriptResult | None:
     """Check the script still demonstrates the difference, without an agent.
 
@@ -116,10 +170,10 @@ def run_confirmation_script(
     outcome — wrong exit codes, a script error, or a timeout — so the caller
     can fall back to the agent task.
     """
-    firefox_code = run_script(script_path, "firefox", firefox_path, headless)
+    firefox_code = run_script(script_path, "firefox", firefox, headless)
     if firefox_code != 1:
         return None
-    chrome_code = run_script(script_path, "chrome", chrome_path, headless)
+    chrome_code = run_script(script_path, "chrome", chrome, headless)
     if chrome_code != 0:
         return None
 
@@ -179,12 +233,17 @@ class DiagnosisPlan(Task):
    otherwise pick first listed channel. Default to `nightly` if there is no evidence
    of the affected channel in the report.
 
-3. If a Puppeteer reproduction script is attached to the bug (an mjs file,
+3. Choose the platform: `android` if the report is about Firefox for Android
+   (a `platform:android` line in user_story, or the reporter used Firefox for
+   Android), even if it also reproduces in desktop Responsive Design Mode or
+   mobile emulation. Otherwise `desktop`.
+
+4. If a Puppeteer reproduction script is attached to the bug (an mjs file,
    typically named `Reproduction script generated by autowebcompat bot`),
    download it to exactly:
      {self.script_path}.
 
-4. Submit your findings via `submit_result` (see "Reporting your result").
+5. Submit your findings via `submit_result` (see "Reporting your result").
 """
             )
         )
@@ -212,30 +271,23 @@ class ReproScript(Task):
         self,
         task_config: TaskConfig,
         run_tracker: RunTracker,
-        firefox_path: Path,
-        chrome_path: Path,
+        firefox: Browser,
+        chrome: Browser,
         plan_result: DiagnosisPlanResult,
     ):
-        super().__init__(task_config, run_tracker)
-        self.firefox_path = firefox_path
-        self.chrome_path = chrome_path
+        super().__init__(task_config, run_tracker, firefox)
+        self.firefox_bin = browser_bin(firefox)
+        self.chrome_bin = browser_bin(chrome)
         self.plan_result = plan_result
         self.script_path = self.work_dir / "reproduction.mjs"
         self.add_mcp_server(
             "firefox-devtools",
-            build_firefox_devtools_server(
-                firefox_path=firefox_path,
-                headless=task_config.headless,
-                enable_script=True,
-                enable_privileged_context=False,
-            ),
+            firefox_server(firefox, headless=task_config.headless),
             DEVTOOLS_TOOLS,
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(
-                chrome_path=chrome_path, headless=task_config.headless
-            ),
+            chrome_server(chrome, headless=task_config.headless),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -277,8 +329,8 @@ script that demonstrates it. Do not investigate why the difference happens.
    Follow the spec in `{repro_reference}` (read the file before writing), write
    your script to exactly `{self.script_path}`, and run it in both browsers:
 
-   `NODE_PATH={NODE_MODULES} BROWSER=firefox BROWSER_BIN={self.firefox_path} node {self.script_path}`
-   `NODE_PATH={NODE_MODULES} BROWSER=chrome BROWSER_BIN={self.chrome_path} node {self.script_path}`
+   `NODE_PATH={NODE_MODULES} BROWSER=firefox BROWSER_BIN={self.firefox_bin} node {self.script_path}`
+   `NODE_PATH={NODE_MODULES} BROWSER=chrome BROWSER_BIN={self.chrome_bin} node {self.script_path}`
 
    The script checks one browser per run: the difference is demonstrated when
    the Firefox run exits with 1 (not working) and the Chrome run exits with 0
@@ -310,33 +362,26 @@ class Diagnosis(Task):
         self,
         task_config: TaskConfig,
         run_tracker: RunTracker,
-        firefox_path: Path,
-        chrome_path: Path,
+        firefox: Browser,
+        chrome: Browser,
         plan_result: DiagnosisPlanResult,
         repro_result: ReproScriptResult,
     ):
-        super().__init__(task_config, run_tracker)
-        self.firefox_path = firefox_path
-        self.chrome_path = chrome_path
+        super().__init__(task_config, run_tracker, firefox)
+        self.firefox_bin = browser_bin(firefox)
+        self.chrome_bin = browser_bin(chrome)
         self.plan_result = plan_result
         self.repro_result = repro_result
         self.testcase_path = make_empty_temp_file(self.work_dir, "testcase=", ".html")
         self.diagnosis_path = self.work_dir / "diagnosis.json"
         self.add_mcp_server(
             "firefox-devtools",
-            build_firefox_devtools_server(
-                firefox_path=firefox_path,
-                headless=task_config.headless,
-                enable_script=True,
-                enable_privileged_context=False,
-            ),
+            firefox_server(firefox, headless=task_config.headless),
             DEVTOOLS_TOOLS,
         )
         self.add_mcp_server(
             "chrome-devtools",
-            build_chrome_devtools_server(
-                chrome_path=chrome_path, headless=task_config.headless
-            ),
+            chrome_server(chrome, headless=task_config.headless),
             CHROME_DEVTOOLS_TOOLS,
         )
 
@@ -351,13 +396,18 @@ class Diagnosis(Task):
      {script_path}
    You may re-run it to observe the difference:
 
-   `NODE_PATH={NODE_MODULES} BROWSER=firefox BROWSER_BIN={self.firefox_path} node {script_path}`
-   `NODE_PATH={NODE_MODULES} BROWSER=chrome BROWSER_BIN={self.chrome_path} node {script_path}`
+   `NODE_PATH={NODE_MODULES} BROWSER=firefox BROWSER_BIN={self.firefox_bin} node {script_path}`
+   `NODE_PATH={NODE_MODULES} BROWSER=chrome BROWSER_BIN={self.chrome_bin} node {script_path}`
 
    It exits with 1 in Firefox (broken) and 0 in Chrome (working)."""
             if script_path is not None
             else """1. Drive the reported site in both browsers with
             the DevTools tools, following the reproduction steps, to observe the difference."""
+        )
+        testcase_location = (
+            f"http://127.0.0.1:{TESTCASE_PORT}/{self.testcase_path.name}"
+            if self.android
+            else "that file"
         )
         return (
             super()
@@ -382,8 +432,8 @@ as your starting evidence.
    create a minimal reduced test case that reproduces the difference between the
    browsers and write it to exactly this path: {self.testcase_path}.
    The test case must include an inline explanation (a comment or on-page text)
-   of what should happen and how Firefox differs from Chrome. Then load that
-   file in both Firefox and Chrome via the DevTools tools and confirm it
+   of what should happen and how Firefox differs from Chrome. Then load
+   {testcase_location} in both Firefox and Chrome via the DevTools tools and confirm it
    reproduces the same difference; if it does not, revise it until it does. If
    you cannot produce the testcase, leave `testcase_path` null.
 
@@ -448,7 +498,7 @@ async def run_autowebcompat_diagnosis(
     publish_file: PublishFile,
 ) -> AutowebcompatDiagnosisResult:
     """Confirm a web-compat issue reproduces, then diagnose why."""
-    with Environment() as env:
+    with Environment() as env, ExitStack() as resources:
         if not config.headless:
             env.start_xvfb()
 
@@ -459,18 +509,38 @@ async def run_autowebcompat_diagnosis(
         plan_result = await plan_task.run()
 
         channel = FirefoxChannel(plan_result.firefox_channel)
+        android = plan_result.platform == "android" and android_emulator.available()
+        if android:
+            logcat = Path(tempfile.mkdtemp(prefix="android-")) / "logcat.txt"
+
+            def publish_logcat() -> None:
+                if logcat.exists():
+                    publish_file("android-logcat.txt", logcat, "text/plain")
+
+            resources.callback(publish_logcat)
+            firefox_browser, chrome_browser = resources.enter_context(
+                AndroidEnvironment(logcat)
+            )
+            serve_to_device(WORK_DIR)
+            if channel == FirefoxChannel.esr:
+                channel = FirefoxChannel.stable
+        elif plan_result.platform == "android":
+            logger.warning("Android emulator is unavailable; using desktop browsers")
         logger.info(
-            "Diagnosing on Firefox %s: %s", channel.value, plan_result.channel_rationale
+            "Diagnosing on Firefox %s%s: %s",
+            channel.value,
+            " for Android" if android else "",
+            plan_result.channel_rationale,
         )
-        firefox_path = getattr(firefox_browser, channel.value)
-        chrome_path = chrome_browser.stable
+        firefox = getattr(firefox_browser, channel.value)
+        chrome = chrome_browser.stable
 
         # If the attached script still demonstrates the difference, that settles the
         # reproduction without spending an agent task on it.
         repro_result = None
         if plan_result.script_path is not None:
             repro_result = run_confirmation_script(
-                plan_result.script_path, firefox_path, chrome_path, config.headless
+                plan_result.script_path, firefox, chrome, config.headless
             )
             if repro_result is None:
                 logger.info(
@@ -478,9 +548,7 @@ async def run_autowebcompat_diagnosis(
                     "falling back to the reproduction task"
                 )
         if repro_result is None:
-            repro_task = ReproScript(
-                config, tracker, firefox_path, chrome_path, plan_result
-            )
+            repro_task = ReproScript(config, tracker, firefox, chrome, plan_result)
             repro_result = await repro_task.run()
 
         results = DiagnosisResults(publish_file, repro_result)
@@ -496,7 +564,7 @@ async def run_autowebcompat_diagnosis(
             logger.info("No validated script; diagnosing from the reproduction steps")
 
         diagnosis_task = Diagnosis(
-            config, tracker, firefox_path, chrome_path, plan_result, repro_result
+            config, tracker, firefox, chrome, plan_result, repro_result
         )
         results.set_diagnosis(await diagnosis_task.run())
 

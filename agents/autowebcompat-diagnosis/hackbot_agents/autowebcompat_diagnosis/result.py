@@ -35,6 +35,17 @@ class DiagnosisPlanResult(BaseModel):
         ),
     ]
 
+    platform: Annotated[
+        Literal["desktop"] | Literal["android"],
+        Field(
+            description=(
+                "The platform to diagnose on: android if the report is about "
+                "Firefox for Android, even if it also reproduces in desktop "
+                "mobile emulation, otherwise desktop."
+            ),
+        ),
+    ]
+
     url: Annotated[
         str,
         Field(
