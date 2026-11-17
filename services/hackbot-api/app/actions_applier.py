@@ -210,6 +210,9 @@ async def _dispatch(
         attachments=attachments,
         agent=run.agent,
         hackbot_client=hackbot_client,
+        # TODO: use ["agent_version"] once no runs from before #7337 have
+        # pending actions.
+        agent_version=run.summary.get("agent_version"),
     )
     try:
         return await handler.apply(params, ctx)
