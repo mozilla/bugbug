@@ -386,3 +386,112 @@ button.copy {
 button.copy:hover {
   color: var(--fg);
 }
+button.copy:active {
+  background: #eef2f7;
+}
+button.copy.copied {
+  color: #fff;
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+/* Dark sidebar: the controls on slate, the results stay light. */
+aside {
+  --side-bg: #1f2430;
+  --side-fg: #e6e8ee;
+  --side-muted: #9aa3b5;
+  --side-line: #3a4152;
+  --side-field: #2a3040;
+  --side-hover: #2a3040;
+  --side-sel: #2f3a52;
+  --side-accent: #14b8a6;
+  --side-accent-fg: #06201d;
+  --side-link: #5eead4;
+  background: var(--side-bg);
+  border-right-color: var(--side-bg);
+  color: var(--side-fg);
+}
+aside h1 {
+  color: #fff;
+}
+aside h2,
+aside h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--side-muted);
+}
+aside button.toggle {
+  color: var(--side-muted);
+  font-weight: 700;
+}
+aside label,
+aside .meta,
+aside .path {
+  color: var(--side-muted);
+}
+aside .check {
+  color: var(--side-fg);
+}
+aside input,
+aside select,
+aside textarea {
+  background: var(--side-field);
+  border-color: var(--side-line);
+  color: var(--side-fg);
+  color-scheme: dark;
+}
+aside input::placeholder,
+aside textarea::placeholder {
+  color: #7d869a;
+}
+aside input:focus,
+aside select:focus,
+aside textarea:focus {
+  outline: none;
+  border-color: var(--side-accent);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.25);
+}
+aside input[type="checkbox"],
+aside input[type="radio"] {
+  accent-color: var(--side-accent);
+}
+aside button {
+  background: var(--side-accent);
+  border-color: var(--side-accent);
+  color: var(--side-accent-fg);
+  font-weight: 600;
+}
+aside button.secondary {
+  background: transparent;
+  border-color: var(--side-line);
+  color: var(--side-fg);
+  font-weight: 400;
+}
+aside button.secondary:hover:not(:disabled) {
+  border-color: var(--side-accent);
+  color: var(--side-link);
+}
+aside a,
+aside details summary {
+  color: var(--side-link);
+}
+aside .note {
+  background: #3a3320;
+  border-color: #5c4d22;
+  color: #f5d98b;
+}
+aside .note.err {
+  background: #3d2224;
+  border-color: #6b2f33;
+  color: #f8b4b4;
+}
+aside .runs li:hover {
+  background: var(--side-hover);
+}
+aside .runs li.sel {
+  border-color: transparent;
+  background: var(--side-sel);
+  box-shadow: inset 3px 0 0 var(--side-accent);
+}
