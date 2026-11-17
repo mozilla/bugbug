@@ -28,10 +28,8 @@ def plan_review_groups(actions: list[tuple[str, dict[str, Any]]]) -> list[list[i
     by_pr: dict[tuple[str, int], list[int]] = {}
     for idx, (action_type, params) in enumerate(actions):
         if action_type in {"github.add_comment", "github.add_inline_comments"}:
-            repo, number = params.get("repo"), params.get("pull_number")
-            if not isinstance(repo, str) or not isinstance(number, int):
-                continue
-            key = (repo, number)
+            # Both are validated when the action is recorded.
+            key = (params["repo"], params["pull_number"])
             by_pr.setdefault(key, []).append(idx)
     return [
         indices
@@ -57,6 +55,21 @@ def merge_review(entries: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
         "pull_number": first["pull_number"],
         "comments": comments,
         "summary": "\n\n".join(summaries),
+    }
+
+
+def review_member_result(action_type: str, result: dict[str, Any]) -> dict[str, Any]:
+    """The result each action in a combined review keeps.
+
+    A general comment keeps the shape of its own action's result, with the
+    review as its ``comment_url``, so references to it still resolve.
+    """
+    if action_type != "github.add_comment":
+        return result
+    return {
+        "repo": result["repo"],
+        "pull_number": result["pull_number"],
+        "comment_url": result["review_url"],
     }
 
 

@@ -28,7 +28,11 @@ from app.action_handlers import (
     merge_resolved,
     plan_coalesced_groups,
 )
-from app.action_handlers.github_handler import merge_review, plan_review_groups
+from app.action_handlers.github_handler import (
+    merge_review,
+    plan_review_groups,
+    review_member_result,
+)
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
@@ -36,6 +40,24 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+
+def _shared_result(action_type: str, result: dict) -> dict:
+    return result
+
+
+# Actions that share one API request: how to find their groups (indices into the
+# pending actions), the action type a group applies as, how its members' params
+# merge into that action's params, and the result each member keeps.
+_COALESCERS = (
+    (plan_coalesced_groups, "bugzilla.update_bug", merge_resolved, _shared_result),
+    (
+        plan_review_groups,
+        "github.add_inline_comments",
+        merge_review,
+        review_member_result,
+    ),
+)
 
 
 _CLAIMABLE_STATUSES = ("pending", "failed")
@@ -286,15 +308,15 @@ async def _apply_pending_rows(
         for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
     }
     actions = [(row.type, row.params) for row, _ in pending]
-    groups = [
-        group
-        for group in plan_coalesced_groups(actions) + plan_review_groups(actions)
-        if all(pending[i][0].ref not in referenced for i in group)
-    ]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
     # whole group there, once every earlier (backward) dependency is resolved.
-    anchor_of = {i: max(group) for group in groups for i in group}
-    group_at = {max(group): group for group in groups}
+    group_at = {
+        max(group): (group, action_type, merge, member_result)
+        for plan, action_type, merge, member_result in _COALESCERS
+        for group in plan(actions)
+        if all(pending[i][0].ref not in referenced for i in group)
+    }
+    anchor_of = {i: anchor for anchor, (group, *_) in group_at.items() for i in group}
 
     for pos, (row, attachments) in enumerate(pending):
         anchor = anchor_of.get(pos)
@@ -302,29 +324,18 @@ async def _apply_pending_rows(
             continue  # non-anchor member: applied together with its anchor
 
         if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
+            group, action_type, merge, member_result = group_at[anchor]
+            member_rows = [pending[i][0] for i in group]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
-            if row.type.startswith("github."):
-                outcome = await _dispatch(
-                    run,
-                    "github.add_inline_comments",
-                    merge_review(entries),
-                    [],
-                    hackbot_client,
-                )
-            else:
-                outcome = await _dispatch(
-                    run,
-                    "bugzilla.update_bug",
-                    merge_resolved(entries),
-                    [],
-                    hackbot_client,
-                )
+            outcome = await _dispatch(
+                run, action_type, merge(entries), [], hackbot_client
+            )
         else:
             member_rows = [row]
+            member_result = _shared_result
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(
                 run, row.type, params, attachments, hackbot_client
@@ -336,17 +347,8 @@ async def _apply_pending_rows(
         for member in member_rows:
             member.status = outcome.status
             member.result = outcome.result
-            if (
-                anchor is not None
-                and member.type == "github.add_comment"
-                and outcome.result is not None
-                and outcome.status == "applied"
-            ):
-                member.result = {
-                    "repo": outcome.result["repo"],
-                    "pull_number": outcome.result["pull_number"],
-                    "comment_url": outcome.result["review_url"],
-                }
+            if outcome.status == "applied" and outcome.result is not None:
+                member.result = member_result(member.type, outcome.result)
             member.error = outcome.error
             if applied_at is not None:
                 member.applied_at = applied_at
