@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+from collections.abc import Iterable
 from datetime import datetime
 from logging import getLogger
 
@@ -171,17 +172,19 @@ class Retriever(object):
 
             new_bugs = bugzilla.download_bugs(regression_related_ids)
 
-        # Try to re-download inconsistent bugs, up to twice.
-        inconsistent_bugs = bugzilla.get_bugs(
+        # Bugzilla sometimes returns bad data, which is correct on another attempt,
+        # so try to re-download inconsistent bugs, up to twice.
+        # We look for inconsistencies in all bugs first, then, on following passes,
+        # only in the freshly re-downloaded bugs (rollback modifies bugs in place, so
+        # we can't re-check the old copies, but these have already been written to the DB).
+        bugs_to_check: Iterable[bugzilla.BugDict] = bugzilla.get_bugs(
             include_invalid=True,
             include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
         )
         for _ in range(2):
-            # We look for inconsistencies in all bugs first, then, on following passes,
-            # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
-            inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs)
-            inconsistent_bug_ids = set(bug["id"] for bug in inconsistent_bugs)
-
+            inconsistent_bug_ids = {
+                bug["id"] for bug in bug_snapshot.get_inconsistencies(bugs_to_check)
+            }
             if len(inconsistent_bug_ids) == 0:
                 break
 
@@ -190,7 +193,12 @@ class Retriever(object):
                 len(inconsistent_bug_ids),
             )
             bugzilla.delete_bugs(lambda bug, ids=inconsistent_bug_ids: bug["id"] in ids)
-            bugzilla.download_bugs(inconsistent_bug_ids)
+            bugs_to_check = bugzilla.download_bugs(inconsistent_bug_ids)
+        else:
+            logger.info(
+                "%d bugs are still inconsistent after re-downloading",
+                len(bug_snapshot.get_inconsistencies(bugs_to_check)),
+            )
 
         # TODO: Figure out why we have missing fields in the first place.
         handle_missing_fields(["history", "comments"])
