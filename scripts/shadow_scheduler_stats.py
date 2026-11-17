@@ -32,7 +32,7 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    6,
+    7,
 )
 
 # Maximum number of pushes being analyzed at the same time. Shadow scheduler
@@ -101,6 +101,21 @@ def get_push_data_regressions(granularity: str, revs: set[str]) -> dict[str, set
     return regressions_by_rev
 
 
+def is_backstop(push: mozci.push.Push) -> bool | None:
+    """Whether the push is a backstop push, or None if it's unknown.
+
+    On backstop pushes, the taskgraph doesn't restrict the manifests of the test
+    tasks to the ones selected by bugbug, so the chunks of the tasks the shadow
+    schedulers select include all manifests, and they schedule many more groups.
+    """
+    try:
+        parameters = push.decision_task.get_artifact("public/parameters.yml")
+    except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
+        return None
+
+    return bool(parameters.get("backstop"))
+
+
 def analyze_shadow_schedulers(
     push: mozci.push.Push,
     group_candidates: set[str],
@@ -127,6 +142,8 @@ def analyze_shadow_schedulers(
         except mozci.errors.TaskNotFound:
             # The push has no decision task (e.g. DONTBUILD pushes).
             names = []
+
+        backstop = is_backstop(push) if names else None
 
         # The task graph is not needed anymore.
         for attr in PUSH_MEMOIZED_ATTRIBUTES:
@@ -188,6 +205,7 @@ def analyze_shadow_schedulers(
     return {
         "id": push.rev,
         "date": push.date,
+        "backstop": backstop,
         "schedulers": schedulers,
         **{
             f"{granularity}_regressions": sorted(regression_labels[granularity])
@@ -438,10 +456,13 @@ def is_evaluated(granularity: str, name: str) -> bool:
     return granularity in TASK_GRANULARITIES or name not in TASK_SCHEDULERS
 
 
-def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series]:
+def get_stats_dataframes(
+    granularity: str,
+) -> tuple[DataFrame, DataFrame, Series, Series]:
     """Return, for each push, the number of scheduled and caught regressions by scheduler.
 
-    Values are NaN when a scheduler didn't run on a push.
+    Values are NaN when a scheduler didn't run on a push. The last series tells
+    whether each push is a backstop push (None if it's unknown).
     """
     regressions_by_rev = get_likely_regressions_by_rev(granularity)
 
@@ -449,6 +470,7 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
     scheduled_data = []
     caught_data = []
     num_regressions = []
+    backstop = []
 
     for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
@@ -466,6 +488,7 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
 
         dates.append(datetime.utcfromtimestamp(scheduler_stat["date"]))
         num_regressions.append(len(regressions))
+        backstop.append(scheduler_stat.get("backstop"))
         scheduled_data.append(
             {
                 scheduler["name"]: get_num_scheduled(granularity, scheduler)
@@ -486,7 +509,12 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
     caught_df = DataFrame(caught_data, index=index).sort_index(axis=1)
     regressions = Series(num_regressions, index=index)
 
-    return scheduled_df, caught_df, regressions
+    return (
+        scheduled_df,
+        caught_df,
+        regressions,
+        Series(backstop, index=index, dtype=object),
+    )
 
 
 def compute_summary(
@@ -496,17 +524,23 @@ def compute_summary(
     ran = scheduled_df.notna()
     regressing = ran.mul(regressions > 0, axis=0)
     total_regressions = ran.mul(regressions, axis=0).sum()
+    # Schedulers without regressions on the pushes have no percentages caught.
+    num_regressing = regressing.sum()
 
     summary = DataFrame(
         {
             "pushes": ran.sum(),
             "avg scheduled": scheduled_df.mean(),
             "median scheduled": scheduled_df.median(),
-            "pushes with regressions": regressing.sum(),
+            "pushes with regressions": num_regressing,
             "% regressing pushes caught": (
-                (caught_df > 0)[regressing].sum() / regressing.sum() * 100
+                (caught_df > 0)[regressing].sum()
+                / num_regressing.replace(0, float("nan"))
+                * 100
             ),
-            "% regressions caught": caught_df.sum() / total_regressions * 100,
+            "% regressions caught": (
+                caught_df.sum() / total_regressions.replace(0, float("nan")) * 100
+            ),
         }
     )
     summary.index.name = "scheduler"
@@ -521,7 +555,11 @@ def format_summary(summary: DataFrame) -> str:
 
 
 def write_summary_table(
-    granularity: str, summary: DataFrame, from_date: datetime, to_date: datetime
+    granularity: str,
+    summary: DataFrame,
+    summaries_by_push_type: dict[str, DataFrame],
+    from_date: datetime,
+    to_date: datetime,
 ) -> None:
     perf = summary.index.map(is_perf_scheduler)
 
@@ -537,7 +575,32 @@ Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions 
 
 ## Test selection schedulers
 
+Results on non-backstop and backstop pushes are also reported separately below
+(pushes whose type is unknown are only in the first table):
+
+- on non-backstop pushes, only some {unit}s run, so regressions are only known
+  where they ran (or were retriggered or backfilled): schedulers selecting {unit}s
+  like the ones that ran are favored;
+- backstop pushes run everything, so their regressions are known for all
+  {unit}s and the schedulers can be compared fairly. However, their test tasks
+  run all manifests rather than only the ones selected by bugbug, so the
+  schedulers select (and catch, through the other manifests of the tasks they
+  select) more {unit}s than they would on other pushes.
+
 {format_summary(summary[~perf])}
+"""
+
+    for push_type, push_type_summary in summaries_by_push_type.items():
+        if len(push_type_summary) == 0:
+            continue
+
+        push_type_summary = push_type_summary[
+            ~push_type_summary.index.map(is_perf_scheduler)
+        ]
+        content += f"""
+### {push_type.capitalize()} pushes
+
+{format_summary(push_type_summary)}
 """
 
     if perf.any():
@@ -684,7 +747,7 @@ def plot_weekly_trend(
 
 
 def report(granularity: str, weeks: int) -> None:
-    scheduled_df, caught_df, regressions = get_stats_dataframes(granularity)
+    scheduled_df, caught_df, regressions, backstop = get_stats_dataframes(granularity)
 
     if len(scheduled_df) == 0:
         logger.warning("No data to report at the %s level", granularity)
@@ -698,7 +761,23 @@ def report(granularity: str, weeks: int) -> None:
         scheduled_df[recent], caught_df[recent], regressions[recent]
     )
     summary = summary[summary["pushes"] > 0]
-    write_summary_table(granularity, summary, from_date, to_date)
+
+    summaries_by_push_type = {}
+    for push_type, is_push_type in (
+        ("non-backstop", backstop.map(lambda b: b is False)),
+        ("backstop", backstop.map(lambda b: b is True)),
+    ):
+        pushes = recent & is_push_type.to_numpy(dtype=bool)
+        push_type_summary = compute_summary(
+            scheduled_df[pushes], caught_df[pushes], regressions[pushes]
+        )
+        summaries_by_push_type[push_type] = push_type_summary[
+            push_type_summary["pushes"] > 0
+        ]
+
+    write_summary_table(
+        granularity, summary, summaries_by_push_type, from_date, to_date
+    )
 
     test_selection = [name for name in summary.index if not is_perf_scheduler(name)]
 
