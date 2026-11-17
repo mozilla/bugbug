@@ -9,7 +9,7 @@ import { ResultView } from "./ResultView";
 
 /** The selected run's progress, output and review. */
 export function RunView() {
-  const { run, runs } = useSnapshot(store);
+  const { run, runs, config } = useSnapshot(store);
   if (!run) return null;
   const listed = runs.find((r) => r.run_id === run.runId);
   // The listed info includes `applied`, so prefer it once the run is over.
@@ -18,6 +18,18 @@ export function RunView() {
   return (
     <>
       <h1 className="mono">{run.runId}</h1>
+      {!!info?.params.bug_id && config && (
+        <p className="meta">
+          Bugzilla link:{" "}
+          <a
+            href={`${config.bugzilla}/show_bug.cgi?id=${info.params.bug_id}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {`${config.bugzilla}/show_bug.cgi?id=${info.params.bug_id}`}
+          </a>
+        </p>
+      )}
       {info ? (
         <Progress info={info} />
       ) : (

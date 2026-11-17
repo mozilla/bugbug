@@ -27,7 +27,8 @@ export function App() {
         )}
         {config && (
           <div className="meta">
-            Artifacts: <span className="mono">{config.artifacts_root}</span>
+            <div>Artifacts:</div>
+            <div className="mono">{config.artifacts_root}</div>
             {!!missingKeys?.length && (
               <div className="note err">
                 {missingKeys.join(", ")} missing (
