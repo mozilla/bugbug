@@ -158,6 +158,22 @@ async def ensure_action_rows(
     return rows
 
 
+def _comment_row_id(member_rows: list[RunAction]) -> int:
+    """The row whose comment a merged PUT posts, which the front matter names.
+
+    The group's `add_comment` if it has one, else the last update with a
+    comment in its `changes` (later changes win). With no comment, nothing
+    reads the ID, so the last row's will do.
+    """
+    for member in member_rows:
+        if member.type == "bugzilla.add_comment":
+            return member.id
+    for member in reversed(member_rows):
+        if "comment" in (member.params.get("changes") or {}):
+            return member.id
+    return member_rows[-1].id
+
+
 async def _dispatch(
     run: Run,
     action_type: str,
@@ -305,28 +321,13 @@ async def _apply_pending_rows(
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
-            # The front matter names the row whose comment is posted: the
-            # group's `add_comment`, or else the last update with a comment in
-            # its `changes` (later changes win). With no comment, nothing reads
-            # the ID, so the anchor's own will do.
-            comment_action_id = next(
-                (m.id for m in member_rows if m.type == "bugzilla.add_comment"),
-                next(
-                    (
-                        m.id
-                        for m in reversed(member_rows)
-                        if "comment" in (m.params.get("changes") or {})
-                    ),
-                    row.id,
-                ),
-            )
             outcome = await _dispatch(
                 run,
                 "bugzilla.update_bug",
                 merge_resolved(entries),
                 [],
                 hackbot_client,
-                comment_action_id,
+                _comment_row_id(member_rows),
             )
         else:
             member_rows = [row]
