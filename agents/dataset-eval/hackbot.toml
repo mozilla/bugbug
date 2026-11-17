@@ -1,0 +1,17 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+[firefox]
+enabled = true
+objdir = "objdir-dataset-eval"
+
+# One run evaluates one experiment: every example in sequence, in one container.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "8"
+memory = "32Gi"
+timeout_seconds = 172800
+
+[deploy.workspace]
+size = "60Gi"

@@ -84,9 +84,39 @@ def _attachment(id: int, bug_id: int, **extra) -> dict:
     }
 
 
+@pytest.mark.parametrize(
+    ("env", "api_url"),
+    [
+        (
+            {
+                "BUGZILLA_API_URL": "https://api.example.com/rest",
+                "BUGZILLA_URL": "https://site.example.com",
+            },
+            "https://api.example.com/rest",
+        ),
+        (
+            {"BUGZILLA_URL": "https://site.example.com/"},
+            "https://site.example.com/rest",
+        ),
+        ({}, "https://bugzilla.mozilla.org/rest"),
+    ],
+    ids=["api-url-wins", "site-root-fallback", "default"],
+)
+def test_from_env_reads_api_url_or_falls_back_to_site_root(monkeypatch, env, api_url):
+    monkeypatch.delenv("BUGZILLA_API_URL", raising=False)
+    monkeypatch.delenv("BUGZILLA_URL", raising=False)
+    monkeypatch.setenv("BUGZILLA_API_KEY", VALID_KEY)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    assert BugzillaSettings.from_env().api_url == api_url
+
+
 async def test_sends_auth_headers_and_uses_rest_base(bugzilla):
     handler, requests = _recorder(httpx.Response(200, json={"version": "20260101.1"}))
-    client = bugzilla(handler, url="https://bugzilla.example.com", edge_key="edge")
+    client = bugzilla(
+        handler, api_url="https://bugzilla.example.com/rest", edge_key="edge"
+    )
 
     assert await client.request("GET", "version") == {"version": "20260101.1"}
 

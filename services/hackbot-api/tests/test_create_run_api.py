@@ -20,10 +20,10 @@ from app.schemas import RunStatus
 
 @pytest.fixture(autouse=True)
 def _stub_gcp(monkeypatch):
-    async def fake_policy(run_id):
+    async def fake_policy(run_id, timeout_seconds):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         return "projects/p/locations/l/jobs/j/executions/e"
 
     monkeypatch.setattr(gcs, "run_prefix", lambda run_id: f"results/{run_id}/")
@@ -175,7 +175,7 @@ def _chain(client, db, monkeypatch, parent):
 
     envs = []
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 
@@ -225,7 +225,7 @@ def test_a_chained_run_needs_an_existing_parent(client, db, monkeypatch):
 def test_an_unchained_run_gets_no_parent_artifacts(client, db, monkeypatch):
     envs = []
 
-    async def fake_trigger(job_name, env):
+    async def fake_trigger(job_name, env, timeout_seconds):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 

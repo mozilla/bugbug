@@ -28,14 +28,7 @@ WITH perf_tasks AS (
   FROM `moz-fx-data-shared-prod.fxci.tasks`
   WHERE submission_date >= "{date_from}"
     AND submission_date < "{date_to}"
-    AND tags.project = '{repository}'
-    AND (
-      tags.label LIKE "%-browsertime-%"
-      OR tags.label LIKE "%-talos-%"
-      OR tags.label LIKE "%-awsy%"
-      OR tags.label LIKE "%-raptor-%"
-      OR tags.label LIKE "perftest-%"
-    )
+    AND {perf_task_filter}
 ),
 runs AS (
   SELECT

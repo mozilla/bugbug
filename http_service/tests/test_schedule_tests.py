@@ -286,23 +286,6 @@ def mock_treeherder_recent_failures() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "group, expected",
-    [
-        ("test-group1", "test-group1"),
-        ("test-group1:test-group-parent", "test-group1"),
-        ("/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
-        (":/fetch/api/request", "testing/web-platform/tests/fetch/api/request"),
-        (
-            "/_mozilla/fetch/api/request",
-            "testing/web-platform/mozilla/tests/fetch/api/request",
-        ),
-    ],
-)
-def test_normalize_group(group: str, expected: str) -> None:
-    assert models._normalize_group(group) == expected
-
-
 def test_get_recent_failures(
     mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
 ) -> None:
@@ -497,7 +480,7 @@ def test_schedule_config_selection_risk(
     monkeypatch.setattr(
         models.test_scheduling,
         "find_manifests_for_paths",
-        lambda repo_dir, paths: ["test-group3"],
+        lambda repo_dir, paths, rev: ["test-group3"],
     )
 
     assert models.schedule_tests("mozilla-central", rev) == "OK"

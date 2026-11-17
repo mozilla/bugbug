@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
 from app import actions_applier
 from app.actions_applier import (
     apply_all_pending,
@@ -22,6 +23,216 @@ from app.schemas import RunStatus
 from sqlalchemy.dialects import postgresql
 
 _CLIENT = object()
+
+
+def _github_comment_rows():
+    return [
+        (
+            _row(
+                0,
+                "pending",
+                action_type="github.add_comment",
+                params={"repo": "o/r", "pull_number": 7, "text": "Overall feedback."},
+                ref="general",
+            ),
+            [],
+        ),
+        (
+            _row(
+                1,
+                "pending",
+                action_type="github.add_inline_comments",
+                params={
+                    "repo": "o/r",
+                    "pull_number": 7,
+                    "comments": [{"path": "a.py", "line": 3, "body": "Check this."}],
+                    "summary": "Review summary.",
+                },
+                ref="inline",
+            ),
+            [],
+        ),
+    ]
+
+
+async def test_github_review_keeps_multiple_summaries_and_inline_lists(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(
+            status="applied",
+            result={
+                "repo": "o/r",
+                "pull_number": 7,
+                "review_url": "https://example.com/review",
+            },
+            error=None,
+        )
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    general, inline = _github_comment_rows()
+    extra = _row(
+        2,
+        "pending",
+        action_type="github.add_inline_comments",
+        params={
+            "repo": "o/r",
+            "pull_number": 7,
+            "comments": [{"path": "b.py", "line": 5, "body": "Another finding."}],
+            "summary": "More feedback.",
+        },
+    )
+    inline[0].idx, extra.idx, general[0].idx = 0, 1, 2
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [inline, (extra, []), general],
+        None,
+    )
+    assert len(handler.calls) == 1
+    assert (
+        handler.calls[0]["summary"]
+        == "Review summary.\n\nMore feedback.\n\nOverall feedback."
+    )
+    assert (
+        handler.calls[0]["comments"]
+        == inline[0].params["comments"] + extra.params["comments"]
+    )
+
+
+async def test_github_general_comments_without_inline_comments_stay_separate(
+    monkeypatch,
+):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    general, _ = _github_comment_rows()
+    another = _row(
+        1,
+        "pending",
+        action_type="github.add_comment",
+        params={"repo": "o/r", "pull_number": 7, "text": "Another reply."},
+    )
+    await actions_applier._apply_pending_rows(
+        _FakeDB(),
+        _FakeRun(status=RunStatus.succeeded.value),
+        [general, (another, [])],
+        None,
+    )
+    assert handler.calls == [general[0].params, another.params]
+
+
+async def test_github_comments_post_as_one_review_and_keep_result_urls(monkeypatch):
+    result = {
+        "repo": "o/r",
+        "pull_number": 7,
+        "review_url": "https://example.com/review",
+    }
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result=result, error=None)
+    )
+    dispatched = []
+
+    def get_handler(action_type):
+        dispatched.append(action_type)
+        return handler
+
+    monkeypatch.setattr(actions_applier, "get_handler", get_handler)
+    rows = _github_comment_rows()
+    db = _FakeDB()
+    run = _FakeRun(status=RunStatus.succeeded.value)
+    await actions_applier._apply_pending_rows(db, run, rows, None)
+    assert dispatched == ["github.add_inline_comments"]
+    assert handler.calls == [
+        {
+            "repo": "o/r",
+            "pull_number": 7,
+            "comments": [{"path": "a.py", "line": 3, "body": "Check this."}],
+            "summary": "Overall feedback.\n\nReview summary.",
+        }
+    ]
+    assert all(row.status == "applied" for row, _ in rows)
+    assert rows[0][0].result == {
+        "repo": "o/r",
+        "pull_number": 7,
+        "comment_url": result["review_url"],
+    }
+    assert rows[1][0].result == result
+    assert db.commits == 2  # claim, then apply the combined review
+    await actions_applier._apply_pending_rows(db, run, rows, None)
+    assert len(handler.calls) == 1
+
+
+@pytest.mark.parametrize("separation", ["repo", "pull_number", "applied", "dependent"])
+async def test_github_comments_stay_separate_when_needed(monkeypatch, separation):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    rows = _github_comment_rows()
+    if separation == "repo":
+        rows[1][0].params["repo"] = "o/another"
+    elif separation == "pull_number":
+        rows[1][0].params["pull_number"] = 8
+    elif separation == "applied":
+        rows[1][0].status = "applied"
+    else:
+        rows[1][0].params["summary"] = "See {{actions.general.comment_url}}"
+    await actions_applier._apply_pending_rows(
+        _FakeDB(), _FakeRun(status=RunStatus.succeeded.value), rows, None
+    )
+    assert handler.calls[0] == rows[0][0].params
+    assert len(handler.calls) == (1 if separation == "applied" else 2)
+
+
+async def test_failed_github_review_retries_both_actions(monkeypatch):
+    handler = _RecordingHandler(
+        SimpleNamespace(status="failed", result=None, error="rejected")
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    rows = _github_comment_rows()
+    run = _FakeRun(status=RunStatus.succeeded.value)
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows, None)
+    assert len(handler.calls) == 1
+    assert all(row.status == "failed" and row.applied_at is None for row, _ in rows)
+    handler.outcome = SimpleNamespace(
+        status="applied",
+        result={
+            "repo": "o/r",
+            "pull_number": 7,
+            "review_url": "https://example.com/review",
+        },
+        error=None,
+    )
+    await actions_applier._apply_pending_rows(_FakeDB(), run, rows, None)
+    assert len(handler.calls) == 2
+    assert all(row.status == "applied" and row.error is None for row, _ in rows)
+
+
+@pytest.mark.parametrize(
+    "held_type", ["github.add_comment", "github.add_inline_comments"]
+)
+async def test_github_review_grouping_respects_auto_apply_policy(
+    monkeypatch, held_type
+):
+    rows = _github_comment_rows()
+
+    async def ensure(db, run):
+        return rows
+
+    monkeypatch.setattr(actions_applier, "ensure_action_rows", ensure)
+    monkeypatch.setattr(
+        actions_applier,
+        "AGENT_REGISTRY",
+        {"bug-fix": _spec(never=frozenset({held_type}))},
+    )
+    handler = _RecordingHandler(
+        SimpleNamespace(status="applied", result={}, error=None)
+    )
+    monkeypatch.setattr(actions_applier, "get_handler", lambda t: handler)
+    await on_run_completed(_FakeDB(), _FakeRun(status=RunStatus.succeeded.value), None)
+    assert len(handler.calls) == 1
+    for row, _ in rows:
+        assert row.status == ("pending" if row.type == held_type else "applied")
 
 
 def test_resolves_known_ref_and_field():
@@ -80,7 +291,7 @@ class _FakeRun:
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
     summary: dict | None = None
-    inputs: dict = field(default_factory=dict)
+    inputs: dict = field(default_factory=lambda: {"require_review": False})
 
 
 def _spec(*, auto=True, consent=False, always=frozenset(), never=frozenset()):
@@ -103,17 +314,19 @@ def _auto_applies(spec, run):
     return actions_applier._auto_apply_blocker(spec, run) is None
 
 
-def _action_auto_applies(spec, run, action_type):
-    run_level_auto_apply = actions_applier._auto_apply_blocker(spec, run) is None
+def _action_auto_applies(spec, run, action_type, require_review=False):
     return actions_applier._should_auto_apply(
-        spec, action_type, run_level_auto_apply=run_level_auto_apply
+        spec,
+        action_type,
+        require_review=require_review,
+        run_level_auto_apply=_auto_applies(spec, run),
     )
 
 
 def _run_with_findings(**findings):
     return _FakeRun(
         status=RunStatus.succeeded.value,
-        inputs={"bug_id": 2014702},
+        inputs={"bug_id": 2014702, "require_review": False},
         summary={"findings": findings, "actions": []},
     )
 
@@ -135,6 +348,11 @@ def test_an_agent_that_needs_no_consent_applies_unconditionally():
     spec = _spec()
     assert _auto_applies(spec, _FakeRun(status=RunStatus.succeeded.value))
     assert _auto_applies(spec, _run_with_findings(auto_apply=False))
+
+
+def test_review_request_holds_actions_even_when_agent_auto_applies():
+    run = _run_with_findings(auto_apply=True)
+    assert not _action_auto_applies(_spec(), run, "bugzilla.add_comment", True)
 
 
 def test_always_apply_action_overrides_agent_default():
@@ -161,6 +379,12 @@ def test_action_without_override_uses_agent_default():
         always=frozenset({"slack.post_message"}),
     )
     assert not _action_auto_applies(spec, _run_with_findings(), "bugzilla.add_comment")
+
+
+def test_review_request_holds_always_apply_actions():
+    action_type = "email.send"
+    spec = _spec(auto=False, always=frozenset({action_type}))
+    assert not _action_auto_applies(spec, _run_with_findings(), action_type, True)
 
 
 # --- the run's own verdict ----------------------------------------------- #
@@ -337,6 +561,15 @@ async def test_succeeded_opted_in_agent_records_and_applies(monkeypatch):
     await on_run_completed(db, _FakeRun(status=RunStatus.succeeded.value), _CLIENT)
     assert calls == {"ensured": True, "applied": True}
     assert db.commits >= 1
+
+
+async def test_succeeded_run_with_review_required_records_but_does_not_apply(
+    monkeypatch,
+):
+    calls = _patch_applier(monkeypatch, auto=True)
+    run = _FakeRun(status=RunStatus.succeeded.value, inputs={"require_review": True})
+    await on_run_completed(_FakeDB(), run, _CLIENT)
+    assert calls == {"ensured": True, "applied": False}
 
 
 async def test_succeeded_non_opted_agent_records_but_does_not_apply(monkeypatch):

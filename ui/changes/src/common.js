@@ -148,6 +148,7 @@ export const TESTING_TAGS = {
   },
 };
 
+const VERY_HIGH_RISK_COLOR = "darkred";
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
 const LOW_RISK_COLOR = "green";
@@ -564,13 +565,16 @@ export async function renderRiskChart(chartEl, bugSummaries) {
         counterObj.low += 1;
       } else if (summary.risk_band == "a") {
         counterObj.medium += 1;
-      } else {
+      } else if (summary.risk_band == "h") {
         counterObj.high += 1;
+      } else {
+        counterObj.veryHigh += 1;
       }
     }
   );
 
   let categories = [];
+  let veryHigh = [];
   let high = [];
   let medium = [];
   let low = [];
@@ -579,11 +583,16 @@ export async function renderRiskChart(chartEl, bugSummaries) {
     low.push(summaryData[date].low);
     medium.push(summaryData[date].medium);
     high.push(summaryData[date].high);
+    veryHigh.push(summaryData[date].veryHigh);
   }
 
   renderChart(
     chartEl,
     [
+      {
+        name: "Very high",
+        data: veryHigh,
+      },
       {
         name: "Higher",
         data: high,
@@ -598,7 +607,7 @@ export async function renderRiskChart(chartEl, bugSummaries) {
       },
     ],
     categories,
-    "Evolution of lower/average/higher risk changes",
+    "Evolution of lower/average/higher/very high risk changes",
     "# of patches"
   );
 }
@@ -2919,6 +2928,10 @@ function addRow(
         // Higher than average risk.
         risk_text.style.color = HIGH_RISK_COLOR;
         risk_text.textContent = "Higher";
+      } else if (bugSummary.risk_band == "v") {
+        // Very high risk.
+        risk_text.style.color = VERY_HIGH_RISK_COLOR;
+        risk_text.textContent = "Very high";
       } else if (bugSummary.risk_band == null) {
         // No risk available (there are no commits associated to the bug).
         risk_text.textContent = "N/A";

@@ -1,6 +1,6 @@
 [project]
 name = "hackbot-agent-uplift-resolve"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cloud Run Job image that runs the uplift conflict-resolution agent for hackbot-api"
 requires-python = ">=3.14"
 dependencies = [
@@ -34,6 +34,10 @@ testpaths = ["tests"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 # `hackbot_agents` is a PEP 420 namespace package, shared with the other
 # agents. Hatchling ships everything under it, prompts included.

@@ -151,8 +151,8 @@ class LandingsRiskReportGenerator(object):
         )
 
         # Some commits that were already in the DB from the previous run might need
-        # to be updated (e.g. coverage information).
-        repository.update_commits()
+        # to be updated (e.g. coverage information, backouts).
+        repository.update_commits(repo_dir)
 
         logger.info("Downloading revisions database...")
         assert db.download(phabricator.REVISIONS_DB)
@@ -686,7 +686,7 @@ class LandingsRiskReportGenerator(object):
                 "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
                 "risk": max_risk,
-                "risk_band": RegressorModel.find_risk_band(max_risk)
+                "risk_band": self.regressor_model.find_risk_band(max_risk)
                 if max_risk is not None
                 else None,
                 "fuzz": "b"
@@ -995,6 +995,7 @@ def notification(days: int) -> None:
     for team in all_teams:
         cur_team_data = team_data[team] = {}
         cur_team_data["month_changes"] = 0
+        cur_team_data["very_high_risk_changes"] = 0
         cur_team_data["high_risk_changes"] = 0
         cur_team_data["medium_risk_changes"] = 0
         cur_team_data["low_risk_changes"] = 0
@@ -1055,9 +1056,14 @@ def notification(days: int) -> None:
                     (fix_date - creation_date).total_seconds() / 86400
                 )
 
-                if bug["risk_band"] == "h":
+                # "high_risk_changes" counts all higher than average risk changes, including
+                # the very high risk ones.
+                if bug["risk_band"] == "v":
+                    cur_team_data["very_high_risk_changes"] += 1
                     cur_team_data["high_risk_changes"] += 1
-                elif bug["risk_band"] == "m":
+                elif bug["risk_band"] == "h":
+                    cur_team_data["high_risk_changes"] += 1
+                elif bug["risk_band"] == "a":
                     cur_team_data["medium_risk_changes"] += 1
                 elif bug["risk_band"] == "l":
                     cur_team_data["low_risk_changes"] += 1
@@ -1106,7 +1112,7 @@ def notification(days: int) -> None:
                     (fix_date - creation_date).total_seconds() / 86400
                 )
 
-                if bug["risk_band"] == "h":
+                if bug["risk_band"] in ("h", "v"):
                     cur_team_data["prev_high_risk_changes"] += 1
 
                 cur_team_data["prev_review_times"] += [
@@ -1460,10 +1466,16 @@ table {
         try:
             month_changes = cur_team_data["month_changes"]
             high_risk_changes = cur_team_data["high_risk_changes"]
+            # Regression rates observed in each risk band.
             predicted_regressions = round(
-                0.33 * cur_team_data["high_risk_changes"]
-                + 0.16 * cur_team_data["medium_risk_changes"]
-                + 0.06 * cur_team_data["low_risk_changes"],
+                0.40 * cur_team_data["very_high_risk_changes"]
+                + 0.24
+                * (
+                    cur_team_data["high_risk_changes"]
+                    - cur_team_data["very_high_risk_changes"]
+                )
+                + 0.12 * cur_team_data["medium_risk_changes"]
+                + 0.045 * cur_team_data["low_risk_changes"],
                 1,
             )
             prev_high_risk_changes = cur_team_data["prev_high_risk_changes"]

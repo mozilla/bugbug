@@ -10,9 +10,11 @@ include:
   - path: agents/test-repair/compose.yml
   - path: agents/test-repair-fix/compose.yml
   - path: agents/frontend-triage/compose.yml
+  - path: agents/gecko-triage/compose.yml
   - path: agents/test-plan-generator/compose.yml
   - path: agents/uplift-resolve/compose.yml
   - path: agents/autowebcompat-intervention/compose.yml
+  - path: agents/dataset-eval/compose.yml
 
 services:
   bugbug-base:
@@ -26,6 +28,18 @@ services:
       context: .
       dockerfile: infra/dockerfile.commit_retrieval
     image: mozilla/bugbug-commit-retrieval
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
+  bugbug-perf-commit-risk:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.perf_commit_risk
+    image: mozilla/bugbug-perf-commit-risk
     volumes:
       - type: bind
         source: ./cache/

@@ -208,6 +208,8 @@ class Model:
                 feature_name = f"Description contains '{feature_name}'"
             elif type_ == "title":
                 feature_name = f"Title contains '{feature_name}'"
+            elif type_ == "title_char":
+                feature_name = f"Title contains characters '{feature_name}'"
             elif type_ == "first_comment":
                 feature_name = f"First comment contains '{feature_name}'"
             elif type_ == "comments":
@@ -364,12 +366,16 @@ class Model:
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
 
-    def get_sample_weights(self, y) -> np.ndarray | None:
+    def get_test_subsets(self) -> dict[str, np.ndarray]:
+        """Subclasses can return boolean masks over the test set, to also report metrics on those subsets."""
+        return {}
+
+    def get_sample_weights(self, X, y) -> np.ndarray | None:
         """Subclasses can return a weight for each training sample, passed to the estimator."""
         return None
 
     def fit_classifier(self, X, y):
-        sample_weight = self.get_sample_weights(y)
+        sample_weight = self.get_sample_weights(X, y)
         if sample_weight is None:
             self.clf.fit(X, y)
         else:
@@ -413,8 +419,21 @@ class Model:
             if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
+            # The folds are weighted like the final model (see fit_classifier); the
+            # weights are computed once on the whole training set and split with it.
+            cv_y = self.le.transform(y_train)
+            sample_weight = self.get_sample_weights(X_train, cv_y)
             scores = cross_validate(
-                self.clf, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+                self.clf,
+                X_train,
+                cv_y,
+                scoring=scorings,
+                cv=5,
+                params=(
+                    {"estimator__sample_weight": sample_weight}
+                    if sample_weight is not None
+                    else None
+                ),
             )
 
             logger.info("Cross Validation scores:")
@@ -523,6 +542,14 @@ class Model:
 
             tracking_metrics["report"] = report
 
+            for name, mask in self.get_test_subsets().items():
+                logger.info(
+                    "%s: accuracy %.4f (%d items)",
+                    name,
+                    np.mean(y_pred[mask] == y_test[mask]),
+                    mask.sum(),
+                )
+
         print_labeled_confusion_matrix(
             confusion_matrix, self.class_names, is_multilabel=is_multilabel
         )
@@ -593,6 +620,24 @@ class Model:
                         labels=confidence_class_names,
                     )
                 )
+
+                # The averages in the report above count classes without any
+                # prediction above the threshold as having precision 0, which
+                # makes precision look lower as the threshold increases. Those
+                # classes only affect recall, so compute the actual values.
+                classified = y_pred_filter.astype(str) != "__NOT_CLASSIFIED__"
+                correct = (y_pred_filter.astype(str) == y_test.astype(str)) & classified
+                subsets = {
+                    "All items": np.ones(len(y_test), dtype=bool),
+                    **self.get_test_subsets(),
+                }
+                for name, mask in subsets.items():
+                    logger.info(
+                        "%s: precision of classified items: %.4f, recall: %.4f",
+                        name,
+                        correct[mask].sum() / max(classified[mask].sum(), 1),
+                        correct[mask].sum() / max(mask.sum(), 1),
+                    )
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )

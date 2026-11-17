@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pydantic import ValidationError
 
 APP_ID = 123
+WEBHOOK_SECRET = "test-github-webhook-secret"
 INSTALLATION_ID = 456
 
 
@@ -63,7 +64,12 @@ class _FakeGitHub:
 
 
 def _app(pem: str, fake: _FakeGitHub, **settings) -> GitHubApp:
-    settings = {"app_id": APP_ID, "private_key": pem, **settings}
+    settings = {
+        "app_id": APP_ID,
+        "private_key": pem,
+        "webhook_secret": WEBHOOK_SECRET,
+        **settings,
+    }
     return GitHubApp(
         GitHubAppSettings(**settings),
         async_transport=httpx.MockTransport(fake),
@@ -72,7 +78,12 @@ def _app(pem: str, fake: _FakeGitHub, **settings) -> GitHubApp:
 
 
 def _set_env(monkeypatch, **env: str) -> None:
-    for name in ("GITHUB_APP_ID", "GITHUB_PRIVATE_KEY", "GITHUB_INSTALLATION_ID"):
+    for name in (
+        "GITHUB_APP_ID",
+        "GITHUB_PRIVATE_KEY",
+        "GITHUB_INSTALLATION_ID",
+        "GITHUB_WEBHOOK_SECRET",
+    ):
         monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
         monkeypatch.setenv(f"GITHUB_{name}", value)
@@ -92,7 +103,13 @@ def test_settings_errors_do_not_expose_the_private_key(monkeypatch, pem):
 
 
 def test_settings_load_from_env(monkeypatch, pem):
-    _set_env(monkeypatch, APP_ID="123", PRIVATE_KEY=pem, INSTALLATION_ID="456")
+    _set_env(
+        monkeypatch,
+        APP_ID="123",
+        PRIVATE_KEY=pem,
+        INSTALLATION_ID="456",
+        WEBHOOK_SECRET=WEBHOOK_SECRET,
+    )
     settings = Settings(_env_file=None).github
     assert settings is not None
     assert settings.app_id == 123
@@ -101,7 +118,12 @@ def test_settings_load_from_env(monkeypatch, pem):
 
 
 def test_settings_accept_a_private_key_with_escaped_newlines(monkeypatch, pem):
-    _set_env(monkeypatch, APP_ID="123", PRIVATE_KEY=pem.replace("\n", "\\n"))
+    _set_env(
+        monkeypatch,
+        APP_ID="123",
+        PRIVATE_KEY=pem.replace("\n", "\\n"),
+        WEBHOOK_SECRET=WEBHOOK_SECRET,
+    )
     settings = Settings(_env_file=None).github
     assert settings is not None
     assert settings.private_key.get_secret_value() == pem.strip()
@@ -144,7 +166,9 @@ def test_settings_reject_anything_but_an_rsa_private_key(monkeypatch, private_ke
 
 
 def test_settings_repr_hides_the_private_key(pem):
-    settings = GitHubAppSettings(app_id=APP_ID, private_key=pem)
+    settings = GitHubAppSettings(
+        app_id=APP_ID, private_key=pem, webhook_secret=WEBHOOK_SECRET
+    )
     assert "PRIVATE KEY" not in repr(settings)
 
 

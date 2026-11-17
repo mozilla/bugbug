@@ -1,6 +1,6 @@
 [project]
 name = "hackbot-agent-frontend-triage"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cloud Run Job image that runs the frontend-triage agent for hackbot-api"
 requires-python = ">=3.14"
 dependencies = [
@@ -23,6 +23,10 @@ agent-tools = { workspace = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hackbot_agents"]

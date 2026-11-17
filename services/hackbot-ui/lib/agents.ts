@@ -11,6 +11,7 @@ export const AGENTS = [
   },
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
+  { value: "gecko-triage", label: "gecko-triage" },
   { value: "test-repair", label: "test-repair" },
   { value: "test-repair-fix", label: "test-repair-fix" },
   { value: "test-plan-generator", label: "test-plan-generator" },
@@ -18,6 +19,7 @@ export const AGENTS = [
     value: "uplift-resolve",
     label: "uplift-resolve",
   },
+  { value: "dataset-eval", label: "dataset-eval" },
 ] as const;
 
 export type AgentValue = (typeof AGENTS)[number]["value"];

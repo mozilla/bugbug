@@ -53,6 +53,24 @@ tasks:
         public/shadow_schedulers_config_group_weekly.svg:
           path: /shadow_schedulers_config_group_weekly.svg
           type: file
+        public/shadow_schedulers_non_group.md:
+          path: /shadow_schedulers_non_group.md
+          type: file
+        public/shadow_schedulers_non_group_tradeoff.svg:
+          path: /shadow_schedulers_non_group_tradeoff.svg
+          type: file
+        public/shadow_schedulers_non_group_weekly.svg:
+          path: /shadow_schedulers_non_group_weekly.svg
+          type: file
+        public/shadow_schedulers_build.md:
+          path: /shadow_schedulers_build.md
+          type: file
+        public/shadow_schedulers_build_tradeoff.svg:
+          path: /shadow_schedulers_build_tradeoff.svg
+          type: file
+        public/shadow_schedulers_build_weekly.svg:
+          path: /shadow_schedulers_build_weekly.svg
+          type: file
 
       features:
         taskclusterProxy: true

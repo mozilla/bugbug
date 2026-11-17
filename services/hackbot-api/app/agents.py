@@ -5,17 +5,23 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from app.schemas import (
+    AgentInputs,
     AutowebcompatDiagnosisInputs,
     AutowebcompatInterventionInputs,
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
+    DatasetEvalInputs,
     FrontendTriageInputs,
+    GeckoTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
     TestRepairInputs,
     UpliftInputs,
 )
+
+# Shared run fields are not forwarded to the agent environment.
+_PLATFORM_FIELDS = frozenset(AgentInputs.model_fields)
 
 
 @dataclass(frozen=True)
@@ -45,6 +51,8 @@ class AgentSpec:
     # reported as an error. Agents that may legitimately finish without acting (or
     # without Phabricator submission tools) must not set it.
     expects_actions: bool = False
+    # How long an execution may run; the API-wide default when unset.
+    execution_timeout_seconds: int | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -55,11 +63,11 @@ def model_to_env(inputs: BaseModel) -> dict[str, str]:
     ``pydantic_settings.BaseSettings`` (which upper-cases field names by
     default). Lists/dicts are JSON-encoded. Deploy-time constants (e.g. the
     broker loopback URL) are NOT inputs — they belong in the Job's static env
-    config, not here.
+    config, not here. Shared run fields are skipped.
     """
     env: dict[str, str] = {}
     for name, value in inputs.model_dump(mode="json").items():
-        if value is None:
+        if value is None or name in _PLATFORM_FIELDS:
             continue
         if isinstance(value, str):
             env[name.upper()] = value
@@ -123,6 +131,23 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # an analysis is waiting, so holding it with the comment hides the run.
         always_apply_actions=frozenset({"slack.post_message"}),
     ),
+    "gecko-triage": AgentSpec(
+        name="gecko-triage",
+        description=(
+            "Triage a Gecko bug. Each team can add its own rules. With no "
+            "team, the run uses the shared rules for the bug's component. Inventory "
+            "what the report contains and read its "
+            "profiles and logs. Ask the reporter for what is missing, or set severity "
+            "and priority. Come back when the bug changes."
+        ),
+        job_name="hackbot-agent-gecko-triage",
+        input_schema=GeckoTriageInputs,
+        # Human-gated while the agent is checked by hand: every run waits in the UI.
+        # Set `auto_apply_actions=True` to let vouched runs (`findings.auto_apply`)
+        # reach the bug with nobody in between.
+        auto_apply_actions=False,
+        auto_apply_requires_consent=True,
+    ),
     "test-repair": AgentSpec(
         name="test-repair",
         description=(
@@ -178,5 +203,15 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-autowebcompat-intervention",
         input_schema=AutowebcompatInterventionInputs,
         auto_apply_actions=True,
+    ),
+    "dataset-eval": AgentSpec(
+        name="dataset-eval",
+        description=(
+            "Run an agent over an eval dataset, grade every example, and log the "
+            "evaluation to Weave."
+        ),
+        job_name="hackbot-agent-dataset-eval",
+        input_schema=DatasetEvalInputs,
+        execution_timeout_seconds=48 * 60 * 60,
     ),
 }

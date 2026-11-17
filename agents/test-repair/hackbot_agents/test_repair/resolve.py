@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
+from mozci import config as mozci_config
 from mozci import data
 from mozci.task import is_verify
 
@@ -48,6 +49,8 @@ RANGE_PUSHES = 20
 MAX_RANGE_COMMITS = 500
 # What the analysis publishes for the test-repair-fix run it hands on to.
 INVESTIGATION_ARTIFACT = "investigation.json"
+
+mozci_config.set(user_agent=_HEADERS["User-Agent"])
 
 
 @dataclass(frozen=True)

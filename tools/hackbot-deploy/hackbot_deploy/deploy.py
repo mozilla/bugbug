@@ -28,6 +28,7 @@ a digest can't.
 
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -37,6 +38,7 @@ REGION = "us-west1"
 LABEL_CONFIG_HASH = "hackbot.config_hash"
 LABEL_REVISION = "org.opencontainers.image.revision"
 LABEL_CREATED = "org.opencontainers.image.created"
+LABEL_VERSION = "org.opencontainers.image.version"
 JOB_LABEL_CONFIG_HASH = "hackbot-config-hash"
 HISTORY_LIMIT = 10
 # A registry image pinned by digest. The host is plain DNS labels: no "#",
@@ -50,6 +52,12 @@ _IMAGE = re.compile(
 
 AGENTS = "agents"
 SERVICES = "services"
+
+# Services with schema migrations, and the Cloud Run Job (webservices-infra,
+# api.tf) that runs them. A deploy of one of these runs its Job with the new
+# image first, and updates the service only if that succeeded. Forward only:
+# a rollback never migrates.
+MIGRATIONS = {"hackbot-api": "hackbot-api-migrate"}
 
 # The GitHub environment a prod promotion of each kind waits for approval in.
 PROD_APPROVAL = {AGENTS: "hackbot-prod-agents", SERVICES: "hackbot-prod-services"}
@@ -87,6 +95,9 @@ class Environment:
 
     def service_name(self, service: str) -> str:
         return f"{service}{self.name_suffix}"
+
+    def migration_job_name(self, service: str) -> str:
+        return f"{MIGRATIONS[service]}{self.name_suffix}"
 
 
 ENVIRONMENTS = {
@@ -134,6 +145,9 @@ class Cloud(Protocol):
         self, project: str, region: str, name: str, images: dict[str, str]
     ) -> None:
         """Set container images by container name, and wait until done."""
+
+    def run_job(self, project: str, region: str, name: str) -> None:
+        """Run the Job once and wait for it; fail unless the execution succeeded."""
 
     def get_service(self, project: str, region: str, name: str) -> dict[str, Any]: ...
 
@@ -193,7 +207,14 @@ def _read_record(
 def _summary(record: dict[str, Any]) -> dict[str, Any]:
     return {
         k: record[k]
-        for k in ("images", "config_hash", "revision", "created", "deployed_at")
+        for k in (
+            "images",
+            "config_hash",
+            "version",
+            "revision",
+            "created",
+            "deployed_at",
+        )
         if k in record
     }
 
@@ -276,6 +297,7 @@ def _ship(
         "runtime": runtime,
         "images": images,
         "config_hash": config_hash,
+        "version": labels.get(LABEL_VERSION),
         "revision": labels.get(LABEL_REVISION),
         "created": labels.get(LABEL_CREATED),
         "deployed_at": _now(),
@@ -359,6 +381,7 @@ def _adopt_terraform_deploy(
         "runtime": applied["runtime"],
         "images": running,
         "config_hash": applied["applied"],
+        "version": labels.get(LABEL_VERSION),
         "revision": labels.get(LABEL_REVISION),
         "created": labels.get(LABEL_CREATED),
         "deployed_at": _now(),
@@ -490,7 +513,8 @@ def deploy_service(
     """Put ``image`` on ``service`` in ``env``, or roll back to the last deployment.
 
     Only the image changes; everything else about the service is Terraform's.
-    A new revision is rolled out, and if it never becomes ready Cloud Run keeps
+    A service in MIGRATIONS first runs its migrations with the new image; then
+    a new revision is rolled out, and if it never becomes ready Cloud Run keeps
     serving the old one.
     """
     if rollback and image is not None:
@@ -532,6 +556,10 @@ def deploy_service(
     )
 
     def update() -> None:
+        if service in MIGRATIONS and not rollback:
+            migrate = env.migration_job_name(service)
+            cloud.set_job_images(env.project_id, REGION, migrate, images)
+            cloud.run_job(env.project_id, REGION, migrate)
         cloud.set_service_images(env.project_id, REGION, name, images)
         after = cloud.get_service(env.project_id, REGION, name)
         running = {c["name"]: c["image"] for c in after["template"]["containers"]}
@@ -586,6 +614,7 @@ def promotion(
         "kind": kind,
         "environment": PROD_APPROVAL[kind],
         "images": record["images"],
+        "version": record.get("version"),
         "revision": record.get("revision"),
         "created": record.get("created"),
         "deployed_by": record.get("deployed_by"),
@@ -625,6 +654,50 @@ def promote(
 # --- Builds --------------------------------------------------------------------
 
 
+def release_needed(
+    cloud: Cloud, env: Environment, deployable: str, version: str
+) -> tuple[bool, str | None]:
+    """Say whether ``deployable`` at ``version`` is new to ``env``.
+
+    Also returns the commit ``env`` runs now, the start of the release's
+    commit range. A release is a version bump: the same version again is
+    already there, whatever else changed.
+    """
+    split_id(deployable)
+    record, _ = _read_record(cloud, env, deployable)
+    if record is None:
+        return True, None
+    return record.get("version") != version, record.get("revision")
+
+
+def wait_for_older_builds(
+    cloud: Cloud,
+    project: str,
+    location: str,
+    build_id: str,
+    *,
+    timeout_seconds: float,
+    poll_seconds: float = 30.0,
+    on_wait: Callable[[list[str]], None] = lambda older: None,
+    sleep: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> None:
+    """Return once no older build of this build's trigger is still going.
+
+    Builds of one trigger deploy to one environment, so taking turns keeps
+    two of them from deploying at once while every build still deploys, in
+    the order they started.
+    """
+    deadline = clock() + timeout_seconds
+    while older := older_builds(cloud, project, location, build_id):
+        if clock() >= deadline:
+            raise DeployError(
+                f"older builds of this trigger are still running after {timeout_seconds:.0f}s: {', '.join(older)}"
+            )
+        on_wait(older)
+        sleep(poll_seconds)
+
+
 def built_images(
     cloud: Cloud,
     repository: str,
@@ -650,13 +723,7 @@ def built_images(
 
 
 def older_builds(cloud: Cloud, project: str, location: str, build_id: str) -> list[str]:
-    """Return the builds of this build's trigger that started earlier and are still going.
-
-    Deploys of one agent or service aren't serialised, and two at once can
-    leave it running one image while the record names the other. So a build
-    stops when an older one of its trigger is still going; rerunning the
-    trigger once that finishes deploys the newer commit.
-    """
+    """Return the builds of this build's trigger that started earlier and are still going."""
     build = cloud.get_build(project, location, build_id)
     trigger = build.get("buildTriggerId")
     if not trigger:  # started by hand, not by a trigger

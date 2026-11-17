@@ -1,0 +1,41 @@
+services:
+  # One evaluation run. Locally, FIREFOX_GIT_REPO is mounted read-only and lends
+  # its objects to the tree, so nothing is cloned. Run with:
+  #   FIREFOX_GIT_REPO=/path DATASET=<weave dataset>:latest \
+  #     docker compose --env-file .env -f agents/dataset-eval/compose.yml run --rm --build dataset-eval
+  dataset-eval:
+    build:
+      context: ../..
+      dockerfile: agents/dataset-eval/Dockerfile
+      target: agent
+    # Per-run inputs are not `:?`-required; pydantic AgentInputs validates them.
+    environment:
+      - RUN_ID
+      - DATASET=${DATASET:-}
+      - AGENT=${AGENT:-}
+      - HARNESS=${HARNESS:-}
+      - MODEL=${MODEL:-}
+      - EFFORT=${EFFORT:-}
+      - REPS=${REPS:-}
+      - TASKS=${TASKS:-}
+      - EXAMPLE_TIMEOUT_MIN=${EXAMPLE_TIMEOUT_MIN:-}
+      - JUDGE_MODEL=${JUDGE_MODEL:-}
+      - JUDGE_RUBRIC=${JUDGE_RUBRIC:-}
+      - LABEL=${LABEL:-}
+      - SOURCE_REPO=/workspace/firefox
+      - FIREFOX_MIRROR=/firefox
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CODEX_API_KEY=${CODEX_API_KEY:-}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - WEAVE_PROJECT=${WEAVE_PROJECT:-moz-bugbug/hackbot-evals}
+      - ARTIFACTS_DIR=/artifacts
+    shm_size: 2gb
+    volumes:
+      - ${FIREFOX_GIT_REPO:-/firefox}:/firefox:ro
+      - dataset-eval-workspace:/workspace
+      - dataset-eval-home:/home/agent
+      - ${HOME}/hackbot/artifacts:/artifacts
+
+volumes:
+  dataset-eval-workspace:
+  dataset-eval-home:

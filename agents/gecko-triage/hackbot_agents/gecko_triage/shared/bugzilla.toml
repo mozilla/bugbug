@@ -1,0 +1,51 @@
+# Bugzilla keywords and fields the agent reads or names, and its whiteboard tags. They are the same for every
+# team, so they live in `shared/` and not in a team file.
+
+# A summary that matches this is a meta bug.
+meta_summary = '\[meta\]|\bmeta[\s-]?bug\b'
+
+[keywords]
+# A bug with this keyword is a meta bug and is skipped.
+meta = "meta"
+# The keywords the agent may add: `stalled` when a bug has no path forward, `regression`
+# when the bug used to work, even if the regressor is not known. It never removes a keyword.
+add = ["stalled", "regression"]
+
+[fields]
+# Non-empty on a bug QA filed or follows.
+qa_whiteboard = "cf_qa_whiteboard"
+
+[history]
+# Changes to these fields give the agent nothing new to read, so they do not take the
+# last word away from its comment: the CC list, votes, ranks, and the release status and
+# tracking flags (`cf_status_firefox150`, `cf_tracking_firefox_esr140` and others).
+no_effect = ["cc", "votes", "cf_rank", "cf_fx_points", "cf_fx_iteration"]
+no_effect_prefixes = ["cf_status_", "cf_tracking_"]
+
+[whiteboard]
+# Keeps the agent off one bug. Anyone can add it.
+skip = "[gecko-triage:skip]"
+# The agent adds these to an analyzed bug whose fix looks small, so people can find it
+# (`rules/workflow.md`, "Fix tags"). `gfb_candidate` only suggests a good first bug: a
+# person adds the `good-first-bug` keyword and the mentor. It comes with `easy_fix`.
+easy_fix = "[gecko-triage:easy-fix]"
+gfb_candidate = "[gecko-triage:gfb-candidate]"
+
+[no_team]
+# The products a run with no team may triage. Most of their code is in the
+# mozilla-central checkout the agent reads, so it can find the code at fault. The
+# preflight skips any other product, for example Thunderbird, bugzilla.mozilla.org,
+# Invalid Bugs, Core Graveyard and Websites. The list is short on purpose: a product
+# joins only when a person checks that its code is in mozilla-central.
+products = [
+  "Core",
+  "Firefox",
+  "Toolkit",
+  "Testing",
+  "DevTools",
+  "GeckoView",
+  "Firefox for Android",
+  "Firefox Build System",
+  "Remote Protocol",
+  "WebExtensions",
+]

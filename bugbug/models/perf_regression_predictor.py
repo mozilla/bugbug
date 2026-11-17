@@ -416,10 +416,23 @@ class PerfRegressionPredictorModel(Model):
             return class_probabilities
         return class_probabilities.argmax(axis=-1)
 
+    @property
+    def version(self) -> str:
+        """The version ``bugbug_model.json`` declares, else the published artifact's name.
+
+        Retrained checkpoints are published under a new versioned path, so the
+        artifact name identifies the checkpoint when its metadata does not.
+        """
+        version = self.model_metadata.get("model_version")
+        if version:
+            return str(version)
+        name = self.artifact_url.rsplit("/", 1)[-1]
+        return name[: -len(".tar.zst")] if name.endswith(".tar.zst") else name
+
     def get_extra_data(self) -> dict[str, Any]:
         return {
             "model_name": MODEL_NAME,
-            "model_version": self.model_metadata.get("model_version"),
+            "model_version": self.version,
             "max_length": self.max_length,
             "calibrated": False,
         }

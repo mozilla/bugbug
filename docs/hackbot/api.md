@@ -23,6 +23,13 @@ user's email, stored as `requested_by` — the caller is a trusted service (the 
 is attribution, not authentication. It also takes a `dedupe_key` query parameter, which
 decides whether the request starts a run at all (see [Deduplication](#deduplication)).
 
+Every agent input schema includes `require_review`, which defaults to `false`. When set,
+all of the run's actions stay pending for manual approval, including action types the
+agent lists in `always_apply_actions`; otherwise, the agent's existing auto-apply policy
+decides. The value is stored with the run inputs so it remains available at completion,
+but it is not forwarded to the agent environment or prompt. Retriggers preserve the value
+because they reuse the original inputs.
+
 Artifact downloads are restricted to artifacts already listed on the run, which both scopes
 the download to that run's prefix and prevents probing unrelated objects.
 
@@ -145,6 +152,20 @@ retention and schema separable.
 
 Two tables, defined in [app/database/models.py](../../services/hackbot-api/app/database/models.py); schema changes go through Alembic
 ([services/hackbot-api/alembic/](../../services/hackbot-api/alembic/)).
+
+Every API deploy runs `alembic upgrade head` first, with the new image, from a
+Cloud Run Job (`hackbot-api-migrate`), and rolls the new code out only if it
+succeeds. Migrations are **forward only**:
+
+- A migration runs while the previous release still serves, so it must work
+  with that release's code: add columns nullable or with a default, and drop
+  things a release later.
+- A rollback swaps the image back and never downgrades; the `downgrade()`s drop
+  columns and tables, so running one loses data. Fix a bad migration with a
+  new one. A deliberate downgrade is a manual, break-glass step (see
+  webservices-infra `hackbot/README.md`, Deploys).
+- dev is shared: a branch deployed with a new migration moves dev's database
+  ahead, and other branches' deploys then fail until dev is downgraded by hand.
 
 **`runs`** is the system of record for a run — its inputs, execution name, summary,
 artifacts and terminal state. Listing orders by `created_at desc, run_id desc` rather than
