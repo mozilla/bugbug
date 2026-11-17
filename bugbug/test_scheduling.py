@@ -1487,25 +1487,37 @@ def _get_files(repo_dir: str, rev: str) -> list[str]:
 
     if not cached.rev:
         out = _hg(repo_dir, "files", "-r", rev, "-0")
-        files = set(out.decode("utf-8", "surrogateescape").split("\0"))
+        cached.files = sorted(
+            path for path in out.decode("utf-8", "surrogateescape").split("\0") if path
+        )
+        cached.manifest_by_path = None
     else:
-        files = set(cached.files)
+        added = set()
+        removed = set()
+        manifests_changed = False
         out = _hg(repo_dir, "status", "--rev", cached.rev, "--rev", rev, "-amr", "-0")
         for entry in out.decode("utf-8", "surrogateescape").split("\0"):
             if not entry:
                 continue
 
             status, path = entry.split(" ", 1)
-            cached.parsed_manifests.pop(path, None)
-            if status == "R":
-                files.discard(path)
-            else:
-                files.add(path)
+            if status == "A":
+                added.add(path)
+            elif status == "R":
+                removed.add(path)
+            if path.endswith(".toml"):
+                cached.parsed_manifests.pop(path, None)
+                manifests_changed = True
 
-    files.discard("")
+        if added or removed:
+            cached.files = sorted((set(cached.files) - removed) | added)
+
+        # The test manifests by the paths they include only change if test manifests change,
+        # or if files are added or removed, as they might match the globs of support files.
+        if manifests_changed or added or removed:
+            cached.manifest_by_path = None
+
     cached.rev = rev
-    cached.files = sorted(files)
-    cached.manifest_by_path = None
     return cached.files
 
 

@@ -1439,6 +1439,39 @@ def test_find_manifests_for_paths_cached_by_repo(tmp_path, monkeypatch) -> None:
         ) == {"test/mochitest.toml"}
 
 
+def test_find_manifests_for_paths_rebuilt_when_needed(tmp_path) -> None:
+    find = _Finder(tmp_path)
+    (tmp_path / "test").mkdir()
+    (tmp_path / "test" / "mochitest.toml").write_text(
+        '[DEFAULT]\nsupport-files = ["data/**"]\n\n["test_a.html"]\n'
+    )
+    (tmp_path / "test" / "test_a.html").write_text("a")
+    (tmp_path / "test" / "data").mkdir()
+    (tmp_path / "test" / "data" / "a.json").write_text("a")
+
+    def manifest_by_path():
+        return test_scheduling._files_by_repo[str(tmp_path)].manifest_by_path
+
+    assert find.manifests(["test/data/a.json"]) == {"test/mochitest.toml"}
+    initial = manifest_by_path()
+
+    # Modifying a file which is not a test manifest doesn't change the test manifests.
+    (tmp_path / "test" / "test_a.html").write_text("b")
+    assert find.manifests(["test/test_a.html"]) == {"test/mochitest.toml"}
+    assert manifest_by_path() is initial
+
+    # Adding a file might add it to the support files of a test manifest.
+    (tmp_path / "test" / "data" / "b.json").write_text("b")
+    assert find.manifests(["test/data/b.json"]) == {"test/mochitest.toml"}
+    assert manifest_by_path() is not initial
+    initial = manifest_by_path()
+
+    # Modifying a test manifest changes the test manifests.
+    (tmp_path / "test" / "mochitest.toml").write_text('["test_a.html"]\n')
+    assert find.manifests(["test/data/b.json"]) == set()
+    assert manifest_by_path() is not initial
+
+
 def test_find_tasks_for_paths(tmp_path) -> None:
     find = _Finder(tmp_path)
     known_tasks = (
