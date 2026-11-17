@@ -4,7 +4,7 @@ From the repo root:
 
     uv run --no-project --python 3.14 --with pytest --with fastapi --with httpx \
         --with python-dotenv --with pillow --with requests --with uvicorn \
-        pytest -q agents/autowebcompat-etp/local_runner/tests
+        --with anthropic pytest -q agents/autowebcompat-etp/local_runner/tests
 """
 
 import importlib.util
@@ -37,6 +37,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "RUNS", {})
     # The worker threads wait on the original queue, so nothing queued here runs.
     monkeypatch.setattr(server, "RUN_QUEUE", queue.Queue())
+    monkeypatch.setattr(server, "MODELS_CACHE", None)
     return artifacts
 
 
@@ -53,6 +54,60 @@ def write_run(artifacts, run_id, params, result):
     summary = {"status": "ok", "findings": {"result": result}}
     (path / "summary.json").write_text(json.dumps(summary))
     return path
+
+
+# --- models --------------------------------------------------------------------
+
+
+def test_models_fallback_when_sdk_fails(client, monkeypatch):
+    def broken(**kwargs):
+        raise RuntimeError("no network")
+
+    monkeypatch.setattr(server.anthropic, "Anthropic", broken)
+    body = client.get("/api/models").json()
+    assert body["fallback"] is True
+    assert [m["id"] for m in body["models"]] == [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-fable-5-2",
+    ]
+    assert all(m["display_name"] for m in body["models"])
+    assert server.MODELS_CACHE is None
+
+
+def test_models_listed_newest_first_and_cached(client, monkeypatch):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    calls = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.models = self
+
+        def list(self):
+            calls.append(1)
+            return [
+                SimpleNamespace(
+                    id="old", display_name="Old", created_at=datetime(2025, 1, 1)
+                ),
+                SimpleNamespace(
+                    id="new", display_name="New", created_at=datetime(2026, 11, 1)
+                ),
+            ]
+
+    monkeypatch.setattr(server.anthropic, "Anthropic", FakeClient)
+    for _ in range(2):
+        body = client.get("/api/models").json()
+        assert body == {
+            "models": [
+                {"id": "new", "display_name": "New"},
+                {"id": "old", "display_name": "Old"},
+            ],
+            "fallback": False,
+        }
+    assert len(calls) == 1
 
 
 # --- Bugzilla actions ----------------------------------------------------------

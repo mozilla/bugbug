@@ -1,6 +1,13 @@
 # /// script
 # requires-python = ">=3.14"
-# dependencies = ["fastapi", "uvicorn", "requests", "python-dotenv", "pillow"]
+# dependencies = [
+#     "anthropic",
+#     "fastapi",
+#     "pillow",
+#     "python-dotenv",
+#     "requests",
+#     "uvicorn",
+# ]
 # ///
 """Local runner and review UI for the autowebcompat-etp agent.
 
@@ -38,6 +45,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+import anthropic
 import requests
 import uvicorn
 from dotenv import load_dotenv
@@ -77,6 +85,17 @@ BUGZILLA_ROOT = BUGZILLA_REST.removesuffix("/rest")
 META_FILE = "runner-meta.json"
 OUTPUT_FILE = "runner-output.log"
 APPLIED_FILE = "runner-applied.json"
+
+# What /api/models offers when the Models API can't be reached.
+FALLBACK_MODELS = [
+    {"id": "claude-opus-5-5", "display_name": "Claude Opus 5.5"},
+    {"id": "claude-sonnet-5-5", "display_name": "Claude Sonnet 5.5"},
+    {"id": "claude-haiku-5-5", "display_name": "Claude Haiku 5.5"},
+    {"id": "claude-fable-5-2", "display_name": "Claude Fable 5.2"},
+]
+MODELS_TTL = 3600
+# (fetched at, models) of the last successful Models API call.
+MODELS_CACHE: tuple[float, list[dict[str, str]]] | None = None
 
 SCREENSHOT_LABELS = {
     "standard": "Standard ETP",
@@ -693,6 +712,22 @@ def config() -> dict[str, Any]:
             for name, (query, _) in BUG_QUERIES.items()
         },
     }
+
+
+@app.get("/api/models")
+def list_models() -> dict[str, Any]:
+    """The models the API key can use, newest first; a fixed list if that fails."""
+    global MODELS_CACHE
+    if MODELS_CACHE and time.time() - MODELS_CACHE[0] < MODELS_TTL:
+        return {"models": MODELS_CACHE[1], "fallback": False}
+    try:
+        client = anthropic.Anthropic(timeout=15.0, max_retries=1)
+        found = sorted(client.models.list(), key=lambda m: m.created_at, reverse=True)
+    except Exception as exc:
+        return {"models": FALLBACK_MODELS, "fallback": True, "error": str(exc)}
+    models = [{"id": m.id, "display_name": m.display_name} for m in found]
+    MODELS_CACHE = (time.time(), models)
+    return {"models": models, "fallback": False}
 
 
 @app.get("/api/bugs/{query}")

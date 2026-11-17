@@ -8,6 +8,7 @@ import type {
   Applied,
   BugDraft,
   Config,
+  ModelList,
   Review,
   RunInfo,
   RunOptions,
@@ -85,6 +86,7 @@ export interface StartState {
 export const store = proxy({
   config: null as Config | null,
   configError: null as string | null,
+  models: null as ModelList | null,
   runs: [] as RunInfo[],
   start: {
     agent: "etp",

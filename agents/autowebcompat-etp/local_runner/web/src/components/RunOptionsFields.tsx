@@ -1,7 +1,9 @@
+import { useId } from "react";
 import { useSnapshot } from "valtio";
 
 import type { Effort, RunOptions } from "../api";
 import { EFFORTS } from "../format";
+import { store } from "../store";
 
 interface Props {
   /** The store's options proxy to edit in place. */
@@ -20,6 +22,9 @@ export function RunOptionsFields({
   showMode = true,
 }: Props) {
   const snap = useSnapshot(options, { sync: true });
+  const { models } = useSnapshot(store);
+  const modelList = useId();
+  const modelName = models?.models.find((m) => m.id === snap.model);
 
   const maxTurns = (
     <div>
@@ -42,9 +47,23 @@ export function RunOptionsFields({
           <label>Model</label>
           <input
             placeholder="default"
+            list={modelList}
             value={snap.model ?? ""}
             onChange={(e) => (options.model = e.target.value || null)}
           />
+          <datalist id={modelList}>
+            {models?.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.display_name}
+              </option>
+            ))}
+          </datalist>
+          {modelName && <div className="meta">{modelName.display_name}</div>}
+          {models?.fallback && (
+            <div className="meta" title={models.error}>
+              Couldn't list models; showing a fixed list.
+            </div>
+          )}
         </div>
         <div>
           <label>Effort</label>

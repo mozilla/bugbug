@@ -48,6 +48,19 @@ export interface RunInfo {
   applied?: boolean;
 }
 
+/** A model the Models API lists, or one of the server's fallbacks. */
+export interface ModelInfo {
+  id: string;
+  display_name: string;
+}
+
+export interface ModelList {
+  models: ModelInfo[];
+  /** The Models API couldn't be reached; these are a fixed list. */
+  fallback: boolean;
+  error?: string;
+}
+
 export interface Config {
   artifacts_root: string;
   bugzilla: string;
@@ -258,6 +271,7 @@ const runPath = (runId: string) => `/api/runs/${encodeURIComponent(runId)}`;
 
 export const api = {
   config: () => request<Config>("/api/config"),
+  models: () => request<ModelList>("/api/models"),
   whoami: () => request<WhoAmI>("/api/whoami"),
   runs: () => request<RunInfo[]>("/api/runs"),
   startRun: (params: RunParams) => post<RunInfo>("/api/runs", params),

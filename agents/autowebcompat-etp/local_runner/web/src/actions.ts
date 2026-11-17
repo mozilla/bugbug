@@ -30,6 +30,10 @@ export function init(): () => void {
     (config) => (store.config = config),
     (err) => (store.configError = message(err))
   );
+  api.models().then(
+    (models) => (store.models = models),
+    () => {}
+  );
   loadRuns();
   const poll = setInterval(loadRuns, RUNS_POLL_MS);
   const tick = setInterval(() => {
