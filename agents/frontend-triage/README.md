@@ -50,12 +50,12 @@ and the channel each reports to:
 | `Firefox for Android :: Downloads`                              | `#firefox-android-dev-info`                |
 | `Firefox for Android :: Tabs`                                   | `#firefox-android-dev-info`                |
 | `Firefox for Android :: Translations`                           | `#firefox-android-dev-info`                |
-| `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust`            |
-| `Firefox for Android :: Logins`                                 | `#android-activation-and-trust`            |
-| `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust`            |
-| `Firefox for Android :: Privacy`                                | `#android-activation-and-trust`            |
-| `Firefox for Android :: QR`                                     | `#android-activation-and-trust`            |
-| `Firefox for Android :: Settings`                               | `#android-activation-and-trust`            |
+| `Firefox for Android :: Experimentation and Telemetry`          | `#android-activation-and-trust-triage`     |
+| `Firefox for Android :: Logins`                                 | `#android-activation-and-trust-triage`     |
+| `Firefox for Android :: Onboarding`                             | `#android-activation-and-trust-triage`     |
+| `Firefox for Android :: Privacy`                                | `#android-activation-and-trust-triage`     |
+| `Firefox for Android :: QR`                                     | `#android-activation-and-trust-triage`     |
+| `Firefox for Android :: Settings`                               | `#android-activation-and-trust-triage`     |
 | `Firefox Build System :: Android Studio and Gradle Integration` | `#android-pie`                             |
 | `DevTools :: about:debugging`                                   | `#devtools-triage`                         |
 | `DevTools :: Application Panel`                                 | `#devtools-triage`                         |
