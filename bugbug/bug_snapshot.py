@@ -108,18 +108,20 @@ def target_milestone(target_milestone):
     return mapping.get(target_milestone, target_milestone)
 
 
-def null_str(val):
-    if val == "":
-        return None
-
-    return val
-
-
 def null_int(val):
     if val == "":
         return None
 
     return int(val)
+
+
+def timestamp(val):
+    # Bugzilla returns timestamps in history as "YYYY-MM-DD HH:MM:SS" (UTC),
+    # while bug fields use ISO 8601 with a "Z" suffix.
+    if val == "":
+        return None
+
+    return dateutil.parser.parse(val).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 FIELD_TYPES = {
@@ -139,7 +141,8 @@ FIELD_TYPES = {
     "platform": platform,
     "product": product,
     "target_milestone": target_milestone,
-    "cf_due_date": null_str,
+    "cf_due_date": timestamp,
+    "cf_last_resolved": timestamp,
 }
 
 
