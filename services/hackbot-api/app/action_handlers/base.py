@@ -47,6 +47,7 @@ class ApplyContext:
     download_artifact: ArtifactDownloader
     hackbot_client: HackbotClient
     attachments: list[dict[str, str]] = field(default_factory=list)
+    agent_version: str | None = None
 
     def artifact_key(self, name: str) -> str | None:
         """The uploaded key for an attachment recorded under ``name``, if any."""

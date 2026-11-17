@@ -290,7 +290,7 @@ class _FakeRun:
     status: str
     agent: str = "bug-fix"
     run_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    summary: dict | None = None
+    summary: dict | None = field(default_factory=dict)
     inputs: dict = field(default_factory=lambda: {"require_review": False})
 
 
