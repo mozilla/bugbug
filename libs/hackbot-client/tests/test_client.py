@@ -310,7 +310,7 @@ async def test_apply_actions_rejects_a_success_response_that_is_not_json(monkeyp
 
 
 async def test_trigger_run_with_service_account_auth(monkeypatch):
-    """Client mints a Bearer token from the key file, audience is base_url."""
+    """Client mints a Bearer token from the key file for the given audience."""
     captured = _capture_post(
         monkeypatch,
         httpx.Response(

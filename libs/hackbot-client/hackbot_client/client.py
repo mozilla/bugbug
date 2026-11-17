@@ -30,7 +30,7 @@ class HackbotClient:
         base_url: str = "https://hackbot-api.moz.tools",
         api_key: str = "",
         key_file: str = "",
-        audience: str = "https://hackbot-api.moz.tools",
+        audience: str = "",
         timeout_seconds: float = 30.0,
     ) -> None:
         """Initialize the client.
@@ -44,7 +44,7 @@ class HackbotClient:
             key_file: Path to a service account key file, for running outside
                 GCP without a metadata server (optional)
             audience: Audience of service account tokens; must match the one
-                the Hackbot API accepts
+                the Hackbot API accepts (required unless `api_key` is set)
             timeout_seconds: HTTP request timeout
         """
         self._base_url = base_url.rstrip("/")
@@ -58,6 +58,8 @@ class HackbotClient:
         await self._http.aclose()
 
     def _refresh_credentials(self) -> None:
+        if not self._audience:
+            raise ValueError("audience is required for service account auth")
         request = google_requests.Request()
         if self._credentials is None:
             if self._key_file:
