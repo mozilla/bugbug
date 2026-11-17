@@ -27,17 +27,24 @@ def _client() -> sentry_sdk.Client:
 
 class ReportProblemHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        feedback_type = params.get("type", "error")
         event_id = _client().capture_event(
             {
                 "message": params["title"],
                 "level": _SENTRY_LEVELS[params["severity"]],
                 "tags": {
                     "kind": "agent_feedback",
+                    "feedback_type": feedback_type,
                     "agent": ctx.agent,
                     "run_id": ctx.run_id,
                 },
                 "fingerprint": ["agent-feedback", params["title"]],
-                "contexts": {"feedback": {"message": params["message"]}},
+                "contexts": {
+                    "feedback": {
+                        "message": params["message"],
+                        "type": feedback_type,
+                    }
+                },
             },
             scope=sentry_sdk.Scope(),
         )

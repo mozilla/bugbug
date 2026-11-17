@@ -101,7 +101,7 @@ class GitHubAppSettings(BaseModel):
         pem = value.get_secret_value().replace("\\n", "\n").strip()
         try:
             key = load_pem_private_key(pem.encode(), password=None)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             key = None
         if not isinstance(key, RSAPrivateKey):
             raise ValueError(
