@@ -16,13 +16,15 @@ instructions that used to tell the model to ignore the Markdown fences and the
 `{calculator, severity}` envelope onto our flat result fields.
 """
 
-# The skill's frontmatter `name`, which is what ClaudeAgentOptions.skills takes.
-SKILL_NAME = "triage-perf-bug"
+from hackbot_agents.perf_triage.plugin import TRIAGE_SKILL
+
+# The plugin-qualified skill name ClaudeAgentOptions.skills takes.
+SKILL_NAME = TRIAGE_SKILL
 
 TRIAGE_TASK_DETAILS = """\
 You are running performance triage on one Firefox bug: step 1 of a longer flow.
 
-USE THE SKILL, IN AGENT MODE. Invoke the `triage-perf-bug` skill. Agent mode is
+USE THE SKILL, IN AGENT MODE. Invoke the `perf:triage-perf-bug` skill. Agent mode is
 already switched on for you through PERF_TRIAGE_AGENT_MODE in the environment,
 and the skill's own "Agent mode" section says what that changes: Step 3 (profile
 analysis) runs only when profile URLs are listed in the user message (otherwise

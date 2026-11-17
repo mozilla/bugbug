@@ -75,23 +75,17 @@ RUN set -eux; \
     rm -rf /tmp/searchfox-cli.tar.gz /tmp/searchfox-cli-*; \
     searchfox-cli --version
 
-# The profiler-analysis skill, vendored at a pinned mozilla-central revision in
-# agents/perf-triage/hackbot_agents/perf_triage/skills/ (see PINNED.md there). The SDK discovers
-# skills on the filesystem at <cwd>/.claude/skills/ and WORKDIR is /app, so this
-# exact path is what makes ClaudeAgentOptions.skills=["profiler-analysis"] find
-# it — proven in-container 2026-08-19.
-#
-# references/ is load-bearing, not documentation: the skill Globs that directory
-# for the case study matching the scenario. Copying SKILL.md alone leaves the
-# skill RUNNING but uncalibrated, which fails silently. Copy the whole tree.
-COPY agents/perf-triage/hackbot_agents/perf_triage/skills/profiler-analysis \
-     /app/.claude/skills/profiler-analysis
-
-# The triage-perf-bug skill (step 1), vendored at a pinned revision of
-# performance-triage-calculator -- see PINNED.md. Same /app/.claude/skills/
-# discovery path as profiler-analysis above. One file, no references/ tree.
-COPY agents/perf-triage/hackbot_agents/perf_triage/skills/triage-perf-bug \
-     /app/.claude/skills/triage-perf-bug
+# The skills (profiler-analysis, triage-perf-bug) come from the `perf` plugin in
+# mozilla/firefox-aidev-plugins, cloned at a pinned commit; the agent loads it
+# with ClaudeAgentOptions.plugins (hackbot_agents/perf_triage/plugin.py). Bump
+# the commit to take a newer skill, and re-run the eval when you do.
+ARG FIREFOX_AIDEV_PLUGINS_REPO=https://github.com/mozilla/firefox-aidev-plugins
+ARG FIREFOX_AIDEV_PLUGINS_REV=bc5569595d27960fa29e30c987ca83ce208d1744
+RUN git init -q /opt/firefox-aidev-plugins \
+    && git -C /opt/firefox-aidev-plugins fetch -q --depth 1 "$FIREFOX_AIDEV_PLUGINS_REPO" "$FIREFOX_AIDEV_PLUGINS_REV" \
+    && git -C /opt/firefox-aidev-plugins checkout -q FETCH_HEAD \
+    && test -f /opt/firefox-aidev-plugins/plugins/perf/skills/triage-perf-bug/SKILL.md \
+    && test -d /opt/firefox-aidev-plugins/plugins/perf/skills/profiler-analysis/references
 
 
 # hackbot.toml lives at the agent root; the runtime discovers it in the cwd.
@@ -99,8 +93,7 @@ COPY agents/perf-triage/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
     && mkdir -p /workspace \
-    && chown agent:agent /workspace \
-    && chown -R agent:agent /app/.claude
+    && chown agent:agent /workspace
 
 USER agent
 

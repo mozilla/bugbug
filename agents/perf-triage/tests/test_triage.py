@@ -16,7 +16,10 @@ def make_triage(**kw) -> PerfTriage:
 def test_skipping_the_profile_loads_only_the_triage_skill():
     opts = make_triage(analyse_profile=False).agent_options()
     assert opts.env["PERF_TRIAGE_SKIP_PROFILE"] == "1"
-    assert opts.skills == ["triage-perf-bug"]
+    assert opts.skills == ["perf:triage-perf-bug"]
+    assert opts.plugins == [
+        {"type": "local", "path": "/opt/firefox-aidev-plugins/plugins/perf"}
+    ]
 
 
 def test_skip_is_the_default():
@@ -28,7 +31,7 @@ def test_perf_triage_loads_profiler_analysis():
     opts = t.agent_options()
     assert "PERF_TRIAGE_SKIP_PROFILE" not in opts.env
     assert opts.env["PERF_TRIAGE_AGENT_MODE"] == "1"
-    assert opts.skills == ["triage-perf-bug", "profiler-analysis"]
+    assert opts.skills == ["perf:triage-perf-bug", "perf:profiler-analysis"]
     assert "https://share.firefox.dev/x" in t.user_prompt()
 
 

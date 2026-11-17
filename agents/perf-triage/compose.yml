@@ -38,6 +38,7 @@ services:
       - EFFORT
       # Unset or empty means the installed calculator package.
       - PERF_TRIAGE_PATH
+      - PERF_PLUGIN_DIR
       # The internal rankings: production downloads them from GCS; locally the
       # host file in $PERF_TRIAGE_TOP_SITES is mounted below.
       - PERF_TRIAGE_TOP_SITES_URI

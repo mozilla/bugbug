@@ -13,10 +13,10 @@ from typing import Any
 from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 from hackbot_agents.perf_triage.config import BUGZILLA_READ_TOOLS
 from hackbot_agents.perf_triage.inputs import BugDataInput, PerfInput
+from hackbot_agents.perf_triage.plugin import PROFILER_ANALYSIS_SKILL, perf_plugin
 from hackbot_agents.perf_triage.tasks import RunTracker, Task, TaskConfig
 from hackbot_agents.perf_triage.triage.prompt import SKILL_NAME, TRIAGE_TASK_DETAILS
 from hackbot_agents.perf_triage.triage.result import TriageResult
-from hackbot_agents.perf_triage.vendored import PROFILER_ANALYSIS_SKILL
 from perf_triage_calculator import perf_triage as calc
 
 # Where the skill finds the calculator script. It resolves $PERF_TRIAGE_PATH
@@ -98,11 +98,10 @@ class PerfTriage(Task):
         if not self.analyse_profile:
             env[PERF_TRIAGE_SKIP_PROFILE_ENV] = "1"
         options.env = env
-        # Same deliberate divergence as the root-cause task: the SDK sets
-        # setting_sources itself and adds the Skill tool when `skills` is given,
-        # so pinning setting_sources=[] would switch off the discovery that
-        # loads the skill from /app/.claude/skills/. Clear it rather than
-        # overriding it with another list.
+        # The skills come from the `perf` plugin. The SDK sets setting_sources
+        # itself and adds the Skill tool when `skills` is given, so clear it
+        # rather than pinning another list.
+        options.plugins = perf_plugin()
         options.skills = (
             [SKILL_NAME, PROFILER_ANALYSIS_SKILL]
             if self.analyse_profile
