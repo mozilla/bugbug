@@ -288,3 +288,37 @@ def test_refresh_loop_survives_provider_error(monkeypatch, tmp_path):
     refresher._loop()
 
     assert calls == [1]
+
+
+def test_wandb_refresh_forces_a_new_exchange(monkeypatch, tmp_path):
+    from weave.wandb_interface import auth
+
+    token_file = tmp_path / "identity-token"
+    credentials_file = tmp_path / "credentials.json"
+    monkeypatch.setenv(wif.WandbWifSettings.token_file_env, str(token_file))
+    monkeypatch.setenv(auth.CREDENTIALS_FILE_ENV, str(credentials_file))
+    monkeypatch.delenv("WANDB_API_KEY", raising=False)
+    credentials = auth.get_wandb_credentials()
+    credentials._cached_access_token = ("stale", None)
+    credentials_file.write_text("{}")
+
+    config = wif.WandbWifSettings(audience=_WANDB_AUDIENCE)
+    refresher = wif.TokenFileRefresher(
+        token_file,
+        interval=0,
+        audience=_WANDB_AUDIENCE,
+        provider_id=config.provider_id,
+        name=config.name,
+        on_refresh=config.on_token_refresh,
+    )
+
+    def _fetch(*_a, **_k):
+        refresher.stop()
+        return "fresh.jwt"
+
+    monkeypatch.setattr(wif, "fetch_gcp_identity_token", _fetch)
+
+    refresher._loop()
+
+    assert credentials._cached_access_token is None
+    assert not credentials_file.exists()

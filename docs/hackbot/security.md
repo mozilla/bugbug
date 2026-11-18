@@ -49,6 +49,8 @@ The runtime fetches that token from the GCP metadata server, writes it to a priv
 SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
 run nor a single exchange, so the file has to stay fresh for the whole run
 ([hackbot_runtime/wif.py](../../libs/hackbot-runtime/hackbot_runtime/wif.py)).
+Weave also caches the W&B access token past the point W&B accepts it, so each refresh drops
+that cache too.
 
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take
