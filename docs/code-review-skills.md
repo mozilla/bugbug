@@ -348,9 +348,10 @@ a stack parent or a related patch.
 ### Testing your rules and skills
 
 Pass your work-in-progress rules and skill files directly to `patch_review`
-via the MCP. Rules are merged by name into the fetched `review-context.toml`
-(replacing a rule with the same name, or appending if new). Skill content is
-injected directly, bypassing the network fetch for matching names.
+via the MCP (only in Claude Code, see below for `codex`). Rules are merged
+by name into the fetched `review-context.toml` (replacing a rule with the
+same name, or appending if new). Skill content is injected directly, bypassing
+the network fetch for matching names.
 
 From Claude Code, trigger a review with your local files:
 
@@ -374,6 +375,59 @@ This simulates the state as if your changes had already landed — no push
 required. If a skill is missing, verify the rule conditions match the patch's
 changed files (`any_file` / `all_files` against the actual `+++ b/` paths in
 the diff).
+
+Codex doesn't implement `prompt` resources in MCP, so to check things, either
+use Claude Code, or do it manually with e.g. curl::
+
+Simple example:
+
+```
+curl --fail-with-body --silent --show-error \
+  https://mcp-dev.moz.tools/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "prompts/get",
+    "params": {
+      "name": "patch_review",
+      "arguments": {
+        "patch_url": "https://phabricator.services.mozilla.com/D123456"
+      }
+    }
+  }'
+
+```
+
+more complete example with additional rules:
+
+```
+jq -n \
+  --arg patch_url 'https://phabricator.services.mozilla.com/D295935' \
+  --arg review_context_repo 'mozilla-firefox/firefox' \
+  --rawfile extra_context_toml review-context.toml \
+  --arg content_overrides '{".claude/skills/dom-audio/SKILL.md": "skill content here"}' \
+  '{
+    jsonrpc: "2.0",
+    id: 1,
+    method: "prompts/get",
+    params: {
+      name: "patch_review",
+      arguments: {
+        patch_url: $patch_url,
+        review_context_repo: $review_context_repo,
+        extra_context_toml: $extra_context_toml,
+        content_overrides: $content_overrides
+      }
+    }
+  }' |
+curl --fail-with-body --silent --show-error \
+  https://mcp-dev.moz.tools/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data-binary @-
+```
 
 ### Gotchas
 
