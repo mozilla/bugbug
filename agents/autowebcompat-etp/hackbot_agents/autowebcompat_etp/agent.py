@@ -33,6 +33,7 @@ from .exceptions import (
     pattern_host,
 )
 from .mcp_servers import build_firefox_devtools_server
+from .preflight import preflight
 from .result import (
     RESULT_SERVER_NAME,
     ClassifierFeature,
@@ -335,10 +336,13 @@ async def run_autowebcompat_etp(
     bugzilla_mcp_server: McpServerConfig,
     publish_file: PublishFile,
     mode: Mode = "investigate",
+    run_preflight: bool = True,
 ) -> AutowebcompatEtpResult:
     """Investigate an ETP breakage report and return the proposed fix.
 
-    In `retest` mode, Firefox runs with the ETP exception list turned off.
+    In `retest` mode, Firefox runs with the ETP exception list turned off. With
+    `run_preflight`, the URL is loaded first, and a site Firefox shows an error
+    page for ends the run without starting the agent.
 
     Raises :class:`AgentError` if the agent ends in an error.
     """
@@ -350,7 +354,7 @@ async def run_autowebcompat_etp(
         screenshot_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-screenshots-"))
         log_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-logs-"))
         content_blocking_log_file = log_dir / CONTENT_BLOCKING_LOG_FILE
-        result = await EtpInvestigation(
+        investigation = EtpInvestigation(
             config,
             tracker,
             firefox_path,
@@ -359,7 +363,17 @@ async def run_autowebcompat_etp(
             screenshot_dir,
             content_blocking_log_file,
             mode,
-        ).run()
+        )
+        stopped = (
+            await preflight(
+                input_data,
+                investigation.mcp_servers["firefox-devtools"],
+                investigation.screenshot_paths["standard"],
+            )
+            if run_preflight
+            else None
+        )
+        result = stopped if stopped is not None else await investigation.run()
 
     records = exception_records(result, input_data)
     whiteboard_tags, user_story_lines = bug_tags(result)

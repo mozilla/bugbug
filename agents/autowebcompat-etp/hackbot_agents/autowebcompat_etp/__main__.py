@@ -33,6 +33,9 @@ class AgentInputs(BaseSettings):
     headless: bool = False
     # `retest` reruns an old bug with Firefox's ETP exceptions turned off.
     mode: Mode = "investigate"
+    # Load the URL before starting the agent, and stop if Firefox shows an
+    # error page for it.
+    preflight: bool = True
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -76,6 +79,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
         },
         publish_file=ctx.publish_file,
         mode=inputs.mode,
+        run_preflight=inputs.preflight,
     )
     end_time = datetime.now()
 
