@@ -4,6 +4,13 @@ function lineClass(line: string): string {
   if (line.startsWith("[agent]")) return "agent";
   if (line.startsWith("[done]") || line.startsWith("=====")) return "done";
   if (/ERROR|Traceback|\[tool←ERROR\]| - ERROR - /.test(line)) return "err";
+  // Docker and runner failures carry no "ERROR" marker.
+  if (
+    /^failed to |rpc error|Cannot connect to the Docker|\[runner\] .*(failed|status error)/.test(
+      line,
+    )
+  )
+    return "err";
   if (line.startsWith("[agent→tool]") || line.startsWith("[tool←"))
     return "tool";
   return "";
