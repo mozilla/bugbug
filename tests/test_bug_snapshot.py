@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from datetime import datetime, timezone
 
 from bugbug import bugzilla
 from bugbug.bug_snapshot import rollback
@@ -122,6 +123,34 @@ def _make_bug_with_history():
             },
         ],
     }
+
+
+def test_rollback_before():
+    bug = rollback(
+        _make_bug_with_history(),
+        before=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        do_assert=True,
+    )
+    assert bug["keywords"] == ["perf"]
+    assert bug["severity"] == "S3"
+    assert [c["count"] for c in bug["comments"]] == [0, 1]
+
+    bug = rollback(
+        _make_bug_with_history(),
+        before=datetime(2026, 1, 1, 12, tzinfo=timezone.utc),
+        do_assert=True,
+    )
+    assert bug["keywords"] == ["perf"]
+    assert bug["severity"] == "--"
+    assert [c["count"] for c in bug["comments"]] == [0]
+
+    bug = rollback(
+        _make_bug_with_history(),
+        before=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        do_assert=True,
+    )
+    assert bug["keywords"] == ["perf", "regression"]
+    assert len(bug["comments"]) == 3
 
 
 def test_rollback_skips_unparsable_changes():
