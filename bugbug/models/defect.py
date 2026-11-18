@@ -7,14 +7,13 @@ import itertools
 import logging
 from typing import Any
 
-import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
-from imblearn.pipeline import Pipeline as ImblearnPipeline
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.svm import LinearSVC
 
-from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
+from bugbug import bug_features, bugzilla, feature_cleanup, labels
 from bugbug.model import BugModel
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +23,10 @@ logger = logging.getLogger(__name__)
 class DefectModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
+
+        # Cross-validation multiplies the (long) training time, the test set
+        # evaluation is enough.
+        self.cross_validation_enabled = False
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -42,6 +45,13 @@ class DefectModel(BugModel):
             bug_features.AffectedThenUnaffected(),
             bug_features.Product(),
             bug_features.Component(),
+            bug_features.BugReporter(),
+            bug_features.OpSys(),
+            bug_features.Platform(),
+            bug_features.Version(),
+            bug_features.FiledVia(),
+            bug_features.HasImageAttachmentAtBugCreation(),
+            bug_features.HasAttachment(),
         ]
 
         if historical:
@@ -66,31 +76,54 @@ class DefectModel(BugModel):
             ]
         )
 
-        self.clf = ImblearnPipeline(
+        # A linear model on sparse n-gram features is as accurate as gradient
+        # boosted trees for these tasks, and much faster to train. Probabilities
+        # are calibrated on out-of-fold predictions.
+        self.clf = Pipeline(
             [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            (
+                                "title",
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=50000,
+                                ),
+                                "title",
+                            ),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(
+                                    min_df=3,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=100000,
+                                ),
                                 "first_comment",
                             ),
                             (
                                 "comments",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(
+                                    min_df=3,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=100000,
+                                ),
                                 "comments",
                             ),
                         ]
                     ),
                 ),
-                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    CalibratedClassifierCV(
+                        LinearSVC(C=0.1), method="isotonic", cv=3, n_jobs=3
+                    ),
                 ),
             ]
         )
