@@ -15,7 +15,7 @@ def input_attachments_prompt(files: list[Path]) -> str:
         return ""
     listing = "\n".join(f"- {path}" for path in files)
     return (
-        "The request came with these attached files. Use the Read tool to look "
-        "at any that help, such as screenshots or logs:\n"
+        "The request came with these attached files. Open any that help with "
+        "the task:\n"
         f"{listing}\n\n"
     )
