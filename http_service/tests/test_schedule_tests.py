@@ -390,7 +390,9 @@ def test_schedule_backout(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -433,7 +435,9 @@ def test_schedule_backout_try(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -465,7 +469,9 @@ def test_schedule_backout_treeherder_failure(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     mock_schedule_tests_classify(
         {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}

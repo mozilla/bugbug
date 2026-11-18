@@ -1936,6 +1936,39 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
     trigger_pull()
 
 
+def get_stack(repo_dir: str, branch: str, rev: str) -> list[bytes]:
+    """The nodes of the patches in the stack of a revision, like utils.get_hgmo_stack.
+
+    On try, they are computed from the local repository with the automationrelevant
+    revset of the hgmo extension, which hg.mozilla.org uses for automationrelevance:
+    the draft ancestors of the revision (from the phases pulled from try). On other
+    repositories, the stack is made of the changesets of the push of the revision,
+    which are only known by hg.mozilla.org, so it is retrieved from there.
+    """
+    if branch != "try" or not re.fullmatch(r"[0-9a-f]{40}", rev):
+        return utils.get_hgmo_stack(branch, rev)
+
+    with hglib.open(repo_dir) as hg:
+        changesets = json.loads(
+            hg.rawcommand(
+                hglib.util.cmdbuilder(
+                    b"log",
+                    rev=f"sort(automationrelevant({rev}))".encode("ascii"),
+                    template=b"json(node, files)",
+                    config=["hgmo.automationrelevantdraftancestors=true"],
+                )
+            )
+        )
+
+    return [
+        changeset["node"].encode("ascii")
+        for changeset in changesets
+        # Like get_hgmo_stack, don't analyze empty changesets or changesets which
+        # simply specify try parameters.
+        if changeset["files"] not in ([], ["try_task_config.json"])
+    ]
+
+
 def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
     """Export each revision as its own git-formatted patch (see get_commit_patch).
 
