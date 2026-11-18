@@ -55,6 +55,27 @@ def get_transformer_pipeline(pipeline: Pipeline) -> Pipeline:
     )
 
 
+def drop_vectorizers_stop_words(estimator) -> None:
+    """Drop the terms ignored by the fitted text vectorizers.
+
+    The vectorizers store the terms they ignored (e.g. because of `min_df` or
+    `max_features`) in `stop_words_`, which is only useful for introspection and
+    can make up most of the size of a pickled model.
+    """
+    if hasattr(estimator, "stop_words_"):
+        estimator.stop_words_ = None
+
+    if isinstance(estimator, Pipeline):
+        children = [step for _, step in estimator.steps]
+    else:
+        children = [
+            transformer for _, transformer, _ in getattr(estimator, "transformers_", [])
+        ]
+
+    for child in children:
+        drop_vectorizers_stop_words(child)
+
+
 def classification_report_imbalanced_values(
     y_true, y_pred, labels, target_names=None, sample_weight=None, digits=2, alpha=0.1
 ):
@@ -667,6 +688,8 @@ class Model:
             hyperparameters = estimator.get_params()
             estimator = estimator.__class__(**hyperparameters)
         self.clf.steps.append((step_name, estimator))
+
+        drop_vectorizers_stop_words(self.clf)
 
         model_path = path.join(model_directory, "model.pkl")
         with open(model_path, "wb") as f:
