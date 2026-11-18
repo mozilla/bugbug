@@ -3,6 +3,7 @@
 version: "3.8"
 
 include:
+  - path: agents/perf-regression/compose.yml
   - path: agents/autowebcompat-repro/compose.yml
   - path: agents/perf-triage/compose.yml
   - path: agents/autowebcompat-diagnosis/compose.yml

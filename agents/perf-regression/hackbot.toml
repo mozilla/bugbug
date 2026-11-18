@@ -1,0 +1,16 @@
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own. Builds and benchmark repetitions run on try hardware, not inside the
+# agent.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "4"
+memory = "16Gi"
+timeout_seconds = 28800
+
+[deploy.workspace]
+size = "40Gi"

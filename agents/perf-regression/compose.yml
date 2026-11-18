@@ -1,0 +1,27 @@
+services:
+  perf-regression-agent:
+    build:
+      context: ../..
+      dockerfile: agents/perf-regression/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID
+      - ALERT_ID
+      - SUITES
+      - MAX_ATTEMPTS
+      - MODEL
+      - MAX_TURNS
+      - EFFORT
+      - CI_TIMEOUT_SECONDS
+      - ANTHROPIC_API_KEY
+      # Local runs push to try themselves, with the developer's own token.
+      - LANDO_ACCESS_TOKEN
+      - LANDO_URL
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - perf-regression-workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+
+volumes:
+  perf-regression-workspace:
