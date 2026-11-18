@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import dateutil.parser
+import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -51,6 +52,10 @@ def get_regression_label_date(bug: dict) -> datetime | None:
 
 
 class DefectModel(BugModel):
+    # Weight of the training samples labelled using the fixed defects rule (see
+    # get_bugbug_labels), relative to the other labels.
+    fixed_defects_weight = 1.0
+
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
 
@@ -173,6 +178,25 @@ class DefectModel(BugModel):
             snapshot_date = min(snapshot_date, regression_label_date)
         return snapshot_date
 
+    def items_gen(self, classes):
+        # Remember the bug of each item, to weight training samples (see
+        # get_sample_weights).
+        self.train_bug_ids = []
+        for bug, label in super().items_gen(classes):
+            self.train_bug_ids.append(bug["id"])
+            yield bug, label
+
+    def get_sample_weights(self, X, y):
+        if self.fixed_defects_weight == 1.0:
+            return None
+
+        bug_ids = np.array(self.train_bug_ids)[np.asarray(X.index)]
+        return np.where(
+            np.isin(bug_ids, list(self.fixed_defect_bug_ids)),
+            self.fixed_defects_weight,
+            1.0,
+        )
+
     def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]
 
@@ -249,6 +273,7 @@ class DefectModel(BugModel):
         non_regression_max_creation_time = (
             datetime.now(timezone.utc) - NON_REGRESSION_MIN_AGE
         )
+        self.fixed_defect_bug_ids = set()
         bug_ids = set()
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
@@ -336,12 +361,12 @@ class DefectModel(BugModel):
                         classes[bug_id] = "defect"
 
             # Defects which were fixed without being identified as regressions are
-            # most likely not regressions. Without them, almost all defects in the
-            # training set would be regressions, while the model is mostly applied
-            # to defects which are not regressions.
+            # most likely defects which are not regressions. Without them, almost all
+            # defects in the training set would be regressions (as the 'defect' type
+            # is only used when it was explicitly set), while the models are mostly
+            # applied to defects which are not regressions.
             if (
-                kind == "regression"
-                and bug_id not in classes
+                bug_id not in classes
                 and bug_id not in unknown_regression_bug_ids
                 and bug_id > 1540807
                 and bug["type"] == "defect"
@@ -349,7 +374,13 @@ class DefectModel(BugModel):
                 and dateutil.parser.parse(bug["creation_time"])
                 < non_regression_max_creation_time
             ):
-                classes[bug_id] = 0
+                if kind == "bug":
+                    classes[bug_id] = 1
+                elif kind == "regression":
+                    classes[bug_id] = 0
+                elif kind == "defect_enhancement_task":
+                    classes[bug_id] = "defect"
+                self.fixed_defect_bug_ids.add(bug_id)
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
