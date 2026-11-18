@@ -61,7 +61,10 @@ def patch_resources(monkeypatch, jobs):
             self.data = {}
             self.expirations = {}
 
-        def set(self, k, v):
+        def set(self, k, v, ex=None):
+            if ex is not None:
+                self.expirations[k] = ex
+
             # keep track of job ids for testing purposes
             if k.startswith("bugbug:job_id"):
                 key = k.split(":", 2)[-1]
@@ -82,12 +85,9 @@ def patch_resources(monkeypatch, jobs):
         def exists(self, k):
             return k in self.data
 
-        def delete(self, k):
-            if self.exists(k):
-                del self.data[k]
-
-        def expire(self, key, expiration):
-            self.expirations[key] = expiration
+        def delete(self, *keys):
+            for k in keys:
+                self.data.pop(k, None)
 
     class QueueMock:
         """Mock class to mimic rq.Queue."""
