@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { useSnapshot } from "valtio";
 
 import type { Effort, RunOptions } from "../api";
@@ -23,7 +22,6 @@ export function RunOptionsFields({
 }: Props) {
   const snap = useSnapshot(options, { sync: true });
   const { models } = useSnapshot(store);
-  const modelList = useId();
   const modelName = models?.models.find((m) => m.id === snap.model);
 
   const maxTurns = (
@@ -45,20 +43,20 @@ export function RunOptionsFields({
       <div className="row">
         <div>
           <label>Model</label>
-          <input
-            placeholder="default"
-            list={modelList}
+          <select
             value={snap.model ?? ""}
             onChange={(e) => (options.model = e.target.value || null)}
-          />
-          <datalist id={modelList}>
+          >
+            <option value="">default</option>
+            {snap.model && !modelName && (
+              <option value={snap.model}>{snap.model}</option>
+            )}
             {models?.models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.display_name}
+                {m.display_name} ({m.id})
               </option>
             ))}
-          </datalist>
-          {modelName && <div className="meta">{modelName.display_name}</div>}
+          </select>
           {models?.fallback && (
             <div className="meta" title={models.error}>
               Couldn't list models; showing a fixed list.

@@ -203,6 +203,9 @@ code,
   font-family: ui-monospace, monospace;
   font-size: 12.5px;
 }
+.mono.path {
+  font-size: 10.5px;
+}
 .shots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
