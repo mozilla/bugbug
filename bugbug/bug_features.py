@@ -8,8 +8,6 @@ import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from functools import partial
-from multiprocessing.pool import Pool
 
 import pandas as pd
 from dateutil import parser
@@ -17,7 +15,7 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, bugzilla, repository, utils
+from bugbug import bugzilla, repository, utils
 
 utils.setup_libmozdata()
 
@@ -728,8 +726,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         self,
         feature_extractors,
         cleanup_functions,
-        rollback=False,
-        rollback_when=None,
         commit_data=False,
         merge_data=True,
     ):
@@ -742,8 +738,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             cleanup_functions
         ), "Duplicate Cleanup Functions"
         self.cleanup_functions = cleanup_functions
-        self.rollback = rollback
-        self.rollback_when = rollback_when
         self.commit_data = commit_data
         self.merge_data = merge_data
 
@@ -804,17 +798,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 "first_comment": "" if len(comments) == 0 else comments[0],
                 "comments": " ".join(comments),
             }
-
-        def apply_rollback(bugs_iter):
-            with Pool() as p:
-                yield from p.imap(
-                    partial(bug_snapshot.rollback, when=self.rollback_when),
-                    bugs_iter,
-                    chunksize=1024,
-                )
-
-        if self.rollback:
-            bugs_iter = apply_rollback(bugs_iter)
 
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
 
