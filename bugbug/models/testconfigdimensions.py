@@ -489,7 +489,7 @@ class _DimensionClassifierModel(DimensionSelector, Model):
         train_len = sum(1 for index in self.row_push_index if index < split)
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
-    def get_sample_weights(self, y):
+    def get_sample_weights(self, X, y):
         return np.array(self.row_weights[: len(y)])
 
     def _predict_proba(self, features: Sequence[dict[str, float]]) -> np.ndarray:
@@ -596,7 +596,7 @@ class TestConfigSelectClassModel(_DimensionClassifierModel):
             y = np.concatenate([y, missing])
         super().fit_classifier(X, y)
 
-    def get_sample_weights(self, y):
+    def get_sample_weights(self, X, y):
         placeholders = getattr(self, "_placeholders", 0)
         weights = np.array(self.row_weights[: len(y) - placeholders])
         return np.concatenate([weights, np.full(placeholders, 1e-6)])

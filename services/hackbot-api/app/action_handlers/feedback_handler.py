@@ -2,9 +2,9 @@
 
 Reports go to the agents' Sentry project (``AGENTS_SENTRY_DSN``), beside agent
 crashes, with an empty scope so none of hackbot-api's own context is attached.
-They are tagged with the agent name and run ID, fingerprinted on the title so
-repeat reports of the same problem group into one Sentry issue, and tagged
-``kind=agent_feedback`` to keep them apart from crashes.
+They are tagged with the agent name, agent version and run ID, fingerprinted
+on the title so repeat reports of the same problem group into one Sentry
+issue, and tagged ``kind=agent_feedback`` to keep them apart from crashes.
 """
 
 from functools import cache
@@ -34,6 +34,7 @@ class ReportProblemHandler:
                 "tags": {
                     "kind": "agent_feedback",
                     "agent": ctx.agent,
+                    "agent_version": ctx.agent_version,
                     "run_id": ctx.run_id,
                 },
                 "fingerprint": ["agent-feedback", params["title"]],

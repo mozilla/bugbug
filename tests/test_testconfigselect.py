@@ -142,6 +142,11 @@ def test_live_candidates() -> None:
         # A platform not in the training data yet: named after its label.
         "test-macosx1500-aarch64/opt-mochitest-browser-chrome-3": [G2],
         "test-linux2404-64/opt-mochitest-plain-4": [f"{G}:other.toml"],
+        # Web-platform test groups are relative to the root of their suite.
+        "test-linux2404-64/opt-web-platform-tests-5": [
+            "/css/cssom-view",
+            "/_mozilla/fetch",
+        ],
         "build-linux64/opt": [],
     }
     assert testconfigselect.live_candidates(manifests_by_task, known_configs) == {
@@ -153,6 +158,8 @@ def test_live_candidates() -> None:
             "test-macosx1500-aarch64/opt-mochitest-browser-chrome",
         ],
         G: ["test-linux2404-64/opt-*"],
+        "testing/web-platform/tests/css/cssom-view": ["test-linux2404-64/opt-*"],
+        "testing/web-platform/mozilla/tests/fetch": ["test-linux2404-64/opt-*"],
     }
 
 
@@ -207,7 +214,7 @@ def trained_model(
     assert {r.push_index for r, _ in model.evaluation_regressions} == set(
         range(540, 600, 10)
     )
-    assert len(model.get_sample_weights(y_train)) == len(y_train)
+    assert len(model.get_sample_weights(None, y_train)) == len(y_train)
 
     model.le.fit(y)
     model.fit_classifier(X, model.le.transform(y))

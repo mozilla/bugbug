@@ -40,6 +40,27 @@ from openai_codex.models import UnknownNotification
 
 from hackbot_runtime.transcript import TranscriptLog, _truncate
 
+DEFAULT_TOOL_TIMEOUT_SEC = 7200
+
+
+def mcp_servers_config(
+    urls: dict[str, str], *, tool_timeout_sec: float = DEFAULT_TOOL_TIMEOUT_SEC
+) -> dict:
+    """Codex ``thread_start(config=...)`` for the MCP servers at ``urls``, by name.
+
+    Serve each with ``agent_tools.mcp_server.serve``, which yields its URL.
+    """
+    return {
+        "mcp_servers": {
+            name: {
+                "url": url,
+                "tool_timeout_sec": tool_timeout_sec,
+                "default_tools_approval_mode": "approve",
+            }
+            for name, url in urls.items()
+        }
+    }
+
 
 @dataclass
 class CodexTurnResult:

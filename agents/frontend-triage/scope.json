@@ -9,7 +9,7 @@
     {
       "product": "Firefox",
       "component": "Sidebar",
-      "channel": "#p10y-bots"
+      "channel": "#core-x-frontend-bots"
     },
     {
       "product": "Firefox",
@@ -74,32 +74,32 @@
     {
       "product": "Firefox for Android",
       "component": "QR",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox for Android",
       "component": "Experimentation and Telemetry",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox for Android",
       "component": "Logins",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox for Android",
       "component": "Onboarding",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox for Android",
       "component": "Privacy",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox for Android",
       "component": "Settings",
-      "channel": "#android-activation-and-trust"
+      "channel": "#android-activation-and-trust-triage"
     },
     {
       "product": "Firefox Build System",
