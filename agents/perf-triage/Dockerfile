@@ -75,18 +75,9 @@ RUN set -eux; \
     rm -rf /tmp/searchfox-cli.tar.gz /tmp/searchfox-cli-*; \
     searchfox-cli --version
 
-# The skills (profiler-analysis, triage-perf-bug) come from the `perf` plugin in
-# mozilla/firefox-aidev-plugins, cloned at a pinned commit; the agent loads it
-# with ClaudeAgentOptions.plugins (hackbot_agents/perf_triage/plugin.py). Bump
-# the commit to take a newer skill, and re-run the eval when you do.
-ARG FIREFOX_AIDEV_PLUGINS_REPO=https://github.com/mozilla/firefox-aidev-plugins
-ARG FIREFOX_AIDEV_PLUGINS_REV=bc5569595d27960fa29e30c987ca83ce208d1744
-RUN git init -q /opt/firefox-aidev-plugins \
-    && git -C /opt/firefox-aidev-plugins fetch -q --depth 1 "$FIREFOX_AIDEV_PLUGINS_REPO" "$FIREFOX_AIDEV_PLUGINS_REV" \
-    && git -C /opt/firefox-aidev-plugins checkout -q FETCH_HEAD \
-    && test -f /opt/firefox-aidev-plugins/plugins/perf/skills/triage-perf-bug/SKILL.md \
-    && test -d /opt/firefox-aidev-plugins/plugins/perf/skills/profiler-analysis/references
-
+# The skills and the top-sites rankings come from the `perf` plugin in the
+# internal mozilla/internal-aidev-plugins, which the job clones at start-up
+# (hackbot_agents/perf_triage/plugin.py), not into this image.
 
 # hackbot.toml lives at the agent root; the runtime discovers it in the cwd.
 COPY agents/perf-triage/hackbot.toml /app/hackbot.toml

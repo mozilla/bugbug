@@ -1,7 +1,7 @@
 # perf-triage agent
 
 Rates one Firefox performance bug with the Performance Impact Calculator (the
-`triage-perf-bug` skill from the `perf` plugin in mozilla/firefox-aidev-plugins, in agent mode) and writes the rating to the bug:
+`triage-perf-bug` skill from the `perf` plugin in the internal mozilla/internal-aidev-plugins, in agent mode) and writes the rating to the bug:
 one comment, `cf_performance_impact`, and the calculator's keywords (added, never
 removed). When the bug links a Firefox Profiler capture or has one attached, the skill analyses it with
 `profiler-analysis` first, so the profile can change the rating.
@@ -48,22 +48,21 @@ whole in the container (deployed with 8Gi for that reason).
 `compose.yml`, or the command line. Every `AgentInputs` field must also be listed
 in `compose.yml`, or Docker drops it and the default applies silently.
 
-| Env var                     | Required | Meaning                                                                                                                                                    |
-| --------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BUG_ID`                    | yes      | The Bugzilla bug to triage                                                                                                                                 |
-| `ANTHROPIC_API_KEY`         | yes      | Drives the agent (billed per token, roughly $0.25-0.85 a bug)                                                                                              |
-| `BUGZILLA_API_URL`          | yes      | e.g. `https://bugzilla.mozilla.org/rest`. **Broker container only**                                                                                        |
-| `BUGZILLA_API_KEY`          | yes      | **Broker container only.** The agent reads Bugzilla through the broker and never sees the key                                                              |
-| `BROKER_URL`                | yes      | Broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                                                                           |
-| `SOURCE_REF`                | build    | Build arg naming the commit the image is built from. Defaults to `dev`                                                                                     |
-| `PERF_TRIAGE_PATH`          | no       | The calculator script. Defaults to the installed `performance-triage-calculator` package; point it at a checkout to test an unreleased calculator          |
-| `PERF_PLUGIN_DIR`           | no       | The `perf` plugin directory. Defaults to the image's pinned clone; point it at a firefox-aidev-plugins checkout's `plugins/perf` to test unreleased skills |
-| `PERF_TRIAGE_TOP_SITES_URI` | prod     | `gs://bucket/object` of the internal top-sites rankings; downloaded at start-up. The run stops if neither this nor `PERF_TRIAGE_TOP_SITES` gives a file    |
-| `PERF_TRIAGE_TOP_SITES`     | local    | Host path of `top_sites.json` from the internal `mozilla/performance-triage-top-sites` repo; `compose.yml` mounts it                                       |
-| `MODEL`                     | no       | Model override; unset uses the SDK default                                                                                                                 |
-| `MAX_TURNS`                 | no       | Hard cap on loop iterations, a runaway guard                                                                                                               |
-| `EFFORT`                    | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`                                                                                                            |
-| `BLIND_BUG_ID`              | no       | Evaluation only: the broker serves that bug as it stood before it was triaged (`hackbot_agents/perf_triage/blind.py`)                                      |
+| Env var             | Required | Meaning                                                                                                                                                       |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BUG_ID`            | yes      | The Bugzilla bug to triage                                                                                                                                    |
+| `ANTHROPIC_API_KEY` | yes      | Drives the agent (billed per token, roughly $0.25-0.85 a bug)                                                                                                 |
+| `BUGZILLA_API_URL`  | yes      | e.g. `https://bugzilla.mozilla.org/rest`. **Broker container only**                                                                                           |
+| `BUGZILLA_API_KEY`  | yes      | **Broker container only.** The agent reads Bugzilla through the broker and never sees the key                                                                 |
+| `BROKER_URL`        | yes      | Broker base URL; the agent appends `/mcp`. `compose.yml` sets it                                                                                              |
+| `SOURCE_REF`        | build    | Build arg naming the commit the image is built from. Defaults to `dev`                                                                                        |
+| `PERF_TRIAGE_PATH`  | no       | The calculator script. Defaults to the installed `performance-triage-calculator` package; point it at a checkout to test an unreleased calculator             |
+| `PERF_PLUGIN_DIR`   | local    | An internal-aidev-plugins checkout's `plugins/perf`, used instead of cloning; `compose.yml` mounts it. Carries the skills and the internal top-sites rankings |
+| `GITHUB_TOKEN`      | prod     | Repo-scoped GitHub App token to clone internal-aidev-plugins at start-up; removed from the environment before the model runs                                  |
+| `MODEL`             | no       | Model override; unset uses the SDK default                                                                                                                    |
+| `MAX_TURNS`         | no       | Hard cap on loop iterations, a runaway guard                                                                                                                  |
+| `EFFORT`            | no       | `low` \| `medium` \| `high` \| `xhigh` \| `max`                                                                                                               |
+| `BLIND_BUG_ID`      | no       | Evaluation only: the broker serves that bug as it stood before it was triaged (`hackbot_agents/perf_triage/blind.py`)                                         |
 
 ## Output
 

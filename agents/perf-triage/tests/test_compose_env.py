@@ -28,8 +28,8 @@ def test_every_agent_input_is_passed_through():
 def test_calculator_and_rankings_are_passed_through():
     env = _env()
     assert "PERF_TRIAGE_PATH" in env
-    assert "PERF_TRIAGE_TOP_SITES_URI" in env
-    assert env["PERF_TRIAGE_TOP_SITES"] == "/data/top_sites.json"
+    assert "PERF_TRIAGE_TOP_SITES" not in env
+    assert env["PERF_PLUGIN_DIR"] == "/plugins/perf"
 
 
 def test_every_module_the_dockerfile_runs_exists():

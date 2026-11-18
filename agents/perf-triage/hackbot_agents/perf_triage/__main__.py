@@ -7,7 +7,7 @@ from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .agent import PerfTriageFindings, run_perf_triage
-from .top_sites import ensure_top_sites
+from .plugin import ensure_perf_plugin
 
 logger = logging.getLogger("perf-triage")
 
@@ -30,7 +30,7 @@ class AgentInputs(BaseSettings):
 
 async def main(ctx: HackbotContext) -> PerfTriageFindings:
     inputs = AgentInputs()  # type: ignore[call-arg]
-    logger.info("top-sites rankings at %s", ensure_top_sites())
+    logger.info("perf plugin at %s", ensure_perf_plugin())
     server = {"type": "http", "url": inputs.bugzilla_mcp_url}
     tracker = RunTracker()
     config = TaskConfig(

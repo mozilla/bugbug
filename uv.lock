@@ -2651,7 +2651,6 @@ source = { editable = "agents/perf-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla"] },
     { name = "claude-agent-sdk" },
-    { name = "google-cloud-storage" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
     { name = "performance-triage-calculator" },
@@ -2669,7 +2668,6 @@ dev = [
 requires-dist = [
     { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
-    { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "performance-triage-calculator", git = "https://github.com/mozilla/performance-triage-calculator?rev=53c8dcf4ab84750d6d9a423f90823b4e5275bfaa" },

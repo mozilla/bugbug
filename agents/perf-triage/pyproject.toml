@@ -10,7 +10,6 @@ dependencies = [
     "mcp>=1.0.0",
     "pydantic>=2",
     "performance-triage-calculator",
-    "google-cloud-storage>=2.16.0",
 ]
 
 [project.optional-dependencies]
