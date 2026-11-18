@@ -62,7 +62,8 @@ class ReadthroughTTLCache(Generic[Key, Value]):
                     key,
                 )
                 del self.items_last_accessed[key]
-                del self.items_storage[key]
+                # Items accessed only once were never stored.
+                self.items_storage.pop(key, None)
 
     def start_ttl_thread(self):
         def purge_expired_entries_with_wait():
