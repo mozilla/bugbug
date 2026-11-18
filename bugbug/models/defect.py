@@ -5,7 +5,7 @@
 
 import itertools
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import dateutil.parser
@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 # See DefectModel.get_rollback_point.
 TRAINING_SNAPSHOT_AGE = timedelta(days=3)
+
+# Fixed defects which were not identified as regressions within this time are
+# considered non-regressions.
+NON_REGRESSION_MIN_AGE = timedelta(days=90)
 
 
 def is_regression_label_change(change: dict) -> bool:
@@ -184,6 +188,7 @@ class DefectModel(BugModel):
             elif kind == "defect_enhancement_task" and category == "True":
                 classes[int(bug_id)] = "defect"
 
+        unknown_regression_bug_ids = set()
         for bug_id, category in labels.get_labels("regression_bug_nobug"):
             assert category in [
                 "nobug",
@@ -195,6 +200,7 @@ class DefectModel(BugModel):
                 classes[int(bug_id)] = 1 if category != "nobug" else 0
             elif kind == "regression":
                 if category == "bug_unknown_regression":
+                    unknown_regression_bug_ids.add(int(bug_id))
                     continue
 
                 classes[int(bug_id)] = 1 if category == "regression" else 0
@@ -240,6 +246,9 @@ class DefectModel(BugModel):
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
+        non_regression_max_creation_time = (
+            datetime.now(timezone.utc) - NON_REGRESSION_MIN_AGE
+        )
         bug_ids = set()
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
@@ -325,6 +334,22 @@ class DefectModel(BugModel):
                         classes[bug_id] = 1
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "defect"
+
+            # Defects which were fixed without being identified as regressions are
+            # most likely not regressions. Without them, almost all defects in the
+            # training set would be regressions, while the model is mostly applied
+            # to defects which are not regressions.
+            if (
+                kind == "regression"
+                and bug_id not in classes
+                and bug_id not in unknown_regression_bug_ids
+                and bug_id > 1540807
+                and bug["type"] == "defect"
+                and bug["resolution"] == "FIXED"
+                and dateutil.parser.parse(bug["creation_time"])
+                < non_regression_max_creation_time
+            ):
+                classes[bug_id] = 0
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
