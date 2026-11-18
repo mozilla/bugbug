@@ -104,6 +104,9 @@ export interface EtpResult {
   broken_in_strict: boolean | null;
   broken_with_easyprivacy?: boolean | null;
   broken_with_easylist?: boolean | null;
+  /** The Firefox the run drove (absent in older runs). */
+  firefox_version?: string | null;
+  firefox_build_id?: string | null;
   culprit_prefs: string[];
   blocked_resources: string[];
   proposed_exceptions: ProposedException[];

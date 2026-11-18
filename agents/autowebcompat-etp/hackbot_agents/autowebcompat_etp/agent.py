@@ -32,6 +32,7 @@ from .exceptions import (
     hosts_overlap,
     pattern_host,
 )
+from .firefox_build import firefox_build
 from .mcp_servers import build_firefox_devtools_server
 from .preflight import preflight
 from .result import (
@@ -95,6 +96,10 @@ class AutowebcompatEtpResult(EtpInvestigationResult):
     screenshot_urls: dict[str, str]
     content_blocking_log_url: str | None = None
     mode: Mode = "investigate"
+    # The Firefox the run drove (None if its application.ini couldn't be read,
+    # and in runs from before they were recorded).
+    firefox_version: str | None = None
+    firefox_build_id: str | None = None
 
     @model_validator(mode="after")
     def validate_blocked_trackers_have_screenshots(self) -> AutowebcompatEtpResult:
@@ -351,6 +356,8 @@ async def run_autowebcompat_etp(
             env.start_xvfb()
 
         firefox_path = install_firefox("nightly")
+        firefox_version, firefox_build_id = firefox_build(firefox_path)
+        logger.info("Firefox %s, build %s", firefox_version, firefox_build_id)
         screenshot_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-screenshots-"))
         log_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-logs-"))
         content_blocking_log_file = log_dir / CONTENT_BLOCKING_LOG_FILE
@@ -390,4 +397,6 @@ async def run_autowebcompat_etp(
             content_blocking_log_file, publish_file
         ),
         mode=mode,
+        firefox_version=firefox_version,
+        firefox_build_id=firefox_build_id,
     )

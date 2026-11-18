@@ -89,6 +89,15 @@ export function ResultView() {
           <dd>{brokenLabel(result.broken_with_easyprivacy ?? null)}</dd>
           <dt>Strict with EasyList + EasyPrivacy</dt>
           <dd>{brokenLabel(result.broken_with_easylist ?? null)}</dd>
+          {result.firefox_build_id && (
+            <>
+              <dt>Firefox</dt>
+              <dd>
+                {result.firefox_version} (build{" "}
+                <code>{result.firefox_build_id}</code>)
+              </dd>
+            </>
+          )}
           <dt>Severity / priority</dt>
           <dd>
             {result.severity ?? "—"} / {result.priority ?? "—"}
