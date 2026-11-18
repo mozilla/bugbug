@@ -100,9 +100,7 @@ class ComponentSpecificModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
-                    ),
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
             ]
         )
@@ -135,6 +133,9 @@ class ComponentSpecificModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return "creation"
 
     def was_in_component_at(self, states, when):
         current = None

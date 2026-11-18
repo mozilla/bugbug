@@ -79,9 +79,7 @@ class BaseComponentModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
-                    ),
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
             ]
         )
@@ -145,6 +143,9 @@ class BaseComponentModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return "creation"
 
     def items_gen(self, classes):
         # Remember when each bug was filed and in which component, for the evaluation.
