@@ -111,6 +111,15 @@ commit with the revision's diff applied — see [runtime.md](runtime.md).
 
 ## Bugzilla webhook — `needinfo?` requests
 
+The same endpoint also routes public performance-regression **creation** events filed
+by Perfherder's sheriff bot to `perf-regression`: on by default
+(`BUGZILLA_WEBHOOK_PERF_REGRESSION_ENABLED`). The run investigates only the suites in
+`BUGZILLA_WEBHOOK_PERF_REGRESSION_SUITES` (Speedometer 3 by default), checked against
+the alert, and stops at once for alerts without them. This uses a durable API dedupe
+key per bug and leaves results in the dashboard, without commenting on the bug. See the agent's
+[deployment and filtering instructions](../../agents/perf-regression/README.md#automatic-bug-creation-trigger)
+before subscribing BMO creation events.
+
 A `needinfo?` request directed at Hackbot's Bugzilla account triggers a `bug-fix` follow-up
 run on that bug. Same shape as the Phabricator trigger — a developer asks Hackbot for
 something in the place they already work — but on the Bugzilla side, and answering a

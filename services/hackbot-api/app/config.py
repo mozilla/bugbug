@@ -48,6 +48,14 @@ class BugzillaWebhookSettings(BaseModel):
     bot_login: str = "hackbot@mozilla.tld"
     # Name of the Bugzilla group whose members may trigger a run with a needinfo.
     authorized_group: str
+    # Start a perf-regression run for each new Perfherder regression bug. It
+    # needs the agent job and the CI wait set up.
+    perf_regression_enabled: bool = True
+    # Only bugs filed by these accounts (Perfherder's sheriff bot files them).
+    perf_regression_reporters: list[str] = ["performance-sheriff-bot@mozilla.tld"]
+    # Suites the run may investigate; it stops early when the alert has none.
+    # Empty for every suite.
+    perf_regression_suites: list[str] = ["speedometer3"]
 
 
 class SlackSettings(BaseModel):

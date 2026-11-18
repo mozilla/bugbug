@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.auth import verify_phabricator_signature
-from app.bugzilla_webhook import detect_needinfo_request
+from app.bugzilla_webhook import (
+    detect_needinfo_request,
+    detect_perf_regression_creation,
+)
 from app.config import settings
 from app.database.connection import get_db
 from app.hackbot_client import get_hackbot_client
@@ -942,3 +945,152 @@ def test_bugzilla_route_surfaces_failed_dispatch(client):
 
     with pytest.raises(RuntimeError, match="run creation failed"):
         _post_bugzilla(client, _bugzilla_payload())
+
+
+def _perf_creation():
+    return {
+        "event": {"action": "create", "target": "bug"},
+        "bug": {
+            "id": 2075214,
+            "is_private": False,
+            "summary": "1.94 - 0.88% speedometer3 NewsSite-Next/total regression",
+            "keywords": ["perf", "perf-alert", "regression"],
+            "creator": "performance-sheriff-bot@mozilla.tld",
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p["event"].update(action="modify"),
+        lambda p: p["bug"].update(is_private=True),
+        lambda p: p["bug"].pop("is_private"),
+        lambda p: p["bug"].update(keywords=["regression"]),
+        lambda p: p["bug"].update(id=True),
+        lambda p: p.pop("event"),
+    ],
+)
+def test_perf_creation_filter_fails_closed(mutate):
+    payload = _perf_creation()
+    mutate(payload)
+    assert detect_perf_regression_creation(payload) is None
+
+
+def test_perf_creation_route_dedupes_via_api(client, monkeypatch, bugzilla_authorizer):
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", True)
+    fake = AsyncMock()
+    fake.trigger_run.return_value = TriggeredRun(
+        run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+        agent="perf-regression",
+        status=RunStatus.pending,
+        is_new=True,
+    )
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake
+    response = _post_bugzilla(client, _perf_creation())
+    assert response.status_code == 202
+    assert response.json()["status"] == "triggered"
+    fake.trigger_run.assert_awaited_once_with(
+        "perf-regression",
+        {"bug_id": 2075214, "suites": ["speedometer3"]},
+        dedupe_key="perf-regression-created:2075214",
+    )
+    assert bugzilla_authorizer.checked == []
+    fake.trigger_run.return_value = TriggeredRun(
+        run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+        agent="perf-regression",
+        status=RunStatus.pending,
+        is_new=False,
+    )
+    assert _post_bugzilla(client, _perf_creation()).json()["status"] == "ignored"
+
+
+def test_perf_route_is_disabled_until_deployed(client, monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", False)
+    fake = AsyncMock()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake
+    assert _post_bugzilla(client, _perf_creation()).json()["status"] == "ignored"
+    fake.trigger_run.assert_not_awaited()
+
+
+def test_perf_creation_requires_webhook_secret(client, monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", True)
+    assert _post_bugzilla(client, _perf_creation(), secret="wrong").status_code == 401
+
+
+def test_perf_creation_accepts_other_performance_tests():
+    payload = _perf_creation()
+    payload["bug"]["summary"] = "JetStream3 regression on Linux"
+    assert detect_perf_regression_creation(payload) == 2075214
+
+
+@pytest.mark.parametrize(
+    "creator,routed",
+    [
+        ("performance-sheriff-bot@mozilla.tld", True),
+        ("someone@example.com", False),
+        (None, False),
+    ],
+)
+def test_perf_creation_requires_a_listed_reporter(creator, routed):
+    payload = _perf_creation()
+    payload["bug"]["creator"] = creator
+    reporters = ["performance-sheriff-bot@mozilla.tld"]
+    expected = 2075214 if routed else None
+    assert detect_perf_regression_creation(payload, reporters) == expected
+
+
+def test_perf_creation_route_leaves_suite_choice_to_the_run(client, monkeypatch):
+    # The title names another suite; the run checks the alert's own rows.
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", True)
+    fake = AsyncMock()
+    fake.trigger_run.return_value = TriggeredRun(
+        run_id="d3d5f21d-d716-4bb0-a812-8c9ef3e2f1c6",
+        agent="perf-regression",
+        status=RunStatus.pending,
+        is_new=True,
+    )
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake
+    payload = _perf_creation()
+    payload["bug"]["summary"] = "2.5% tp6 amazon fcp + 4 more (Windows) regression"
+    assert _post_bugzilla(client, payload).json()["status"] == "triggered"
+    assert fake.trigger_run.await_args.args[1] == {
+        "bug_id": 2075214,
+        "suites": ["speedometer3"],
+    }
+
+
+def test_perf_creation_route_ignores_other_reporters(client, monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", True)
+    fake = AsyncMock()
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake
+    payload = _perf_creation()
+    payload["bug"]["creator"] = "someone@example.com"
+    assert _post_bugzilla(client, payload).json()["status"] == "ignored"
+    fake.trigger_run.assert_not_awaited()
+
+
+def test_perf_creation_retries_after_a_failed_start(client, monkeypatch):
+    monkeypatch.setattr(settings.bugzilla_webhook, "perf_regression_enabled", True)
+    failed = TriggeredRun(
+        run_id="11111111-1111-4111-8111-111111111111",
+        agent="perf-regression",
+        status=RunStatus.failed,
+        is_new=False,
+    )
+    fresh = TriggeredRun(
+        run_id="22222222-2222-4222-8222-222222222222",
+        agent="perf-regression",
+        status=RunStatus.pending,
+        is_new=True,
+    )
+    fake = AsyncMock()
+    fake.trigger_run.side_effect = [failed, fresh]
+    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake
+    response = _post_bugzilla(client, _perf_creation())
+    assert response.json() == {"status": "triggered", "run_id": str(fresh.run_id)}
+    keys = [call.kwargs["dedupe_key"] for call in fake.trigger_run.await_args_list]
+    assert keys == [
+        "perf-regression-created:2075214",
+        f"perf-regression-created:2075214:after:{failed.run_id}",
+    ]

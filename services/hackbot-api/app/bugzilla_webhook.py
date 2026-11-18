@@ -1,9 +1,37 @@
 """Detection helpers for Bugzilla needinfo webhooks."""
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
+
+
+def detect_perf_regression_creation(
+    payload: dict, reporters: Sequence[str] = ()
+) -> int | None:
+    """Route only public, newly-created performance regression bugs.
+
+    With ``reporters``, only bugs filed by one of those accounts are routed.
+    Which suites to investigate is decided by the run from the alert itself.
+    """
+    event = payload.get("event")
+    bug = payload.get("bug")
+    if not isinstance(event, dict) or not isinstance(bug, dict):
+        return None
+    if event.get("action") != "create" or event.get("target") != "bug":
+        return None
+    if bug.get("is_private") is not False:
+        return None
+    keywords = bug.get("keywords")
+    if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+        return None
+    if not {"perf-alert", "regression"}.issubset(keywords):
+        return None
+    if reporters and bug.get("creator") not in reporters:
+        return None
+    bug_id = bug.get("id")
+    return bug_id if type(bug_id) is int and bug_id > 0 else None
 
 
 @dataclass(frozen=True)
