@@ -423,3 +423,32 @@ def test_classify_comment_worker(monkeypatch):
     assert app.get_result(JobInfo(models.classify_comment, "spamcomment", 999)) == {
         "available": False
     }
+
+
+def test_get_results(jobs, add_result, add_change_time):
+    model_name = "component"
+    keys = {
+        bug_id: str(JobInfo(app.classify_bug, model_name, bug_id))
+        for bug_id in (1, 2, 3, 4)
+    }
+    for bug_id, key in keys.items():
+        add_result(key, {"bug": bug_id})
+    # Bug 1 didn't change since it was classified, bug 2 changed, bug 3 was
+    # classified by an old worker (without a change time), and the change time of
+    # bug 4 is unknown (e.g. a security bug).
+    add_change_time(keys[1], "1")
+    add_change_time(keys[2], "1")
+    add_change_time(keys[4], "1")
+
+    results = app.get_results(
+        [JobInfo(app.classify_bug, model_name, bug_id) for bug_id in keys],
+        ["1", "2", "1", None],
+    )
+
+    assert results == [{"bug": 1}, None, None, {"bug": 4}]
+    # The results of the bugs which changed are removed.
+    assert f"bugbug:job_result:{keys[2]}" not in app.redis_conn.data
+    assert f"bugbug:change_time:{keys[2]}" not in app.redis_conn.data
+    assert f"bugbug:job_result:{keys[3]}" not in app.redis_conn.data
+    assert f"bugbug:job_result:{keys[1]}" in app.redis_conn.data
+    assert f"bugbug:job_result:{keys[4]}" in app.redis_conn.data
