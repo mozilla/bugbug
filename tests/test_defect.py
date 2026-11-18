@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from bugbug.bug_snapshot import rollback
 from bugbug.models.defect import DefectModel
+from bugbug.models.regression import RegressionModel
 
 
 def test_get_defect_labels():
@@ -82,3 +83,15 @@ def test_training_snapshot_few_days_after_creation():
     bug = rollback(bug, before=model.get_rollback_point(bug, 1))
     assert bug["keywords"] == []
     assert [c["count"] for c in bug["comments"]] == [0, 1]
+
+
+def test_regression_training_snapshot():
+    model = RegressionModel()
+
+    # Regressions are rolled back to right before they were identified as such.
+    assert model.get_rollback_point(_make_bug("2026-01-10T00:00:00Z"), 1) == _date(10)
+
+    # Non-regressions are rolled back to the age at which regressions are identified.
+    bug = _make_bug("2026-01-10T00:00:00Z")
+    bug["creation_time"] = "2026-01-05T00:00:00Z"
+    assert model.get_rollback_point(bug, 0) == _date(14)
