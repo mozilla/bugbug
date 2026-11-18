@@ -118,7 +118,6 @@ class TestRailClient:
         name: str,
         description: str | None = None,
     ) -> Run:
-        """Create a run holding only ``case_ids``, not every case in the suite."""
         payload: dict[str, Any] = {
             "name": name,
             "suite_id": suite_id,
