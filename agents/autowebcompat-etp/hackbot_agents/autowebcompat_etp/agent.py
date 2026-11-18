@@ -14,14 +14,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-import json5
 import requests
 from autowebcompat_tools.browser import install_firefox
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
 from autowebcompat_tools.task import RunTracker, Task, TaskConfig
-from claude_agent_sdk import McpServerConfig
-from pydantic import model_validator
+from claude_agent_sdk import ClaudeAgentOptions, McpServerConfig
 
 from .config import BUGZILLA_READ_TOOLS, DEVTOOLS_TOOLS, PRIVILEGED_TOOLS
 from .exceptions import (
@@ -29,7 +27,6 @@ from .exceptions import (
     FIND_EXCEPTIONS_TOOL,
     build_exceptions_server,
     find_existing_exceptions,
-    hosts_overlap,
     pattern_host,
 )
 from .firefox_build import firefox_build
@@ -38,8 +35,17 @@ from .preflight import preflight
 from .result import (
     RESULT_SERVER_NAME,
     ClassifierFeature,
+    EtpFindings,
     EtpInvestigationResult,
     ProposedShim,
+)
+from .shims import (
+    FIND_SHIMS_TOOL,
+    SHIMS_SERVER_NAME,
+    SHIMS_URL,
+    build_shims_server,
+    matching_shims,
+    parse_shims,
 )
 from .tracker_lists import (
     CHECK_TRACKER_LISTS_TOOL,
@@ -51,10 +57,22 @@ HERE = Path(__file__).resolve().parent
 
 logger = logging.getLogger("autowebcompat-etp")
 
-SHIMS_URL = (
-    "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/"
-    "browser/extensions/webcompat/data/shims.js"
-)
+# Built-in Claude Code tools the agent never gets. It reads untrusted pages and
+# bug reports next to the API key, so it has no shell, no way to write files
+# and no web access of its own: what it needs comes from its MCP tools.
+DISALLOWED_TOOLS = [
+    "Bash",
+    "BashOutput",
+    "KillShell",
+    "Write",
+    "Edit",
+    "NotebookEdit",
+    "WebFetch",
+    "WebSearch",
+    "Task",
+    "Agent",
+]
+
 
 PublishFile = Callable[[str, Path, str | None], str]
 
@@ -87,7 +105,7 @@ SCREENSHOT_FIELDS = {
 CONTENT_BLOCKING_LOG_FILE = "content-blocking-log.json"
 
 
-class AutowebcompatEtpResult(EtpInvestigationResult):
+class AutowebcompatEtpResult(EtpFindings):
     exception_records: list[dict[str, Any]]
     whiteboard_tags: list[str]
     user_story_lines: list[str]
@@ -100,12 +118,6 @@ class AutowebcompatEtpResult(EtpInvestigationResult):
     # and in runs from before they were recorded).
     firefox_version: str | None = None
     firefox_build_id: str | None = None
-
-    @model_validator(mode="after")
-    def validate_blocked_trackers_have_screenshots(self) -> AutowebcompatEtpResult:
-        # The screenshot paths are left out here, and the agent's submission
-        # was already checked against them.
-        return self
 
 
 class EtpInvestigation(Task[EtpInvestigationResult]):
@@ -125,6 +137,7 @@ class EtpInvestigation(Task[EtpInvestigationResult]):
         mode: Mode = "investigate",
     ):
         super().__init__(task_config, run_tracker)
+        self.allowed_tools.remove("Bash")
         self.input_data = input_data
         self.mode = mode
         self.screenshot_paths = {
@@ -148,8 +161,16 @@ class EtpInvestigation(Task[EtpInvestigationResult]):
             build_tracker_lists_server(),
             [CHECK_TRACKER_LISTS_TOOL],
         )
+        self.add_mcp_server(SHIMS_SERVER_NAME, build_shims_server(), [FIND_SHIMS_TOOL])
         if self.input_data.type == "bug_id":
             self.add_mcp_server("bugzilla", bugzilla_mcp_server, BUGZILLA_READ_TOOLS)
+
+    def agent_options(self) -> ClaudeAgentOptions:
+        options = super().agent_options()
+        # The run bypasses permission prompts, so leaving a tool out of
+        # allowed_tools doesn't keep the agent from calling it; this does.
+        options.disallowed_tools = list(DISALLOWED_TOOLS)
+        return options
 
     def subject(self) -> Any:
         return self.input_data.subject()
@@ -243,38 +264,6 @@ def bug_tags(result: EtpInvestigationResult) -> tuple[list[str], list[str]]:
     return whiteboard, user_story
 
 
-def url_patterns(value: Any) -> list[str]:
-    """Every URL pattern in a shim entry, however deeply it is nested.
-
-    Patterns appear as plain strings in `matches` and `unblocksOnOptIn`, in
-    `{patterns: [...]}` objects inside them, and in `contentScripts[].matches`.
-    """
-    if isinstance(value, str):
-        return [value] if "://" in value else []
-    if isinstance(value, list):
-        return [pattern for item in value for pattern in url_patterns(item)]
-    if isinstance(value, dict):
-        return [pattern for item in value.values() for pattern in url_patterns(item)]
-    return []
-
-
-def parse_shims(source: str) -> list[dict[str, Any]]:
-    """Pull each shim's id, name, bug and URL patterns out of `shims.js`.
-
-    The file is JavaScript, but `AVAILABLE_SHIMS` is a plain literal (unquoted
-    keys, trailing commas, comments), which JSON5 can parse.
-    """
-    start = source.index("[", source.index("const AVAILABLE_SHIMS"))
-    end = source.index("\n];", start) + len("\n]")
-    shims = []
-    for entry in json5.loads(source[start:end]):
-        shims.append(
-            {key: entry[key] for key in ("id", "name", "bug") if key in entry}
-            | {"patterns": url_patterns(entry)}
-        )
-    return shims
-
-
 def find_existing_shims(shim: ProposedShim | None) -> list[dict[str, Any]] | None:
     """Existing shims whose URL patterns cover a host the proposal touches.
 
@@ -290,19 +279,9 @@ def find_existing_shims(shim: ProposedShim | None) -> list[dict[str, Any]] | Non
         logger.exception("could not fetch or parse the existing shims")
         return None
 
-    hosts = {pattern_host(p) for p in shim.matches + shim.unblocksOnOptIn}
-    matches = []
-    for entry in existing:
-        overlapping = [
-            pattern
-            for pattern in entry["patterns"]
-            if any(hosts_overlap(pattern_host(pattern), host) for host in hosts)
-        ]
-        if overlapping:
-            matches.append(
-                {key: entry[key] for key in ("id", "name", "bug") if key in entry}
-                | {"patterns": overlapping}
-            )
+    matches = matching_shims(
+        existing, {pattern_host(p) for p in shim.matches + shim.unblocksOnOptIn}
+    )
 
     found = [match["id"] for match in matches]
     if found and shim.existing_shim_id not in found:
@@ -351,52 +330,60 @@ async def run_autowebcompat_etp(
 
     Raises :class:`AgentError` if the agent ends in an error.
     """
-    with Environment() as env:
-        if not config.headless:
-            env.start_xvfb()
+    # The screenshots and the content blocking log are kept until they are
+    # published below, then removed with the directory.
+    with tempfile.TemporaryDirectory(
+        prefix="autowebcompat-etp-", ignore_cleanup_errors=True
+    ) as tmp:
+        work = Path(tmp)
+        with Environment() as env:
+            if not config.headless:
+                env.start_xvfb()
 
-        firefox_path = install_firefox("nightly")
-        firefox_version, firefox_build_id = firefox_build(firefox_path)
-        logger.info("Firefox %s, build %s", firefox_version, firefox_build_id)
-        screenshot_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-screenshots-"))
-        log_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-logs-"))
-        content_blocking_log_file = log_dir / CONTENT_BLOCKING_LOG_FILE
-        investigation = EtpInvestigation(
-            config,
-            tracker,
-            firefox_path,
-            input_data,
-            bugzilla_mcp_server,
-            screenshot_dir,
-            content_blocking_log_file,
-            mode,
-        )
-        stopped = (
-            await preflight(
+            firefox_path = install_firefox("nightly")
+            firefox_version, firefox_build_id = firefox_build(firefox_path)
+            logger.info("Firefox %s, build %s", firefox_version, firefox_build_id)
+            screenshot_dir = work / "screenshots"
+            log_dir = work / "logs"
+            screenshot_dir.mkdir()
+            log_dir.mkdir()
+            content_blocking_log_file = log_dir / CONTENT_BLOCKING_LOG_FILE
+            investigation = EtpInvestigation(
+                config,
+                tracker,
+                firefox_path,
                 input_data,
-                investigation.mcp_servers["firefox-devtools"],
-                investigation.screenshot_paths["standard"],
+                bugzilla_mcp_server,
+                screenshot_dir,
+                content_blocking_log_file,
+                mode,
             )
-            if run_preflight
-            else None
-        )
-        result = stopped if stopped is not None else await investigation.run()
+            stopped = (
+                await preflight(
+                    input_data,
+                    investigation.mcp_servers["firefox-devtools"],
+                    investigation.screenshot_paths["standard"],
+                )
+                if run_preflight
+                else None
+            )
+            result = stopped if stopped is not None else await investigation.run()
 
-    records = exception_records(result, input_data)
-    whiteboard_tags, user_story_lines = bug_tags(result)
-    return AutowebcompatEtpResult(
-        # The local paths mean nothing outside the container; the URLs replace them.
-        **result.model_dump(exclude=set(SCREENSHOT_FIELDS.values())),
-        exception_records=records,
-        whiteboard_tags=whiteboard_tags,
-        user_story_lines=user_story_lines,
-        existing_exceptions=find_existing_exceptions(records),
-        existing_shims=find_existing_shims(result.proposed_shim),
-        screenshot_urls=publish_screenshots(result, publish_file),
-        content_blocking_log_url=publish_content_blocking_log(
-            content_blocking_log_file, publish_file
-        ),
-        mode=mode,
-        firefox_version=firefox_version,
-        firefox_build_id=firefox_build_id,
-    )
+        records = exception_records(result, input_data)
+        whiteboard_tags, user_story_lines = bug_tags(result)
+        return AutowebcompatEtpResult(
+            # The local paths mean nothing outside the container; the URLs replace them.
+            **result.model_dump(exclude=set(SCREENSHOT_FIELDS.values())),
+            exception_records=records,
+            whiteboard_tags=whiteboard_tags,
+            user_story_lines=user_story_lines,
+            existing_exceptions=find_existing_exceptions(records),
+            existing_shims=find_existing_shims(result.proposed_shim),
+            screenshot_urls=publish_screenshots(result, publish_file),
+            content_blocking_log_url=publish_content_blocking_log(
+                content_blocking_log_file, publish_file
+            ),
+            mode=mode,
+            firefox_version=firefox_version,
+            firefox_build_id=firefox_build_id,
+        )

@@ -245,7 +245,11 @@ class BlockedTrackers(BaseModel):
     ] = None
 
 
-class EtpInvestigationResult(BaseModel):
+class EtpFindings(BaseModel):
+    # The findings of an investigation, with the checks that hold wherever
+    # they are stored. EtpInvestigationResult adds the ones that only make
+    # sense for what the agent submits.
+
     summary: Annotated[
         str,
         Field(
@@ -551,7 +555,7 @@ class EtpInvestigationResult(BaseModel):
         return path
 
     @model_validator(mode="after")
-    def validate_fix_matches_outcome(self) -> EtpInvestigationResult:
+    def validate_fix_matches_outcome(self) -> EtpFindings:
         has_shim = self.proposed_shim is not None
         if self.failure_reason is None:
             if bool(self.proposed_exceptions) == has_shim:
@@ -591,6 +595,11 @@ class EtpInvestigationResult(BaseModel):
         if (self.severity is None) != (self.priority is None):
             raise ValueError("set both severity and priority, or neither")
         return self
+
+
+class EtpInvestigationResult(EtpFindings):
+    # What the agent submits: the findings, checked against the screenshots it
+    # saved.
 
     @model_validator(mode="after")
     def validate_blocked_trackers_have_screenshots(self) -> EtpInvestigationResult:

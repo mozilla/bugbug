@@ -313,3 +313,83 @@ def test_shims_fetch_failure_returns_none():
         agent.requests, "get", side_effect=requests.ConnectionError()
     ):
         assert agent.find_existing_shims(make_shim()) is None
+
+
+# --- the agent's tools ---------------------------------------------------------
+
+
+def make_investigation(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "build_firefox_devtools_server", mock.Mock())
+    return agent.EtpInvestigation(
+        agent.TaskConfig(headless=True),
+        agent.RunTracker(),
+        tmp_path,
+        BugIdInput(bug_id=1),
+        {},
+        tmp_path,
+    )
+
+
+def test_agent_has_no_shell_write_or_web_tools(tmp_path, monkeypatch):
+    options = make_investigation(tmp_path, monkeypatch).agent_options()
+    # The run bypasses permission prompts, so only disallowed_tools keeps a
+    # built-in tool away from the agent.
+    assert options.permission_mode == "bypassPermissions"
+    for tool in ("Bash", "Write", "Edit", "WebFetch", "WebSearch", "Task"):
+        assert tool in options.disallowed_tools
+        assert tool not in options.allowed_tools
+    assert not set(options.disallowed_tools) & set(options.allowed_tools)
+
+
+def test_agent_can_look_up_shims(tmp_path, monkeypatch):
+    investigation = make_investigation(tmp_path, monkeypatch)
+    assert "mcp__shims__find_shims" in investigation.agent_options().allowed_tools
+    assert "shims" in investigation.mcp_servers
+    assert "find_shims" in investigation.system_prompt()
+    assert "curl" not in investigation.system_prompt()
+
+
+def test_run_removes_its_working_directory(tmp_path, monkeypatch):
+    import asyncio
+
+    seen = {}
+
+    async def fake_preflight(input_data, server, screenshot):
+        seen["screenshots"] = screenshot.parent
+        assert screenshot.parent.is_dir()
+        return None
+
+    monkeypatch.setattr(agent, "Environment", mock.MagicMock())
+    monkeypatch.setattr(agent, "install_firefox", lambda channel: tmp_path)
+    monkeypatch.setattr(agent, "build_firefox_devtools_server", mock.Mock())
+    monkeypatch.setattr(agent, "build_exceptions_server", mock.Mock())
+    monkeypatch.setattr(agent, "build_tracker_lists_server", mock.Mock())
+    monkeypatch.setattr(agent, "build_shims_server", mock.Mock())
+    monkeypatch.setattr(agent, "find_existing_exceptions", lambda records: [])
+    monkeypatch.setattr(
+        agent.EtpInvestigation, "run", mock.AsyncMock(return_value=make_result(GLOBAL))
+    )
+    monkeypatch.setattr(agent, "preflight", fake_preflight)
+
+    asyncio.run(
+        agent.run_autowebcompat_etp(
+            agent.TaskConfig(headless=True),
+            agent.RunTracker(),
+            BugIdInput(bug_id=1),
+            {},
+            mock.Mock(),
+        )
+    )
+    assert not seen["screenshots"].exists()
+    assert not seen["screenshots"].parent.exists()
+
+
+def test_final_result_skips_the_submission_only_checks():
+    # The stored result has no screenshot paths; the agent's submission was
+    # checked against them.
+    assert not issubclass(agent.AutowebcompatEtpResult, EtpInvestigationResult)
+    assert issubclass(EtpInvestigationResult, agent.EtpFindings)
+    assert "validate_blocked_trackers_have_screenshots" in vars(EtpInvestigationResult)
+    assert "validate_blocked_trackers_have_screenshots" not in dir(
+        agent.AutowebcompatEtpResult
+    )

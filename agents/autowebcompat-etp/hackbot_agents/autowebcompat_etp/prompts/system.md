@@ -130,10 +130,9 @@ A shim is possible when the breakage starts from a specific blocked script whose
 role is either an optional, user-triggered feature (placeholder) or an API the
 page only needs to exist (stub). It is not possible when the site needs the
 tracker's real behavior without a user gesture, or when the culprit isn't a
-script (e.g. an image or XHR the page's core content depends on). The current
-shims are at
-https://raw.githubusercontent.com/mozilla-firefox/firefox/main/browser/extensions/webcompat/data/shims.js
-— fetch it with `curl` to check whether one already covers the provider.
+script (e.g. an image or XHR the page's core content depends on). `find_shims`
+looks up the current shims by host: call it with the hosts of the provider's
+scripts and resources to check whether one already covers the provider.
 
 **Content blocking log.** `get_content_blocking_log` lists every third-party
 origin of the selected tab with `STATE_*` flags. The `STATE_BLOCKED_*` flags
