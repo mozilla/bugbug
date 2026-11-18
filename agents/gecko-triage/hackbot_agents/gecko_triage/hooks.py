@@ -23,6 +23,8 @@ What they enforce:
 - a cited comment of another bug is one the run read, and a sentence about a patch or
   an attachment cites the comment that adds it (`citations.py`);
 - severity and priority only when the current value is `--`, never S1, P4 or P5;
+- no severity or priority in a component that `left_to_owner` in
+  `shared/bugzilla.toml` lists for that field, or on a move into one;
 - at most three needinfos, each on one full email address, never the bot, never twice,
   not on someone with one open, and only on someone on the bug, a listed expert of the
   team, anyone when the bug moves, or a commit author that a `mozilla_vcs` result of
@@ -694,6 +696,21 @@ def _check_severity(value: object, current: object, bug_type: object = None) -> 
     return _check_level("severity", value, current, TRIAGE_SEVERITIES)
 
 
+def _check_left_to_owner(changes: dict, state: TriageState) -> None:
+    """Refuse a field that `left_to_owner` lists for the bug's component or the target."""
+    bug = state.bug
+    product, component = bug.get("product"), bug.get("component")
+    target = (changes.get("product", product), changes.get("component", component))
+    for where in ((product, component), target):
+        fields = [f for f in TERMS.left_to_owner.fields(*where) if f in changes]
+        if fields:
+            names = " and ".join(fields)
+            raise ToolError(
+                f"the owners of {where[0]} :: {where[1]} set {names} themselves. "
+                f"Leave {names} out of the changes and record the other changes."
+            )
+
+
 _REFUSED_PRIORITIES = {
     "P4": "it is reserved for web platform test bots",
     "P5": "it means will not fix, which is a person's decision",
@@ -1124,6 +1141,7 @@ def update_bug_hook(
             )
         if "groups" in changes:
             _check_groups(changes, state)
+        _check_left_to_owner(changes, state)
         if "severity" in changes:
             changes["severity"] = _check_severity(
                 changes["severity"], state.bug.get("severity"), state.bug.get("type")
