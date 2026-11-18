@@ -235,8 +235,14 @@ const ETP_LISTS_STATUS_SCRIPT = `
     const { RemoteSettings } = ChromeUtils.importESModule(
       "resource://services-settings/remote-settings.sys.mjs"
     );
+    const exceptions = RemoteSettings("url-classifier-exceptions");
     RemoteSettings.pollChanges({ trigger: "manual" })
-      .then(() => RemoteSettings("url-classifier-exceptions").get())
+      // pollChanges syncs every collection and rejects if any one fails. Only
+      // this collection matters here: after a failure, sync it on its own, so
+      // an unrelated collection can't fail the switch, and a failure of this
+      // one still does.
+      .catch(() => exceptions.sync({ trigger: "manual" }))
+      .then(() => exceptions.get())
       .then((records) => { state.rs = { done: true, exceptions: records.length }; })
       .catch((e) => { state.rs = { done: true, error: String(e) }; });
   }
