@@ -73,26 +73,17 @@ async def patch_review(
         target_software=tool.target_software,
     )
     patch_summary = tool.patch_summarizer.run(patch)
-    repo = review_context_repo
-    branch = review_context_branch
-    if repo is None:
-        repo_ref = await patch.github_repo_ref()
-        if repo_ref:
-            repo, inferred_branch = repo_ref
-            branch = branch or inferred_branch
-    external_context = ""
-    if repo:
-        from bugbug.tools.code_review.review_context import (
-            load_external_context_for_review,
-        )
+    from bugbug.tools.code_review.review_context import (
+        resolve_external_context_for_review,
+    )
 
-        external_context, _ = await load_external_context_for_review(
-            patch,
-            repo,
-            review_context_branch=branch or "main",
-            extra_context_toml=extra_context_toml,
-            content_overrides=overrides,
-        )
+    external_context, _ = await resolve_external_context_for_review(
+        patch,
+        review_context_repo,
+        review_context_branch=review_context_branch,
+        extra_context_toml=extra_context_toml,
+        content_overrides=overrides,
+    )
     initial_prompt = tool.generate_initial_prompt(
         patch, patch_summary, external_context
     )
