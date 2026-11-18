@@ -151,7 +151,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox",
         "Sidebar",
-        "#p10y-bots",
+        "#core-x-frontend-bots",
         trees=("browser/components/sidebar/",),
         owns=("browser/components/sidebar/",),
         notes=(
