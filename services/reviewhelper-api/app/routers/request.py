@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import verify_external_api_key
@@ -80,7 +81,19 @@ async def create_or_get_review_request(
         status=ReviewStatus.PENDING,
     )
     db.add(review_request)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing_request = await db.scalar(stmt)
+        if existing_request is None:
+            raise
+        return JSONResponse(
+            {
+                "status": existing_request.status.value,
+                "message": _build_response_message(existing_request),
+            }
+        )
 
     schedule_time = (
         request.revision_created_at + INITIAL_TASK_DELAY
