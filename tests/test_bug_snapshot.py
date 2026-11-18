@@ -79,3 +79,62 @@ def test_rollback_normalizes_timestamps():
 
         assert bug["cf_last_resolved"] == "2026-02-01T12:00:00Z"
         assert bug["cf_due_date"] is None
+
+
+def _make_bug_with_history():
+    def comment(count, when):
+        return {
+            "count": count,
+            "id": count + 1,
+            "text": f"comment {count}",
+            "author": "reporter@example.com",
+            "creation_time": when,
+        }
+
+    return {
+        "id": 1,
+        "product": "Core",
+        "creator": "reporter@example.com",
+        "creation_time": "2026-01-01T00:00:00Z",
+        "keywords": ["perf", "regression"],
+        "severity": "S3",
+        "comments": [
+            comment(0, "2026-01-01T00:00:00Z"),
+            comment(1, "2026-01-02T00:00:00Z"),
+            comment(2, "2026-01-05T00:00:00Z"),
+        ],
+        "attachments": [],
+        "flags": [],
+        "history": [
+            {
+                "when": "2026-01-02T00:00:00Z",
+                "who": "dev@example.com",
+                "changes": [
+                    {"field_name": "severity", "added": "S3", "removed": "--"},
+                ],
+            },
+            {
+                "when": "2026-01-05T00:00:00Z",
+                "who": "dev@example.com",
+                "changes": [
+                    {"field_name": "keywords", "added": "regression", "removed": ""},
+                ],
+            },
+        ],
+    }
+
+
+def test_rollback_skips_unparsable_changes():
+    bug = _make_bug_with_history()
+    bug["cf_last_resolved"] = None
+    bug["history"][1]["changes"].append(
+        {
+            "field_name": "cf_last_resolved",
+            "added": "2026-01-05 00:00:00 2026-01-05 00:00:00",
+            "removed": "",
+        }
+    )
+
+    bug = rollback(bug)
+    assert bug["keywords"] == ["perf"]
+    assert bug["cf_last_resolved"] is None
