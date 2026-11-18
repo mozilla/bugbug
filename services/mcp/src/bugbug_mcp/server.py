@@ -1,6 +1,7 @@
 """MCP server for Firefox Development."""
 
 import functools
+import json
 import os
 from pathlib import Path
 from typing import Annotated
@@ -34,7 +35,13 @@ def get_code_review_tool():
 
 
 @mcp.prompt()
-async def patch_review(patch_url: str) -> str:
+async def patch_review(
+    patch_url: str,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+    extra_context_toml: str | None = None,
+    content_overrides: str | None = None,
+) -> str:
     """Review a code patch from Phabricator."""
     parsed_url = urlparse(patch_url)
     if (
@@ -45,6 +52,20 @@ async def patch_review(patch_url: str) -> str:
     else:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
 
+    overrides = None
+    if content_overrides is not None:
+        try:
+            overrides = json.loads(content_overrides)
+            if not isinstance(overrides, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in overrides.items()
+            ):
+                raise ValueError("expected an object of strings")
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "content_overrides must be a JSON object of strings"
+            ) from exc
+
     patch = PhabricatorPatch(revision_id=revision_id)
 
     tool = get_code_review_tool()
@@ -52,7 +73,29 @@ async def patch_review(patch_url: str) -> str:
         target_software=tool.target_software,
     )
     patch_summary = tool.patch_summarizer.run(patch)
-    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
+    repo = review_context_repo
+    branch = review_context_branch
+    if repo is None:
+        repo_ref = await patch.github_repo_ref()
+        if repo_ref:
+            repo, inferred_branch = repo_ref
+            branch = branch or inferred_branch
+    external_context = ""
+    if repo:
+        from bugbug.tools.code_review.review_context import (
+            load_external_context_for_review,
+        )
+
+        external_context, _ = await load_external_context_for_review(
+            patch,
+            repo,
+            review_context_branch=branch or "main",
+            extra_context_toml=extra_context_toml,
+            content_overrides=overrides,
+        )
+    initial_prompt = tool.generate_initial_prompt(
+        patch, patch_summary, external_context
+    )
 
     return system_prompt + "\n\n" + initial_prompt
 
