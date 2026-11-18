@@ -2438,6 +2438,38 @@ def test_commit_dict_matches_expected():
     # commit_features.source_code_metrics_diff()(commit)
 
 
+def test_transform_metrics_diff(fake_hg_repo, monkeypatch):
+    hg, local, remote = fake_hg_repo
+
+    monkeypatch.setattr(repository, "path_to_component", {})
+
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 1; }\n")
+    commit(hg, "Bug 1 - Add the files. r=moz")
+
+    # A function is added to a.cpp, and a function of b.cpp is changed.
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\nint h() { return 2; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 2; }\n")
+    revision = commit(hg, "Bug 2 - Change the files. r=moz")
+
+    (mined_commit,) = repository.hg_log(hg, [revision.encode("ascii")])
+
+    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer(
+        1
+    )
+    try:
+        mined_commit = repository.transform(hg, local, mined_commit)
+    finally:
+        repository.code_analysis_server.terminate()
+
+    assert mined_commit.metrics["functions_total"] == 3
+    # The difference is computed from the files before the commit, for all files.
+    assert mined_commit.metrics_diff["functions_total"] == 1
+
+
 def test_set_commit_metrics():
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
