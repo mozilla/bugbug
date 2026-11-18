@@ -521,7 +521,8 @@ class OpSys(SingleBugFeature):
 
 class FiledVia(SingleBugFeature):
     def __call__(self, bug, **kwargs):
-        return bug["filed_via"]
+        # Old bugs in the DB might not have the field.
+        return bug.get("filed_via")
 
 
 class IsReporterADeveloper(SingleBugFeature):
