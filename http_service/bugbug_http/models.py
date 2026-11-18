@@ -118,8 +118,7 @@ def setkey(key: str, value: bytes, compress: bool = False) -> None:
     LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
-    redis.set(key, value)
-    redis.expire(key, DEFAULT_EXPIRATION_TTL)
+    redis.set(key, value, ex=DEFAULT_EXPIRATION_TTL)
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:

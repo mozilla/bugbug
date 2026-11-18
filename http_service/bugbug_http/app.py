@@ -481,8 +481,7 @@ def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
     LOGGER.debug("Cleaning results for %s", job)
 
-    redis_conn.delete(job.result_key)
-    redis_conn.delete(job.change_time_key)
+    redis_conn.delete(job.result_key, job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
@@ -1607,8 +1606,7 @@ def patch_schedules(base_rev, patch_hash):
             return jsonify({"error": "Patch contains no diff content"}), 400
 
         patch_key = f"bugbug:patch:{patch_hash}"
-        redis_conn.set(patch_key, patch)
-        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+        redis_conn.set(patch_key, patch, ex=7 * 24 * 3600)  # 7 days expiration
 
         LOGGER.info("Stored patch with hash %s", patch_hash)
 
