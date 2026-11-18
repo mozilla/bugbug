@@ -816,12 +816,14 @@ def rollback(bug, when=None, do_assert=False):
                         assert_or_log(
                             f"Exception while transforming {change['removed']} from {bug[field]} (field {field})"
                         )
+                        continue
                     try:
                         new_value = FIELD_TYPES[field](change["added"])
                     except Exception:
                         assert_or_log(
                             f"Exception while transforming {change['added']} from {bug[field]} (field {field})"
                         )
+                        continue
                 else:
                     old_value = change["removed"]
                     new_value = change["added"]
