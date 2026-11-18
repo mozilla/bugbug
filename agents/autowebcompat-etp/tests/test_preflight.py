@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 from unittest import mock
 
@@ -129,17 +130,27 @@ def test_error_page_reason(uri, error, code, reason, summary):
         assert page.describe() == summary
 
 
-def fake_session(document_uri, code=None, navigate_error=False):
+def fake_session(document_uri, code=None, navigate_error=False, states=()):
+    """A fake MCP session whose tab shows `document_uri`.
+
+    `states`: extra page-state fields, one dict per evaluate_script call (the
+    last one repeats).
+    """
+    remaining = list(states)
+
     def call_tool(name, args):
         result = mock.Mock(isError=False, content=[mock.Mock(text="ok")])
         if name == "navigate_page" and navigate_error:
             result.isError = True
         elif name == "evaluate_script":
-            code_json = "null" if code is None else f'"{code}"'
-            result.content[0].text = (
-                "Script ran on page and returned:\n```json\n"
-                f'{{"uri": "{document_uri}", "code": {code_json}}}\n```'
+            extra = (
+                (remaining.pop(0) if len(remaining) > 1 else remaining[0])
+                if remaining
+                else {}
             )
+            state = {"uri": document_uri, "code": code} | extra
+            text = f"```json\n{json.dumps(state)}\n```"
+            result.content[0].text = f"Script ran on page and returned:\n{text}"
         elif name == "screenshot_page":
             Path(args["saveTo"]).write_bytes(PNG_SIGNATURE)
         return result
@@ -201,6 +212,92 @@ def test_load_page_normal_page_proceeds(mcp, tmp_path):
     assert "screenshot_page" not in [
         c.args[0] for c in session.call_tool.call_args_list
     ]
+
+
+@pytest.mark.parametrize(
+    ("status", "captcha", "reason"),
+    [
+        (403, False, "blocked"),
+        (403, True, "blocked_captcha"),
+        (429, False, "blocked"),
+        (451, False, "blocked_geo"),
+        (451, True, "blocked_geo"),
+        (500, False, "down"),
+        (503, False, "down"),
+        (503, True, "blocked_captcha"),
+    ],
+)
+def test_blocked_page_reason(status, captcha, reason):
+    page = preflight.BlockedPage("https://example.com/", status, captcha, None)
+    assert page.failure_reason == reason
+    assert f"HTTP {status}" in page.describe()
+
+
+@pytest.mark.parametrize(
+    ("status", "blocking"),
+    [(200, None), (None, None), (404, None), (401, None), (403, 403), (502, 502)],
+)
+def test_blocking_status(status, blocking):
+    assert preflight.blocking_status({"status": status}) == blocking
+
+
+def test_load_page_detects_a_blocking_status(mcp, tmp_path):
+    session = mcp("https://example.com/", states=[{"status": 403, "captcha": True}])
+    page = asyncio.run(
+        preflight.load_page(SERVER, "https://example.com/", tmp_path / "b.png")
+    )
+    assert page.failure_reason == "blocked_captcha"
+    assert page.screenshot == tmp_path / "b.png"
+    # It looked a second time, after giving the page time to pass a check.
+    assert [c.args[0] for c in session.call_tool.call_args_list] == [
+        "navigate_page",
+        "wait_for_page_load",
+        "evaluate_script",
+        "wait_for_page_load",
+        "evaluate_script",
+        "screenshot_page",
+    ]
+
+
+def test_load_page_lets_a_passing_check_through(mcp, tmp_path):
+    mcp(
+        "https://example.com/",
+        states=[{"status": 503, "captcha": True}, {"status": 200}],
+    )
+    assert (
+        asyncio.run(
+            preflight.load_page(SERVER, "https://example.com/", tmp_path / "b.png")
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("status", [200, 404, None])
+def test_load_page_other_statuses_proceed(mcp, tmp_path, status):
+    session = mcp("https://example.com/", states=[{"status": status}])
+    assert (
+        asyncio.run(
+            preflight.load_page(SERVER, "https://example.com/", tmp_path / "b.png")
+        )
+        is None
+    )
+    assert [c.args[0] for c in session.call_tool.call_args_list].count(
+        "evaluate_script"
+    ) == 1
+
+
+def test_preflight_returns_valid_result_for_a_blocked_site(mcp, tmp_path):
+    mcp("https://example.com/", states=[{"status": 403, "captcha": False}])
+    result = asyncio.run(
+        preflight.preflight(
+            BugDataInput(bug_data="broken: https://example.com/"),
+            SERVER,
+            tmp_path / "b.png",
+        )
+    )
+    assert result.failure_reason == "blocked"
+    assert "HTTP 403" in result.summary
+    assert result.screenshot_standard == tmp_path / "b.png"
 
 
 def test_preflight_returns_valid_result(mcp, tmp_path):

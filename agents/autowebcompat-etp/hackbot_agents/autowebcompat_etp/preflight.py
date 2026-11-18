@@ -1,8 +1,10 @@
 """Load the reported URL once before the agent starts, at no model cost.
 
 If Firefox shows its own error page for the site (a certificate error, a DNS
-failure, a blocked page), there is nothing for the agent to test, so the run
-stops with a result saying so instead of paying for agent turns.
+failure, a blocked page), or the site answers with an error status that leaves
+nothing to look at (a bot-protection or captcha page, a geo-block, a server
+error), there is nothing for the agent to test, so the run stops with a result
+saying so instead of paying for agent turns.
 """
 
 import asyncio
@@ -25,7 +27,10 @@ from .result import EtpInvestigationResult
 logger = logging.getLogger("autowebcompat-etp")
 
 BUGZILLA_BUG_URL = "https://bugzilla.mozilla.org/rest/bug/{}"
-PREFLIGHT_TIMEOUT = 60
+PREFLIGHT_TIMEOUT = 90
+# How long a page that answered with a blocking status gets to finish a check
+# that passes on its own (a proof-of-work interstitial) and load the site.
+CHALLENGE_WAIT_SECONDS = 20
 
 # The pages Firefox shows instead of a site it couldn't or wouldn't load.
 ERROR_PAGES = ("about:certerror", "about:neterror", "about:blocked")
@@ -42,12 +47,32 @@ DOWN_CODES = {
     "proxyResolveFailure",
 }
 
+# What the site's own answer means when it leaves nothing to test. Other
+# statuses (404 included: some single-page apps boot from their 404 page) go to
+# the agent.
+BLOCKED_STATUSES = {403: "blocked", 429: "blocked", 451: "blocked_geo"}
+
 URL_RE = re.compile(r"https?://[^\s<>\"'()\[\]]+")
 
 # Reads what the page ended on. Firefox error pages can read their own error
 # details: the NSS code (e.g. SEC_ERROR_UNKNOWN_ISSUER) for certificate errors.
 PAGE_STATE_SCRIPT = """() => {
-  const state = { uri: document.documentURI, code: null };
+  const state = {
+    uri: document.documentURI,
+    code: null,
+    // The HTTP status of the document the tab is showing.
+    status: performance.getEntriesByType("navigation")[0]?.responseStatus || null,
+    title: document.title,
+    // A captcha or "are you human" page, as opposed to a plain refusal.
+    captcha:
+      /just a moment|attention required|are you (a )?(human|robot)|verify (that )?you are human|security check|pardon our interruption|captcha/i.test(
+        document.title
+      ) ||
+      !!document.querySelector(
+        'iframe[src*="captcha" i], iframe[src*="challenges.cloudflare.com"], ' +
+          '[id*="captcha" i], [class*="captcha" i], #challenge-form'
+      ),
+  };
   for (const read of [
     () => document.getFailedCertSecurityInfo().errorCodeString,
     () => document.getNetErrorInfo().errorCodeString,
@@ -84,6 +109,46 @@ class ErrorPage:
         }.get(page, "a network error")
         codes = " / ".join(c for c in (self.code, self.error) if c) or page
         return f"Firefox shows {kind} ({codes}) for {self.url}, so ETP was not tested."
+
+
+@dataclass
+class BlockedPage:
+    """A page the site answered with a blocking or server-error status."""
+
+    url: str
+    status: int
+    captcha: bool
+    screenshot: Path | None
+
+    @property
+    def failure_reason(
+        self,
+    ) -> Literal["blocked", "blocked_captcha", "blocked_geo", "down"]:
+        if self.status >= 500:
+            # Bot protection also answers 503 with its challenge page.
+            return "blocked_captcha" if self.captcha else "down"
+        reason = BLOCKED_STATUSES[self.status]
+        return "blocked_captcha" if self.captcha and reason == "blocked" else reason
+
+    def describe(self) -> str:
+        kind = {
+            "blocked": "the site refuses this browser",
+            "blocked_captcha": "a captcha or bot-protection page",
+            "blocked_geo": "the site is unavailable for legal reasons here",
+            "down": "a server error",
+        }[self.failure_reason]
+        return (
+            f"{self.url} answers with HTTP {self.status} ({kind}), "
+            "so ETP was not tested."
+        )
+
+
+def blocking_status(state: dict) -> int | None:
+    """The page's HTTP status if it leaves nothing to test, else None."""
+    status = state.get("status")
+    if isinstance(status, int) and (status in BLOCKED_STATUSES or status >= 500):
+        return status
+    return None
 
 
 def first_url(text: str) -> str | None:
@@ -138,10 +203,23 @@ def script_value(text: str):
     return json.loads(match.group(1))
 
 
+async def page_state(session: ClientSession) -> dict:
+    evaluated = await session.call_tool(
+        "evaluate_script", {"function": PAGE_STATE_SCRIPT}
+    )
+    if evaluated.isError:
+        raise RuntimeError(f"evaluate_script failed: {tool_text(evaluated)}")
+    return script_value(tool_text(evaluated))
+
+
 async def load_page(
     server: McpStdioServerConfig, url: str, screenshot: Path
-) -> ErrorPage | None:
-    """Load `url` with the agent's MCP server; the error page Firefox shows, if any."""
+) -> ErrorPage | BlockedPage | None:
+    """Load `url` with the agent's MCP server.
+
+    Returns the error page Firefox shows or the blocking page the site
+    answers with, if any.
+    """
     params = StdioServerParameters(
         command=server["command"],
         args=server.get("args", []),
@@ -159,26 +237,45 @@ async def load_page(
         if navigated.isError:
             logger.info("[preflight] navigate_page: %s", tool_text(navigated))
         await session.call_tool("wait_for_page_load", {"timeoutSeconds": 20})
-        evaluated = await session.call_tool(
-            "evaluate_script", {"function": PAGE_STATE_SCRIPT}
-        )
-        if evaluated.isError:
-            raise RuntimeError(f"evaluate_script failed: {tool_text(evaluated)}")
-        state = script_value(tool_text(evaluated))
+        state = await page_state(session)
+        if blocking_status(state) is not None:
+            # A check that passes on its own reloads into the site; give it
+            # the time the agent would, then look again.
+            logger.info(
+                "[preflight] %s answered HTTP %s; waiting for it to change",
+                url,
+                state.get("status"),
+            )
+            await session.call_tool(
+                "wait_for_page_load", {"timeoutSeconds": CHALLENGE_WAIT_SECONDS}
+            )
+            state = await page_state(session)
         document_uri = state.get("uri") or ""
         error = error_page(document_uri)
-        logger.info("[preflight] %s ended on %s", url, document_uri)
-        if error is None:
+        status = blocking_status(state)
+        logger.info(
+            "[preflight] %s ended on %s (HTTP %s)",
+            url,
+            document_uri,
+            state.get("status"),
+        )
+        if error is None and status is None:
             return None
         shot = await session.call_tool("screenshot_page", {"saveTo": str(screenshot)})
+        saved = screenshot if not shot.isError and screenshot.is_file() else None
+        if error is None:
+            return BlockedPage(
+                url=url,
+                status=status,
+                captcha=bool(state.get("captcha")),
+                screenshot=saved,
+            )
         return ErrorPage(
             url=url,
             document_uri=document_uri,
             error=error or None,
             code=state.get("code"),
-            screenshot=screenshot
-            if not shot.isError and screenshot.is_file()
-            else None,
+            screenshot=saved,
         )
 
 
@@ -188,7 +285,7 @@ async def preflight(
     screenshot: Path,
     timeout: float = PREFLIGHT_TIMEOUT,
 ) -> EtpInvestigationResult | None:
-    """A result for a site Firefox shows an error page for, else None.
+    """A result for a site that shows an error or blocking page, else None.
 
     None means the agent should run: the site loaded, there was no URL to
     check, or the preflight itself failed.
