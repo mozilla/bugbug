@@ -5,8 +5,10 @@
 
 import itertools
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
+import dateutil.parser
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -18,6 +20,30 @@ from bugbug.model import BugModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# See DefectModel.get_rollback_point.
+TRAINING_SNAPSHOT_AGE = timedelta(days=3)
+
+
+def is_regression_label_change(change: dict) -> bool:
+    field = change["field_name"]
+    if field == "keywords":
+        added = {k.strip() for k in change["added"].split(",")}
+        return bool(added & {"regression", "talos-regression"})
+    if field == "regressed_by":
+        return change["added"] != ""
+    if field == "cf_has_regression_range":
+        return change["added"] == "yes"
+    return False
+
+
+def get_regression_label_date(bug: dict) -> datetime | None:
+    """Return when a bug was first identified as a regression, if ever."""
+    for history in bug["history"]:
+        if any(is_regression_label_change(change) for change in history["changes"]):
+            return dateutil.parser.parse(history["when"])
+
+    return None
 
 
 class DefectModel(BugModel):
@@ -127,6 +153,21 @@ class DefectModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item: dict, label: Any) -> datetime:
+        """Return the date bugs are rolled back to, for training.
+
+        The models are applied to recently filed bugs, so they are trained on the
+        bugs as they were a few days after being filed. Bugs are rolled back
+        further if they were identified as regressions earlier.
+        """
+        snapshot_date = (
+            dateutil.parser.parse(item["creation_time"]) + TRAINING_SNAPSHOT_AGE
+        )
+        regression_label_date = get_regression_label_date(item)
+        if regression_label_date is not None:
+            snapshot_date = min(snapshot_date, regression_label_date)
+        return snapshot_date
 
     def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]
