@@ -44,17 +44,24 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 import anthropic
 import requests
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    PlainTextResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 HERE = Path(__file__).resolve().parent
 WEB_DIST = HERE / "web" / "dist"
@@ -116,6 +123,23 @@ COMPARE_LABELS = {
 
 # How many agent runs execute at once; the rest wait in the queue.
 MAX_PARALLEL = int(os.environ.get("MAX_PARALLEL", "1"))
+
+# Limits for a run that sets none, so a stuck agent can't hold the queue or keep
+# spending: the agent's turn limit, and how long the run may take before the
+# runner stops it. 0 turns it off.
+DEFAULT_MAX_TURNS = int(os.environ.get("DEFAULT_MAX_TURNS", "100"))
+RUN_TIMEOUT_MINUTES = int(os.environ.get("RUN_TIMEOUT_MINUTES", "30"))
+
+# The names this server answers to. A page on another site that reaches this
+# port (DNS rebinding) sends that site's name as Host, and its own Origin with
+# a write; both are refused.
+ALLOWED_HOSTS = {
+    "127.0.0.1",
+    "localhost",
+    "::1",
+    "host.docker.internal",
+    *filter(None, os.environ.get("ALLOWED_HOSTS", "").split(",")),
+}
 
 # Untriaged ETP site reports: the REST equivalent of
 # https://bugzilla.mozilla.org/buglist.cgi?resolution=---&query_format=advanced&product=Web%20Compatibility&component=Privacy%3A%20Site%20Reports&bug_severity=--&bug_type=defect
@@ -184,6 +208,7 @@ class Run:
     turns: int = 0
     cost: float | None = None
     process: subprocess.Popen | None = None
+    timed_out: bool = False
     changed: threading.Condition = field(default_factory=threading.Condition)
 
     @property
@@ -228,6 +253,34 @@ STATUS_LOCK = threading.Lock()
 app = FastAPI(title="autowebcompat-etp local runner")
 
 
+class LocalOnly:
+    """Refuse requests for another Host, and writes from another Origin."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            headers = Headers(scope=scope)
+            origin = headers.get("origin")
+            refused = None
+            if urlsplit("//" + headers.get("host", "")).hostname not in ALLOWED_HOSTS:
+                refused = PlainTextResponse("unknown Host header", status_code=400)
+            elif (
+                scope["method"] not in ("GET", "HEAD", "OPTIONS")
+                and origin is not None
+                and urlsplit(origin).hostname not in ALLOWED_HOSTS
+            ):
+                refused = PlainTextResponse("cross-origin write", status_code=403)
+            if refused is not None:
+                await refused(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(LocalOnly)
+
+
 class StartRequest(BaseModel):
     agent: Agent = "etp"
     bug_id: int | None = None
@@ -237,6 +290,8 @@ class StartRequest(BaseModel):
     model: str | None = None
     effort: str | None = None
     max_turns: int | None = None
+    # Minutes before the runner stops the run; null means RUN_TIMEOUT_MINUTES.
+    timeout_minutes: int | None = None
     headless: bool = False
     mode: Literal["investigate", "retest"] = "investigate"
     build: bool = True
@@ -247,6 +302,8 @@ class BatchRequest(BaseModel):
     model: str | None = None
     effort: str | None = None
     max_turns: int | None = None
+    # Minutes before the runner stops the run; null means RUN_TIMEOUT_MINUTES.
+    timeout_minutes: int | None = None
     headless: bool = False
     mode: Literal["investigate", "retest"] = "investigate"
     build: bool = True
@@ -285,9 +342,24 @@ def compose_cmd(*args: str) -> list[str]:
     return cmd + list(args)
 
 
+def stop_process(run: Run) -> None:
+    """Stop a running run's agent container."""
+    subprocess.run(["docker", "stop", run.container], check=False)
+
+
+def time_out(run: Run, minutes: int) -> None:
+    if run.finished is not None or run.status == RunStatus.CANCELLED:
+        return
+    run.timed_out = True
+    run.add_line(f"[runner] ERROR: timed out after {minutes} min; stopping the run")
+    stop_process(run)
+
+
 def execute(run: Run) -> None:
     params = run.params
     env_args: list[str] = ["-e", f"RUN_ID={run.run_id}"]
+    if params.get("max_turns") is None and DEFAULT_MAX_TURNS:
+        env_args += ["-e", f"MAX_TURNS={DEFAULT_MAX_TURNS}"]
     for name in ("bug_id", "bug_data", "url", "model", "effort", "max_turns", "mode"):
         if params.get(name) not in (None, ""):
             env_args += ["-e", f"{name.upper()}={params[name]}"]
@@ -307,6 +379,8 @@ def execute(run: Run) -> None:
     run.add_line(f"$ {' '.join(shown)}")
 
     docker_down = False
+    minutes = params.get("timeout_minutes") or RUN_TIMEOUT_MINUTES
+    timer = threading.Timer(minutes * 60, time_out, (run, minutes)) if minutes else None
     try:
         run.process = subprocess.Popen(
             cmd,
@@ -320,6 +394,9 @@ def execute(run: Run) -> None:
                 if k not in ("BUG_ID", "BUG_DATA", "URL")
             },
         )
+        if timer is not None:
+            timer.daemon = True
+            timer.start()
         assert run.process.stdout is not None
         for raw in run.process.stdout:
             line = raw.decode("utf-8", "replace").rstrip("\n")
@@ -332,9 +409,14 @@ def execute(run: Run) -> None:
     except Exception as exc:
         run.add_line(f"[runner] failed to run docker compose: {exc}")
         code = -1
+    finally:
+        if timer is not None:
+            timer.cancel()
 
     summary = read_json(run.dir / "summary.json")
-    if run.status != RunStatus.CANCELLED:
+    if run.timed_out:
+        run.status = RunStatus.ERROR
+    elif run.status != RunStatus.CANCELLED:
         run.status = RunStatus(
             (summary or {}).get("status")
             or (RunStatus.OK if code == 0 else RunStatus.ERROR)
@@ -716,6 +798,8 @@ def config() -> dict[str, Any]:
         "has_anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "has_bugzilla_key": bool(os.environ.get("BUGZILLA_API_KEY")),
         "max_parallel": MAX_PARALLEL,
+        "default_max_turns": DEFAULT_MAX_TURNS or None,
+        "run_timeout_minutes": RUN_TIMEOUT_MINUTES or None,
         "query_urls": {
             name: f"{BUGZILLA_ROOT}/buglist.cgi?query_format=advanced&"
             + requests.compat.urlencode(query, doseq=True)
@@ -835,7 +919,7 @@ def cancel_run(run_id: str) -> dict[str, Any]:
         write_meta(run)
     else:
         run.add_line("[runner] cancelling…")
-        subprocess.run(["docker", "stop", run.container], check=False)
+        stop_process(run)
     return run.info()
 
 

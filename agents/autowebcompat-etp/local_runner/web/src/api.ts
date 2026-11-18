@@ -23,6 +23,8 @@ export interface RunOptions {
   model: string | null;
   effort: Effort | null;
   max_turns: number | null;
+  /** Minutes before the runner stops the run; null: the server's default. */
+  timeout_minutes: number | null;
   headless: boolean;
   mode: Mode;
   build: boolean;
@@ -68,6 +70,9 @@ export interface Config {
   has_anthropic_key: boolean;
   has_bugzilla_key: boolean;
   max_parallel: number;
+  /** Limits for a run that sets none; null: no limit. */
+  default_max_turns: number | null;
+  run_timeout_minutes: number | null;
   query_urls: Record<BugQuery, string>;
 }
 

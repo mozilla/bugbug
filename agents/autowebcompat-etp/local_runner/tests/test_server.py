@@ -43,7 +43,8 @@ def isolated(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client():
-    return TestClient(server.app)
+    # The server only answers to its own names (see LocalOnly).
+    return TestClient(server.app, base_url="http://127.0.0.1:8123")
 
 
 def write_run(artifacts, run_id, params, result):
@@ -232,3 +233,133 @@ def test_bug_draft_loads_reporter_and_changes(client, isolated, bugzilla_calls):
         "reporter": "reporter@example.com",
     }
     assert [call[:2] for call in bugzilla_calls] == [("GET", "bug/7")]
+
+
+class FakePopen:
+    calls = []
+
+    def __init__(self, cmd, **kwargs):
+        FakePopen.calls.append((cmd, kwargs))
+        self.stdout = [b"agent output\n"]
+        self.pid = 1
+
+    def wait(self):
+        return 0
+
+
+@pytest.fixture
+def popen(monkeypatch):
+    FakePopen.calls = []
+    monkeypatch.setattr(server.subprocess, "Popen", FakePopen)
+    return FakePopen.calls
+
+
+def execute(params):
+    run = server.Run(run_id="etp-bug1-test", params=params)
+    run.dir.mkdir(parents=True)
+    server.execute(run)
+    [(cmd, kwargs)] = FakePopen.calls
+    return run, cmd, kwargs
+
+
+# --- local only ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("host", "status"),
+    [
+        ("127.0.0.1:8123", 200),
+        ("localhost:8123", 200),
+        ("host.docker.internal:8123", 200),
+        ("evil.example:8123", 400),
+        ("evil.example", 400),
+    ],
+)
+def test_other_hosts_are_refused(client, host, status):
+    assert client.get("/api/config", headers={"Host": host}).status_code == status
+
+
+@pytest.mark.parametrize(
+    ("origin", "status"),
+    [
+        (None, 200),
+        ("http://127.0.0.1:8123", 200),
+        # The Vite dev server proxies to the runner.
+        ("http://localhost:5173", 200),
+        ("https://evil.example", 403),
+        ("null", 403),
+    ],
+)
+def test_cross_origin_writes_are_refused(client, origin, status):
+    headers = {"Origin": origin} if origin else {}
+    response = client.post("/api/runs", json={"bug_id": 1}, headers=headers)
+    assert response.status_code == status
+
+
+def test_cross_origin_reads_are_allowed(client):
+    # A read from another origin can't see the response (no CORS headers).
+    response = client.get("/api/config", headers={"Origin": "https://evil.example"})
+    assert response.status_code == 200
+
+
+# --- run limits ----------------------------------------------------------------
+
+
+def test_execute_applies_the_default_max_turns(popen, monkeypatch):
+    monkeypatch.setattr(server, "DEFAULT_MAX_TURNS", 70)
+    _, cmd, _ = execute({"bug_id": 1})
+    assert "MAX_TURNS=70" in cmd
+
+
+def test_execute_keeps_the_runs_max_turns(popen, monkeypatch):
+    monkeypatch.setattr(server, "DEFAULT_MAX_TURNS", 70)
+    _, cmd, _ = execute({"bug_id": 1, "max_turns": 12})
+    assert "MAX_TURNS=12" in cmd
+    assert "MAX_TURNS=70" not in cmd
+
+
+def test_execute_without_a_default_max_turns(popen, monkeypatch):
+    monkeypatch.setattr(server, "DEFAULT_MAX_TURNS", 0)
+    _, cmd, _ = execute({"bug_id": 1})
+    assert not [arg for arg in cmd if arg.startswith("MAX_TURNS=")]
+
+
+def test_time_out_stops_the_run(monkeypatch):
+    stopped = []
+    monkeypatch.setattr(server.subprocess, "run", lambda cmd, **kw: stopped.append(cmd))
+    run = server.Run(run_id="etp-bug1-test", params={"bug_id": 1})
+    run.dir.mkdir(parents=True)
+    server.time_out(run, 30)
+    assert run.timed_out
+    assert stopped == [["docker", "stop", run.container]]
+    assert "timed out after 30 min" in run.lines[-1]
+
+
+def test_time_out_leaves_a_finished_run_alone(monkeypatch):
+    stopped = []
+    monkeypatch.setattr(server.subprocess, "run", lambda cmd, **kw: stopped.append(cmd))
+    run = server.Run(run_id="etp-bug1-test", params={"bug_id": 1}, finished=1.0)
+    run.dir.mkdir(parents=True)
+    server.time_out(run, 30)
+    assert not run.timed_out and not stopped
+
+
+def test_a_timed_out_run_ends_as_an_error(popen):
+    class TimingOut(FakePopen):
+        def wait(self):
+            run.timed_out = True
+            return 143
+
+    server.subprocess.Popen = TimingOut
+    run = server.Run(run_id="etp-bug1-test", params={"bug_id": 1})
+    run.dir.mkdir(parents=True)
+    server.execute(run)
+    assert run.status == server.RunStatus.ERROR
+
+
+def test_config_reports_the_run_limits(client, monkeypatch):
+    monkeypatch.setattr(server, "DEFAULT_MAX_TURNS", 70)
+    monkeypatch.setattr(server, "RUN_TIMEOUT_MINUTES", 0)
+    config = client.get("/api/config").json()
+    assert config["default_max_turns"] == 70
+    assert config["run_timeout_minutes"] is None
