@@ -83,16 +83,36 @@ def test_verdict_broken_needs_configurations():
         ComparisonVerdict(
             outcome="sites_same",
             broken_configurations=[],
-            breakage_tags=["script-error"],
+            breakage_tags={"strict": ["script-error"]},
+            summary="",
+        )
+    with pytest.raises(ValidationError):
+        ComparisonVerdict(
+            outcome="broken",
+            broken_configurations=["strict", "easylist"],
+            breakage_tags={"easylist": ["script-error"]},
+            summary="",
+        )
+    with pytest.raises(ValidationError):
+        ComparisonVerdict(
+            outcome="broken",
+            broken_configurations=["easylist"],
+            breakage_tags={"easylist": [" "]},
             summary="",
         )
     verdict = ComparisonVerdict(
         outcome="broken",
-        broken_configurations=["easylist"],
-        breakage_tags=["Anti Adblocker", "script_error", "anti-adblocker", " "],
+        broken_configurations=["easyprivacy", "easylist"],
+        breakage_tags={
+            "easyprivacy": ["script_error"],
+            "easylist": ["Anti Adblocker", "script_error", "anti-adblocker", " "],
+        },
         summary="",
     )
-    assert verdict.breakage_tags == ["anti-adblocker", "script-error"]
+    assert verdict.breakage_tags == {
+        "easyprivacy": ["script-error"],
+        "easylist": ["anti-adblocker", "script-error"],
+    }
 
 
 def make_captures(tmp_path, counts, failed=()):

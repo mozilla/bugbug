@@ -122,7 +122,7 @@ export interface CompareResult {
   url: string;
   outcome: "sites_same" | "broken" | "site_unavailable";
   broken_configurations: BlockingConfiguration[];
-  breakage_tags?: string[];
+  breakage_tags?: Partial<Record<BlockingConfiguration, string[]>>;
   summary: string;
   blocked_trackers: Partial<Record<CompareConfiguration, number>>;
   blocked_tracker_origins: Partial<Record<CompareConfiguration, string[]>>;

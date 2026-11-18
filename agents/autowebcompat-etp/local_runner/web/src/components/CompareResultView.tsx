@@ -64,18 +64,6 @@ export function CompareResultView() {
               <span className="meta"> (identical screenshots, no LLM)</span>
             )}
           </dd>
-          {result.breakage_tags && result.breakage_tags.length > 0 && (
-            <>
-              <dt>Breakage</dt>
-              <dd className="tags">
-                {result.breakage_tags.map((tag) => (
-                  <span key={tag} className="badge error">
-                    {tag}
-                  </span>
-                ))}
-              </dd>
-            </>
-          )}
           <dt>Turns / cost</dt>
           <dd>
             {findings.num_turns ?? "—"} /{" "}
@@ -141,7 +129,14 @@ export function CompareResultView() {
                   {name === "off" ? (
                     "—"
                   ) : broken.has(name) ? (
-                    <span className="badge error">broken</span>
+                    <span className="tags">
+                      <span className="badge error">broken</span>
+                      {(result.breakage_tags?.[name] ?? []).map((tag) => (
+                        <span key={tag} className="badge error">
+                          {tag}
+                        </span>
+                      ))}
+                    </span>
                   ) : result.outcome === "site_unavailable" ? (
                     "—"
                   ) : (

@@ -34,6 +34,11 @@ CONFIGURATION_LABELS: dict[Configuration, str] = {
 Outcome = Literal["sites_same", "broken", "site_unavailable"]
 
 
+def normalize_tags(tags: list[str]) -> list[str]:
+    normalized = ("-".join(tag.lower().replace("_", " ").split()) for tag in tags)
+    return list(dict.fromkeys(tag for tag in normalized if tag))
+
+
 class ComparisonVerdict(BaseModel):
     """What the agent submits after looking at the differences."""
 
@@ -67,11 +72,12 @@ class ComparisonVerdict(BaseModel):
     ]
 
     breakage_tags: Annotated[
-        list[str],
+        dict[BlockingConfiguration, list[str]],
         Field(
-            description="""Short kebab-case tags for the kinds of breakage you found, across
-        every broken configuration. Non-empty exactly when `outcome` is `broken`.
-        Pick from these where one fits, and add your own when none does:
+            description="""For each broken configuration, short kebab-case tags for the kinds
+        of breakage it shows. The keys are exactly `broken_configurations`, and every
+        list is non-empty. Pick from these where one fits, and add your own when none
+        does:
           * anti-adblocker - a wall or message asking to disable an ad blocker
           * content-blocked - main content (text, articles, listings) missing
           * script-error - a script the page needs failed, per the console
@@ -84,7 +90,7 @@ class ComparisonVerdict(BaseModel):
           * checkout-broken - cart, payment or checkout is missing or fails
           * consent-banner-stuck - a cookie or consent banner can't be dismissed"""
         ),
-    ] = []
+    ] = {}
 
     summary: Annotated[
         str,
@@ -101,17 +107,25 @@ class ComparisonVerdict(BaseModel):
             raise ValueError(
                 "broken_configurations must be non-empty exactly when outcome is broken"
             )
-        if (self.outcome == "broken") != bool(self.breakage_tags):
+        if set(self.breakage_tags) != set(self.broken_configurations):
             raise ValueError(
-                "breakage_tags must be non-empty exactly when outcome is broken"
+                "breakage_tags must have an entry for exactly the broken_configurations"
+            )
+        if not all(self.breakage_tags.values()):
+            raise ValueError(
+                "breakage_tags must list at least one tag per broken configuration"
             )
         return self
 
     @field_validator("breakage_tags")
     @classmethod
-    def normalize_breakage_tags(cls, tags: list[str]) -> list[str]:
-        normalized = ("-".join(tag.lower().replace("_", " ").split()) for tag in tags)
-        return list(dict.fromkeys(tag for tag in normalized if tag))
+    def normalize_breakage_tags(
+        cls, tags: dict[BlockingConfiguration, list[str]]
+    ) -> dict[BlockingConfiguration, list[str]]:
+        return {
+            configuration: normalize_tags(configuration_tags)
+            for configuration, configuration_tags in tags.items()
+        }
 
 
 class ScreenshotDiff(BaseModel):
@@ -130,7 +144,7 @@ class EtpComparisonResult(BaseModel):
     url: str
     outcome: Outcome
     broken_configurations: list[BlockingConfiguration]
-    breakage_tags: list[str] = []
+    breakage_tags: dict[BlockingConfiguration, list[str]] = {}
     summary: str
     # `Blocked trackers` from the content blocking log after each load.
     blocked_trackers: dict[Configuration, int]
