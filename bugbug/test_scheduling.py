@@ -637,6 +637,7 @@ class PastFailures:
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
+        self.readonly = readonly
 
         self.db = shelve.Shelf(
             LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
@@ -660,17 +661,23 @@ class PastFailures:
     def all_runnables(self, value) -> None:
         self.db["all_runnables"] = value
 
+    def _get(self, key: str) -> ExpQueue | None:
+        if not self.readonly:
+            return self.db.get(key, None)
+
+        # Read the underlying DB directly, as shelve looks keys up twice (to check
+        # they exist, and then to read them).
+        value = self.db.dict.get(key.encode("utf-8"))
+        return pickle.loads(value) if value is not None else None
+
     def get(self, key: str) -> ExpQueue | None:
-        value = self.db.get(key, None)
+        value = self._get(key)
 
         # Fallback on INI if the group is now TOML.
         if value is None and self.granularity == "group" and key.endswith(".toml"):
-            ini_key = f"{key[:-4]}ini"
-            try:
-                value = self.db[ini_key]
+            value = self._get(f"{key[:-4]}ini")
+            if value is not None and not self.readonly:
                 self.db[key] = value
-            except KeyError:
-                return None
 
         return value
 
