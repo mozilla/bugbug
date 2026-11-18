@@ -83,6 +83,10 @@ firefox = [
     { name = "grizzly-framework" },
     { name = "prefpicker" },
 ]
+mcp-server = [
+    { name = "fastmcp" },
+    { name = "uvicorn" },
+]
 searchfox = [
     { name = "searchfox" },
 ]
@@ -94,14 +98,16 @@ vcs = [
 requires-dist = [
     { name = "bugsy", marker = "extra == 'bugzilla'" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
+    { name = "fastmcp", marker = "extra == 'mcp-server'", specifier = ">=3.4.0" },
     { name = "grizzly-framework", marker = "extra == 'firefox'" },
     { name = "httpx", marker = "extra == 'vcs'" },
     { name = "prefpicker", marker = "extra == 'firefox'" },
     { name = "pydantic", specifier = ">=2.6.0" },
     { name = "searchfox", marker = "extra == 'searchfox'", specifier = ">=0.20.3" },
     { name = "six", marker = "extra == 'bugzilla'" },
+    { name = "uvicorn", marker = "extra == 'mcp-server'" },
 ]
-provides-extras = ["bugzilla", "firefox", "claude-sdk", "searchfox", "vcs"]
+provides-extras = ["bugzilla", "firefox", "claude-sdk", "mcp-server", "searchfox", "vcs"]
 
 [[package]]
 name = "aiofile"
@@ -2932,7 +2938,11 @@ claude-sdk = [
     { name = "claude-agent-sdk" },
 ]
 codex-sdk = [
+    { name = "agent-tools", extra = ["mcp-server"] },
     { name = "openai-codex" },
+]
+mcp-server = [
+    { name = "agent-tools", extra = ["mcp-server"] },
 ]
 phabricator = [
     { name = "mozphab" },
@@ -2942,6 +2952,8 @@ phabricator = [
 requires-dist = [
     { name = "agent-tools", editable = "libs/agent-tools" },
     { name = "agent-tools", extras = ["claude-sdk"], marker = "extra == 'claude-sdk'", editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["mcp-server"], marker = "extra == 'codex-sdk'", editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["mcp-server"], marker = "extra == 'mcp-server'", editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
@@ -2954,7 +2966,7 @@ requires-dist = [
     { name = "slack-sdk", specifier = ">=3.27.0" },
     { name = "weave", specifier = ">=0.53.12" },
 ]
-provides-extras = ["claude-sdk", "codex-sdk", "phabricator"]
+provides-extras = ["claude-sdk", "codex-sdk", "mcp-server", "phabricator"]
 
 [[package]]
 name = "hf-xet"
