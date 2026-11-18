@@ -1719,8 +1719,29 @@ def clone(
     logger.info("%s cloned", repo_dir)
 
 
+def has_revision(repo_dir: str, revision: str) -> bool:
+    """Whether a revision, identified by its full hash, is in a local repository.
+
+    Symbolic names (e.g. "tip") are never considered present, as they can point to
+    other revisions on the remote repository.
+    """
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        return False
+
+    p = subprocess.run(
+        _build_hg_cmd("log", r=revision.encode("ascii"), template=b"{node}"),
+        cwd=repo_dir,
+        capture_output=True,
+    )
+    return p.returncode == 0 and p.stdout == revision.encode("ascii")
+
+
 def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> None:
-    """Pull a revision from a branch of a remote repository into a local repository."""
+    """Pull a revision from a branch of a remote repository into a local repository.
+
+    Nothing is pulled when the revision is already in the local repository, as pulling
+    contacts the remote repository even when there is nothing new to retrieve.
+    """
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(3),
@@ -1756,6 +1777,13 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
         if update:
             with hglib.open(repo_dir) as hg:
                 hg.update(revision.encode("utf-8"), clean=True)
+
+    if has_revision(repo_dir, revision):
+        logger.info("%s is already in %s, not pulling it", revision, repo_dir)
+        if update:
+            with hglib.open(repo_dir) as hg:
+                hg.update(revision.encode("utf-8"), clean=True)
+        return
 
     trigger_pull()
 

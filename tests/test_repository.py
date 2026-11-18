@@ -135,6 +135,44 @@ def test_clone(fake_hg_repo):
     assert os.path.exists(os.path.join(f"{tmp_repo_dir}2", "file1"))
 
 
+def test_pull_known_revision(fake_hg_repo, monkeypatch):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    revision = commit(hg)
+
+    assert repository.has_revision(local, revision)
+    assert not repository.has_revision(local, "a" * 40)
+    # Symbolic names can point to other revisions on the remote repository.
+    assert not repository.has_revision(local, "tip")
+
+    pulled = []
+    orig_popen = repository.subprocess.Popen
+
+    def mock_popen(cmd, *args, **kwargs):
+        if "pull" not in cmd:
+            return orig_popen(cmd, *args, **kwargs)
+
+        pulled.append(cmd)
+
+        class MockProcess:
+            returncode = 0
+
+            def wait(self, timeout=None):
+                pass
+
+        return MockProcess()
+
+    monkeypatch.setattr(repository.subprocess, "Popen", mock_popen)
+
+    # A revision which is already in the local repository is not pulled again.
+    repository.pull(local, "integration/autoland", revision)
+    assert pulled == []
+
+    repository.pull(local, "integration/autoland", "tip")
+    assert len(pulled) == 1
+
+
 def test_get_revs(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
