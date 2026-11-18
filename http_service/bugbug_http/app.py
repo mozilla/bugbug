@@ -515,7 +515,9 @@ def compress_response(data: dict, status_code: int):
     :rtype: Response
     """
 
-    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=9)
+    # Level 6 is about four times faster than level 9, for responses only a few
+    # percent larger.
+    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=6)
 
     response = Response(status=status_code)
     response.set_data(gzip_buffer)
