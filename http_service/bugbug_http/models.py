@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import concurrent.futures
 import logging
 import os
 from collections import defaultdict
@@ -118,8 +119,7 @@ def setkey(key: str, value: bytes, compress: bool = False) -> None:
     LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
-    redis.set(key, value)
-    redis.expire(key, DEFAULT_EXPIRATION_TTL)
+    redis.set(key, value, ex=DEFAULT_EXPIRATION_TTL)
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
@@ -819,8 +819,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         url = data["next"]
         params = None
 
-    groups: set[str] = set()
-    for push_id, labels in labels_by_push.items():
+    def get_group_results(push_id: int) -> dict[str, dict[str, bool]]:
         response = session.get(
             f"{TREEHERDER_API_URL}/project/{project}/push/group_results/",
             params={"revision": push_revs[push_id]},
@@ -828,7 +827,18 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
             timeout=30,
         )
         response.raise_for_status()
-        group_results = response.json()
+        return response.json()
+
+    # The group results of each push are retrieved in parallel, as there can be one
+    # request for each of the recent pushes.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        group_results_by_push = dict(
+            zip(labels_by_push, executor.map(get_group_results, labels_by_push))
+        )
+
+    groups: set[str] = set()
+    for push_id, labels in labels_by_push.items():
+        group_results = group_results_by_push[push_id]
         for task_id, label in labels.items():
             if task_id in group_results:
                 groups.update(

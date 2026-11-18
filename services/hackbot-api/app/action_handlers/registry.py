@@ -9,6 +9,10 @@ from app.action_handlers.bugzilla_handler import (
 from app.action_handlers.email_handler import SendEmailHandler
 from app.action_handlers.feedback_handler import ReportProblemHandler
 from app.action_handlers.github_handler import (
+    AddCommentHandler as GitHubAddCommentHandler,
+)
+from app.action_handlers.github_handler import AddInlineCommentsHandler
+from app.action_handlers.github_handler import (
     SubmitPatchHandler as GitHubSubmitPatchHandler,
 )
 from app.action_handlers.phabricator_handler import (
@@ -38,6 +42,8 @@ HANDLERS: dict[str, ActionHandler] = {
     "phabricator.submit_patch": SubmitPatchHandler(),
     "phabricator.update_patch": UpdatePatchHandler(),
     "phabricator.add_comment": PhabricatorAddCommentHandler(),
+    "github.add_comment": GitHubAddCommentHandler(),
+    "github.add_inline_comments": AddInlineCommentsHandler(),
     "github.submit_patch": GitHubSubmitPatchHandler(),
     "testrail.submit_test_plan": SubmitTestPlanHandler(),
     "slack.post_message": PostMessageHandler(),

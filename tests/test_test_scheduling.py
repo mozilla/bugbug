@@ -1209,6 +1209,25 @@ def test_fallback_on_ini() -> None:
     assert_val("browser.ini", 42)
 
 
+def test_fallback_on_ini_readonly() -> None:
+    past_failures = test_scheduling.PastFailures("group", False)
+    past_failures.set("browser.ini", ExpQueue(0, 1, 42))
+    past_failures.close()
+
+    past_failures = test_scheduling.PastFailures("group", True)
+
+    exp_queue = past_failures.get("browser.toml")
+    assert exp_queue is not None
+    assert exp_queue[0] == 42
+    exp_queue = past_failures.get("browser.ini")
+    assert exp_queue is not None
+    assert exp_queue[0] == 42
+    assert past_failures.get("reftest.toml") is None
+    assert past_failures.get("unexisting.ini") is None
+
+    past_failures.close()
+
+
 class _Finder:
     """Calls the functions finding what to run for paths, at a revision with the current files.
 
