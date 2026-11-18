@@ -47,6 +47,33 @@ def getprop(name: str) -> str:
     return adb("shell", "getprop", name, check=False).strip()
 
 
+def missing_services() -> list[str]:
+    """Core Android services that don't answer.
+
+    ``sys.boot_completed`` stays set after system_server dies or hangs, so it
+    can't tell a usable device from a wedged one; these services can.
+    """
+    try:
+        return [
+            name
+            for name in ("package", "activity")
+            if f"Service {name}: found"
+            not in adb("shell", "service", "check", name, check=False, timeout=15)
+        ]
+    except subprocess.TimeoutExpired:
+        return ["servicemanager"]
+
+
+def check_device() -> None:
+    """Fail fast instead of letting callers retry against a broken emulator."""
+    if missing := missing_services():
+        raise AndroidError(
+            f"The Android emulator is unusable ({', '.join(missing)} not "
+            "responding) and will not recover during this run. Stop retrying "
+            "browser tools and report the run as failed."
+        )
+
+
 def install_apk(apk: Path) -> None:
     """Install an APK, allowing replacement and downgrades."""
     logger.info("installing %s", apk.name)
@@ -105,7 +132,7 @@ def wait_for_boot(process: subprocess.Popen, timeout: int = BOOT_TIMEOUT) -> Non
             raise AndroidError(
                 f"emulator exited with {process.returncode} before booting"
             )
-        if getprop("sys.boot_completed") == "1":
+        if getprop("sys.boot_completed") == "1" and not missing_services():
             logger.info("emulator booted")
             return
         time.sleep(5)

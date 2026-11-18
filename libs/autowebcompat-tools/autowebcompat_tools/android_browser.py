@@ -141,6 +141,7 @@ class AndroidBrowser(ABC):
 
     def activate(self) -> None:
         """Bring a browser forward, restoring automation if it stopped working."""
+        android_emulator.check_device()
         if not self.is_ready():
             # The other browser may have replaced Android's global debug-app
             # selection. Restore it before relaunching so automation flags load.
@@ -180,6 +181,7 @@ class AndroidFirefox(AndroidBrowser):
         ``fresh`` wipes Firefox's app data first, giving it a clean profile.
         Relaunches within a task keep the profile.
         """
+        android_emulator.check_device()
         install_fenix(self.channel)
         # Nightly and release use the same device ports. Stopping only the
         # requested package lets a previous channel answer the new connection.
@@ -258,6 +260,7 @@ class AndroidChrome(AndroidBrowser):
         return chrome_ready()
 
     def start(self, *, fresh: bool = False) -> None:
+        android_emulator.check_device()
         prepare_chrome()
         self.stop()
         android_emulator.start_app(self.package, "about:blank")
