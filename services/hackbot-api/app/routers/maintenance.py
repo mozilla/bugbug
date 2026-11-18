@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_push_auth
@@ -41,7 +41,10 @@ async def finalize_stale_runs(
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=min_age_minutes)
     result = await db.execute(
         select(Run)
-        .where(Run.finalized_at.is_(None), Run.created_at < cutoff)
+        .where(
+            Run.finalized_at.is_(None),
+            or_(Run.created_at < cutoff, Run.status == "awaiting_ci"),
+        )
         .order_by(Run.created_at)
         .limit(limit)
     )

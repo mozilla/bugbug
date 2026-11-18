@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class RunStatus(str, Enum):
     pending = "pending"
     running = "running"
+    awaiting_ci = "awaiting_ci"
     succeeded = "succeeded"
     failed = "failed"
     timed_out = "timed_out"
@@ -210,6 +211,19 @@ class GeckoTriageInputs(AgentInputs):
     max_turns: Annotated[int | None, Field(ge=1, le=200)] = None
     max_budget_usd: Annotated[float | None, Field(gt=0, le=20)] = None
     effort: str | None = None
+
+
+class PerfRegressionInputs(AgentInputs):
+    bug_id: int = Field(gt=0)
+    alert_id: int | None = Field(default=None, gt=0)
+    # Only investigate these suites (e.g. ["speedometer3"]); all when unset.
+    suites: list[Annotated[str, Field(min_length=1, max_length=100)]] | None = Field(
+        default=None, max_length=20
+    )
+    max_attempts: int = Field(default=1, ge=1, le=1)
+    model: str | None = None
+    max_turns: int = Field(default=500, ge=1, le=500)
+    effort: str = "high"
 
 
 class PerfTriageInputs(AgentInputs):

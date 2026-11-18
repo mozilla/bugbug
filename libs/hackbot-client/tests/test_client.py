@@ -96,6 +96,23 @@ async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch)
     }
 
 
+async def test_deduplicated_ci_wait_is_a_valid_run_reference(monkeypatch):
+    _capture_post(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json={
+                "run_id": RUN_ID,
+                "agent": "perf-regression",
+                "status": "awaiting_ci",
+            },
+        ),
+    )
+    run = await _client().trigger_run("perf-regression", {"bug_id": 1234})
+    assert run.status is RunStatus.awaiting_ci
+    assert not run.is_new
+
+
 async def test_trigger_run_omits_attribution_when_not_provided(monkeypatch):
     captured = _capture_post(
         monkeypatch,

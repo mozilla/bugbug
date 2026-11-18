@@ -53,6 +53,11 @@ its involvement ends: the agent reports its own result, as an `email.send` actio
 test-repair, a Slack message and a hand-off to test-repair-fix) applied once the run has
 succeeded, and holds any proposed Phabricator revision for a human to apply.
 
+With `CI_EVENTS_TOPIC` set it also forwards terminal `try` task events, from its own
+small thread pool, to a Pub/Sub topic whose push subscription wakes waiting
+`perf-regression` runs at `/internal/events/try-task-finished`. Those events are only
+hints; the maintenance sweep reconciles waiting runs regardless.
+
 **It holds no investigation logic.** Each agent resolves the push, the commit range and the
 failing tests itself from the task id. The listener only decides _what to hand off_ — which
 keeps the expensive reasoning in one place and lets the filter stay cheap.

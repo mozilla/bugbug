@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     pulse_password: str = ""
     taskcluster_root_url: str = "https://firefox-ci-tc.services.mozilla.com"
 
+    # Full Pub/Sub topic path; empty disables try completion forwarding.
+    ci_events_topic: str = ""
+
     # hackbot-api
     hackbot_api_url: str = ""
     hackbot_api_key: str = ""

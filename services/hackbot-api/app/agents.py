@@ -14,6 +14,7 @@ from app.schemas import (
     DatasetEvalInputs,
     FrontendTriageInputs,
     GeckoTriageInputs,
+    PerfRegressionInputs,
     PerfTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
@@ -80,6 +81,20 @@ def model_to_env(inputs: BaseModel) -> dict[str, str]:
 
 
 AGENT_REGISTRY: dict[str, AgentSpec] = {
+    "perf-regression": AgentSpec(
+        name="perf-regression",
+        description=(
+            "Investigate a performance-test regression, analyze CI profiles, and "
+            "validate one candidate fix on try. Publish results and "
+            "patches to the dashboard without posting to Bugzilla."
+        ),
+        job_name="hackbot-agent-perf-regression",
+        input_schema=PerfRegressionInputs,
+        execution_timeout_seconds=8 * 60 * 60,
+        # The candidate's one try push is applied while the run waits for CI;
+        # a run that requires review holds it for a manual apply.
+        always_apply_actions=frozenset({"try_server.push"}),
+    ),
     "bug-fix": AgentSpec(
         name="bug-fix",
         description="Investigate a Bugzilla bug and produce a candidate fix patch against the Firefox source tree.",

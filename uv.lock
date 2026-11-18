@@ -2944,6 +2944,7 @@ version = "0.1.0"
 source = { editable = "services/hackbot-pulse-listener" }
 dependencies = [
     { name = "cachetools" },
+    { name = "google-cloud-pubsub" },
     { name = "httpx" },
     { name = "kombu" },
     { name = "mozci" },
@@ -2962,6 +2963,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cachetools", specifier = ">=5.3.0" },
+    { name = "google-cloud-pubsub", specifier = ">=2.21.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "kombu", specifier = ">=5.6,<6" },
     { name = "mozci", specifier = "~=2.6.0" },

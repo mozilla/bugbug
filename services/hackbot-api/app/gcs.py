@@ -66,8 +66,10 @@ def _client() -> storage.Client:
     )
 
 
-def _generate_post_policy_sync(run_id: str, timeout_seconds: int) -> dict[str, Any]:
-    """Mint a V4 signed POST policy for uploads under `runs/<run_id>/`.
+def _generate_post_policy_sync(
+    run_id: str, timeout_seconds: int, *, artifact_prefix: str = ""
+) -> dict[str, Any]:
+    """Mint a V4 signed POST policy under a run, optionally scoped to an execution.
 
     `storage.Client.generate_signed_post_policy_v4` insists on adding an
     exact-match `{"key": blob_name}` condition (see client.py:1918),
@@ -79,7 +81,7 @@ def _generate_post_policy_sync(run_id: str, timeout_seconds: int) -> dict[str, A
     if not bucket_name:
         raise RuntimeError("results_bucket not configured")
 
-    prefix = run_prefix(run_id)
+    prefix = run_prefix(run_id) + artifact_prefix
     expiration_seconds = timeout_seconds + settings.signed_policy_grace_seconds
 
     creds = _signing_credentials()
@@ -121,13 +123,20 @@ def _generate_post_policy_sync(run_id: str, timeout_seconds: int) -> dict[str, A
     return {"url": url, "fields": fields}
 
 
-async def generate_results_policy(run_id: str, timeout_seconds: int) -> dict[str, Any]:
-    return await asyncio.to_thread(_generate_post_policy_sync, run_id, timeout_seconds)
+async def generate_results_policy(
+    run_id: str, timeout_seconds: int, *, artifact_prefix: str = ""
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _generate_post_policy_sync,
+        run_id,
+        timeout_seconds,
+        artifact_prefix=artifact_prefix,
+    )
 
 
-def _read_summary_sync(run_id: str) -> RunSummary | None:
+def _read_summary_sync(run_id: str, artifact_prefix: str = "") -> RunSummary | None:
     bucket = _client().bucket(settings.results_bucket)
-    blob = bucket.blob(summary_blob_name(run_id))
+    blob = bucket.blob(f"{run_prefix(run_id)}{artifact_prefix}summary.json")
     if not blob.exists():
         return None
     raw = blob.download_as_bytes()
@@ -139,8 +148,63 @@ def _read_summary_sync(run_id: str) -> RunSummary | None:
     return RunSummary.model_validate(data)
 
 
-async def read_summary(run_id: str) -> RunSummary | None:
-    return await asyncio.to_thread(_read_summary_sync, run_id)
+async def read_summary(run_id: str, *, artifact_prefix: str = "") -> RunSummary | None:
+    return await asyncio.to_thread(_read_summary_sync, run_id, artifact_prefix)
+
+
+def _promote_artifacts_sync(
+    run_id: str, artifact_prefix: str, summary: RunSummary
+) -> RunSummary:
+    """Publish one completed execution's outputs under the run's usual keys.
+
+    The caller holds the run lock and has checked this execution's identity and
+    successful completion. Workers can only upload inside their own prefix;
+    only the API writes the canonical outputs. Copying is safe to retry after
+    a failure, and summary.json is written last.
+    """
+    if not artifact_prefix or not artifact_prefix.endswith("/"):
+        raise ValueError("Promotion needs an execution artifact prefix")
+    client = _client()
+    bucket = client.bucket(settings.results_bucket)
+    destination = run_prefix(run_id)
+    source = destination + artifact_prefix
+    for blob in client.list_blobs(bucket, prefix=source):
+        name = blob.name.removeprefix(source)
+        if name and name != "summary.json":
+            bucket.copy_blob(
+                blob,
+                bucket,
+                new_name=destination + name,
+                if_source_generation_match=blob.generation,
+            )
+
+    source_uri = f"gs://{settings.results_bucket}/{source}"
+    destination_uri = f"gs://{settings.results_bucket}/{destination}"
+
+    def canonical_urls(value):
+        if isinstance(value, str):
+            return value.replace(source_uri, destination_uri)
+        if isinstance(value, dict):
+            return {key: canonical_urls(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [canonical_urls(item) for item in value]
+        return value
+
+    published = RunSummary.model_validate(
+        canonical_urls(summary.model_dump(mode="json"))
+    )
+    bucket.blob(summary_blob_name(run_id)).upload_from_string(
+        published.model_dump_json(), content_type="application/json"
+    )
+    return published
+
+
+async def promote_artifacts(
+    run_id: str, artifact_prefix: str, summary: RunSummary
+) -> RunSummary:
+    return await asyncio.to_thread(
+        _promote_artifacts_sync, run_id, artifact_prefix, summary
+    )
 
 
 def _download_artifact_bytes_sync(run_id: str, key: str, max_bytes: int) -> bytes:

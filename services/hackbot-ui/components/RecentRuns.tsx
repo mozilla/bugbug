@@ -18,6 +18,7 @@ const COLS = 6;
 const STATUS_OPTIONS: RunStatus[] = [
   "pending",
   "running",
+  "awaiting_ci",
   "succeeded",
   "failed",
   "timed_out",

@@ -3,13 +3,13 @@ import re
 import threading
 import time
 from collections import deque
-from concurrent.futures import Executor
+from concurrent.futures import Executor, ThreadPoolExecutor
 
 from cachetools import TTLCache
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
-from app import client, flakiness, lando, regression, taskcluster, treeherder
+from app import ci_events, client, flakiness, lando, regression, taskcluster, treeherder
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 EXCHANGES = ("exchange/taskcluster-queue/v1/task-failed",)
+TRY_TREEHERDER_ROUTE = "route.tc-treeherder.v2.try.#"
 
 # Taskcluster ``kind`` tags that denote test tasks (vs build tasks). These are
 # taskgraph kinds, not harnesses: xpcshell, reftest and gtest all arrive as ``test``,
@@ -638,7 +639,20 @@ def _trigger_test_repair(
     return run_id
 
 
-def make_handler(executor: Executor):
+# CI completion hints have their own small pool: failure handling can block for
+# minutes, and try completions are far more numerous than failures.
+_FORWARDER = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ci-events")
+
+
+def make_handler(executor: Executor, forwarder: Executor = _FORWARDER):
+    def forward(body: dict) -> None:
+        try:
+            ci_events.forward(body)
+        except Exception:
+            logger.exception(
+                "CI event forwarding failed; the API sweep reconciles waiting runs"
+            )
+
     def run(body: dict) -> None:
         try:
             process(body)
@@ -649,7 +663,9 @@ def make_handler(executor: Executor):
         # Process on a worker thread so a regression check that blocks waiting
         # for a parent build to settle never stalls the consumer thread.
         try:
-            executor.submit(run, body)
+            forwarder.submit(forward, body)
+            if (body.get("status") or {}).get("state") == "failed":
+                executor.submit(run, body)
         except Exception:
             logger.exception("Failed to dispatch pulse message")
         finally:
@@ -665,13 +681,24 @@ def _build_queues(user: str) -> list[Queue]:
     env = settings.environment
     env_segment = "" if env == "production" else f"{env}-"
     queues = []
-    for exchange in EXCHANGES:
+    bindings = [(exchange, "#") for exchange in EXCHANGES]
+    if settings.ci_events_topic:
+        # Every firefox-ci task completes on these exchanges; bind to try tasks'
+        # Treeherder route so Pulse filters them instead of this consumer.
+        bindings += [
+            (exchange, TRY_TREEHERDER_ROUTE)
+            for exchange in (
+                "exchange/taskcluster-queue/v1/task-completed",
+                "exchange/taskcluster-queue/v1/task-exception",
+            )
+        ]
+    for exchange, routing_key in bindings:
         suffix = exchange.rsplit("/", 1)[-1]
         queues.append(
             Queue(
                 name=f"queue/{user}/build-repair-{env_segment}{suffix}",
                 exchange=Exchange(exchange, type="topic", no_declare=True),
-                routing_key="#",
+                routing_key=routing_key,
                 durable=True,
                 auto_delete=True,
             )

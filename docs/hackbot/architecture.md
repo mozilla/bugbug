@@ -107,7 +107,8 @@ artifacts are written to disk under the same keys they'd have in GCS. So
 
 Cloud Run and Eventarc appear in narrow, named places: the job trigger, the completion-log
 parser, the push-auth check. The routes that consume them are named after the domain
-outcome (`agent-run-finished`, `apply-run-actions`), not the mechanism, and the finalize
+outcome (`agent-run-finished`, `apply-run-actions`, `try-task-finished`), not the
+mechanism, and the finalize
 logic re-queries authoritative status rather than trusting the event payload. Moving or
 adding an execution platform means adding a payload parser, not rewriting the lifecycle.
 

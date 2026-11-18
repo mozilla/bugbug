@@ -9,13 +9,14 @@ from hackbot_client import HackbotClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import notifications
+from app import notifications, perf_regression
 from app.actions_applier import on_run_completed
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
 from app.hackbot_client import get_hackbot_client
 from app.routers.runs import finalize_run
+from app.schemas import RunStatus
 
 log = logging.getLogger(__name__)
 
@@ -137,3 +138,36 @@ async def apply_run_actions(
         return
 
     await on_run_completed(db, run, hackbot_client)
+
+
+@router.post("/try-task-finished", status_code=204)
+async def try_task_finished(
+    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+) -> None:
+    """Pulse -> Pub/Sub push: wake a persisted run, never its old session."""
+    body = await request.json()
+    message = body.get("message") if isinstance(body, dict) else None
+    attributes = (
+        (message or {}).get("attributes") if isinstance(message, dict) else None
+    )
+    group = (attributes or {}).get("task_group_id")
+    if not isinstance(group, str) or not group:
+        return
+    matches = await db.execute(
+        select(Run.run_id).where(
+            Run.agent == "perf-regression",
+            Run.status == RunStatus.awaiting_ci.value,
+            Run.finalized_at.is_(None),
+            Run.ci_wait["task_group_id"].astext == group,
+        )
+    )
+    # A wake-up is only a hint: errors are logged, not retried by Pub/Sub,
+    # because the maintenance sweep reconciles every waiting run anyway.
+    for run_id in matches.scalars().all():
+        try:
+            run = await db.get(Run, run_id)
+            if run is not None:
+                await perf_regression.resume(db, run, from_event=True)
+        except Exception:
+            await db.rollback()
+            log.exception("Could not resume perf-regression run %s", run_id)

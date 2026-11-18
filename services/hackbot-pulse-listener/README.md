@@ -145,3 +145,20 @@ uv run --package hackbot-pulse-listener pytest services/hackbot-pulse-listener/t
 ## Deploy
 
 Cloud Run worker pool (no HTTP). See `deploy.sh`.
+
+## Performance CI completion events
+
+With `CI_EVENTS_TOPIC` set to a full Pub/Sub topic path, the listener additionally
+subscribes to `task-completed` and `task-exception`, bound to try tasks'
+`route.tc-treeherder.v2.try.#` routing key. It forwards terminal events
+for the `try` project (including `task-failed`) with a `task_group_id` attribute.
+This is independent of `WATCHED_REPOS`, which still controls failure repair.
+Successful tasks never enter the repair dispatcher. Dry-run disables publishing.
+Forwarding errors are logged and do not prevent failure repair; the API
+maintenance sweep reconciles saved CI waits. Duplicate events are harmless wake-ups.
+
+The topic publisher uses the worker pool service account. See the
+[perf-regression deployment setup](../../agents/perf-regression/README.md#ci-completion-events)
+for the API push subscription, maintenance schedule, and local continuation command.
+Pass `CI_EVENTS_TOPIC` explicitly to `deploy.sh` to create/grant access to the
+topic and enable forwarding; it remains disabled when that variable is unset.
