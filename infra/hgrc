@@ -3,14 +3,16 @@ purge =
 strip =
 robustcheckout = /version-control-tools/hgext/robustcheckout/__init__.py
 hgmo = /version-control-tools/hgext/hgmo
-pushlog = /version-control-tools/hgext/pushlog
 mozext = /version-control-tools/hgext/mozext
 
 [mozext]
-# https://bugzilla.mozilla.org/show_bug.cgi?id=2024739#c15
-# Disable the mozext `changetracker.db` SQLite database as
-# we don't need any of the functionality it provides.
-disable_local_database = true
+# The push dates of the changesets ({firstpushdate}) come from the pushes recorded by
+# mozext in its `changetracker.db` database, instead of the pushlog extension, which
+# stops recording the pushes of autoland at the first one with only obsolete
+# changesets (https://bugzilla.mozilla.org/show_bug.cgi?id=1329788) and can't record
+# the pushes of several repositories (e.g. try) pulled in the same clone: it then
+# downloaded their whole pushlog again on each pull.
+
 # Git-style reverts ("This reverts commit <git hash>.") are resolved to the
 # reverted changesets by searching the most recent `backoutsearchlimit`
 # ancestors of the revert for a matching git_commit. The default limit of 100
