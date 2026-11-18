@@ -137,6 +137,13 @@ class AutowebcompatDiagnosisInputs(AutowebcompatInputs):
     """Inputs for the autowebcompat-diagnosis agent."""
 
 
+class AutowebcompatEtpInputs(AutowebcompatInputs):
+    """Inputs for the autowebcompat-etp agent."""
+
+    # `retest` reruns an old bug with Firefox's ETP exceptions turned off.
+    mode: Literal["investigate", "retest"] = "investigate"
+
+
 class AutowebcompatInterventionInputs(AutowebcompatInputs):
     """Inputs for the autowebcompat-intervention agent."""
 

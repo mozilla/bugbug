@@ -1,6 +1,16 @@
 # autowebcompat-etp needs no platform prep: no [source] checkout, no [firefox] build.
 # Subject comes from the request (bug_data / bug_id); the DevTools MCP drives a
 # Firefox Nightly downloaded at startup.
-#
-# No [deploy] table yet: the agent only runs locally via compose.yml until it is
-# registered with hackbot-api and given infrastructure.
+
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "6"
+memory = "24Gi"
+timeout_seconds = 7200
+
+[deploy.broker]
+cpu = "1"
+memory = "512Mi"
