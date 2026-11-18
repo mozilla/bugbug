@@ -121,10 +121,12 @@ class TestPlan(Task):
         task_config: TaskConfig,
         run_tracker: RunTracker,
         input_data: AutoWebcompatInput,
+        attachments_prompt: str,
         bugzilla_mcp_server: McpServerConfig,
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
+        self.attachments_prompt = attachments_prompt
         if self.input_data.type == "bug_id":
             self.add_mcp_server("bugzilla", bugzilla_mcp_server, BUGZILLA_READ_TOOLS)
 
@@ -163,11 +165,13 @@ likely to be affected by the issue. In particular:
             return (
                 "Here is the web-compatibility report to work on:\n\n"
                 f"{self.input_data.bug_data}\n\n"
+                f"{self.attachments_prompt}"
                 "Follow your task procedure."
             )
         if isinstance(self.input_data, BugIdInput):
             return (
                 f"The web-compatibility report to work on is Bugzilla bug {self.input_data.bug_id}. "
+                f"{self.attachments_prompt}"
                 "Fetch it using the Bugzilla MCP tools, then follow your task procedure."
             )
 
@@ -184,12 +188,14 @@ class BugReproduction(Task):
         firefox_path: Path,
         profile_path: Path,
         input_data: AutoWebcompatInput,
+        attachments_prompt: str,
         bugzilla_mcp_server: McpServerConfig,
         screenshot_dir: Path,
         chrome_path: Path,
     ):
         super().__init__(task_config, run_tracker)
         self.input_data = input_data
+        self.attachments_prompt = attachments_prompt
         self.firefox_path = firefox_path
         self.chrome_path = chrome_path
         self.screenshot_path = make_empty_temp_file(
@@ -283,11 +289,13 @@ class BugReproduction(Task):
             return (
                 "Here is the web-compatibility report to work on:\n\n"
                 f"{self.input_data.bug_data}\n\n"
+                f"{self.attachments_prompt}"
                 "Follow your task procedure."
             )
         if isinstance(self.input_data, BugIdInput):
             return (
                 f"The web-compatibility report to work on is Bugzilla bug {self.input_data.bug_id}. "
+                f"{self.attachments_prompt}"
                 "Fetch it using the Bugzilla MCP tools, then follow your task procedure."
             )
 
@@ -543,6 +551,7 @@ async def run_autowebcompat_repro(
     default_config: TaskConfig,
     tracker: RunTracker,
     input_data: AutoWebcompatInput,
+    attachments_prompt: str,
     bugzilla_mcp_server: McpServerConfig,
     publish_file: PublishFile,
 ) -> AutowebcompatReproResult:
@@ -559,7 +568,7 @@ async def run_autowebcompat_repro(
         chrome_browser = ChromeBrowsers()
 
         test_plan_task = TestPlan(
-            default_config, tracker, input_data, bugzilla_mcp_server
+            default_config, tracker, input_data, attachments_prompt, bugzilla_mcp_server
         )
         test_plan_result = await test_plan_task.run()
         repro_results = ReproductionResults(publish_file, test_plan_result)
@@ -596,6 +605,7 @@ async def run_autowebcompat_repro(
                     browser,
                     profile,
                     input_data,
+                    attachments_prompt,
                     bugzilla_mcp_server,
                     screenshots_dir,
                     chrome_browser.stable,

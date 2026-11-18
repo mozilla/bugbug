@@ -318,6 +318,50 @@ def test_a_failed_parent_download_fails_the_run(tmp_path, monkeypatch):
     assert "expired" in summary["error"]
 
 
+def test_run_async_hands_main_the_input_attachments(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("INPUT_ATTACHMENTS", json.dumps({"shot.png": "https://u"}))
+
+    def fake_download(urls, dest):
+        for name in urls:
+            (dest / name).write_bytes(b"png")
+
+    monkeypatch.setattr("hackbot_runtime.context.artifacts.download_all", fake_download)
+    seen = []
+
+    async def main(ctx):
+        seen.extend(p.read_bytes() for p in ctx.input_attachment_files)
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit) as exc:
+        run_async(main)
+
+    assert exc.value.code == 0
+    assert seen == [b"png"]
+
+
+def test_a_failed_attachment_download_fails_the_run(tmp_path, monkeypatch):
+    _run_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("INPUT_ATTACHMENTS", json.dumps({"shot.png": "https://u"}))
+
+    def failing_download(urls, dest):
+        raise OSError("expired")
+
+    monkeypatch.setattr(
+        "hackbot_runtime.context.artifacts.download_all", failing_download
+    )
+
+    async def main(ctx):
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit) as exc:
+        run_async(main)
+
+    assert exc.value.code == 1
+    summary = json.loads((tmp_path / "t" / "summary.json").read_text())
+    assert "expired" in summary["error"]
+
+
 def test_agent_exception_reported_to_sentry_with_agent_tag(tmp_path, monkeypatch):
     _run_env(tmp_path, monkeypatch)
     monkeypatch.setenv("SENTRY_DSN", "https://key@sentry.example/1")

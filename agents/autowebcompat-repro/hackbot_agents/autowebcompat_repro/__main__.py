@@ -7,6 +7,7 @@ from autowebcompat_tools.task import RunTracker, TaskConfig
 from hackbot_runtime import (
     HackbotAgentResult,
     HackbotContext,
+    input_attachments_prompt,
     run_async,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,6 +70,7 @@ async def main(ctx: HackbotContext) -> AutowebcompatResult:
         ),
         tracker,
         input_data,
+        attachments_prompt=input_attachments_prompt(ctx.input_attachment_files),
         bugzilla_mcp_server={
             "type": "http",
             "url": inputs.bugzilla_mcp_url,

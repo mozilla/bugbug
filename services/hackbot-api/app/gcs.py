@@ -1,22 +1,32 @@
 import asyncio
 import base64
 import binascii
+import contextlib
 import datetime
+import hashlib
 import json
 import logging
 from functools import lru_cache
 from typing import Any
 
 import google.auth
+from google.api_core.exceptions import PreconditionFailed
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import storage
 
 from app.action_handlers.base import ArtifactTooLargeError
 from app.config import settings
-from app.schemas import ArtifactRef, RunSummary
+from app.schemas import ArtifactRef, InputAttachment, RunSummary
 
 log = logging.getLogger(__name__)
+
+
+class InputAttachmentNotFoundError(Exception):
+    def __init__(self, name: str, key: str) -> None:
+        super().__init__(f"Attachment {name!r} ({key}) is no longer available")
+        self.name = name
+        self.key = key
 
 
 def run_prefix(run_id: str) -> str:
@@ -25,6 +35,10 @@ def run_prefix(run_id: str) -> str:
 
 def summary_blob_name(run_id: str) -> str:
     return f"{run_prefix(run_id)}summary.json"
+
+
+def input_attachment_key(data: bytes) -> str:
+    return f"uploads/{hashlib.sha256(data).hexdigest()}"
 
 
 @lru_cache(maxsize=1)
@@ -245,4 +259,73 @@ async def generate_artifact_download_url(
         run_id,
         artifact_name,
         expiration_seconds,
+    )
+
+
+def _inputs_bucket() -> storage.Bucket:
+    if not settings.inputs_bucket:
+        raise RuntimeError("inputs_bucket not configured")
+    return _client().bucket(settings.inputs_bucket)
+
+
+def _store_input_attachments_sync(
+    attachments: list[InputAttachment],
+) -> list[InputAttachment]:
+    bucket = _inputs_bucket()
+    stored: list[InputAttachment] = []
+    for attachment in attachments:
+        if attachment.data_base64 is not None:
+            data = attachment.data()
+            key = input_attachment_key(data)
+            with contextlib.suppress(PreconditionFailed):
+                bucket.blob(key).upload_from_string(
+                    data,
+                    content_type=attachment.content_type or "application/octet-stream",
+                    if_generation_match=0,
+                )
+            size = len(data)
+        else:
+            assert attachment.key is not None
+            key = attachment.key
+            blob = bucket.get_blob(key)
+            if blob is None:
+                raise InputAttachmentNotFoundError(attachment.name, key)
+            size = blob.size or 0
+        stored.append(
+            InputAttachment(
+                name=attachment.name,
+                content_type=attachment.content_type,
+                key=key,
+                size=size,
+            )
+        )
+    return stored
+
+
+async def store_input_attachments(
+    attachments: list[InputAttachment],
+) -> list[InputAttachment]:
+    return await asyncio.to_thread(_store_input_attachments_sync, attachments)
+
+
+def _generate_input_attachment_urls_sync(
+    attachments: list[InputAttachment], expiration_seconds: int
+) -> dict[str, str]:
+    bucket = _inputs_bucket()
+    return {
+        attachment.name: bucket.blob(attachment.key).generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expiration_seconds),
+            method="GET",
+            credentials=_signing_credentials(),
+        )
+        for attachment in attachments
+    }
+
+
+async def generate_input_attachment_urls(
+    attachments: list[InputAttachment], expiration_seconds: int
+) -> dict[str, str]:
+    return await asyncio.to_thread(
+        _generate_input_attachment_urls_sync, attachments, expiration_seconds
     )

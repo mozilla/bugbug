@@ -73,12 +73,18 @@ Two things those files do not tell you:
   `BUGZILLA_WEBHOOK_SECRET` → `bugzilla_webhook.secret`, `SLACK_SIGNING_SECRET` →
   `slack.signing_secret`.
 - **An agent container's env arrives from three places.** Per-execution overrides from the
-  API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field, and
-  `PARENT_ARTIFACTS` for a chained run); static
+  API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field,
+  `PARENT_ARTIFACTS` for a chained run, and `INPUT_ATTACHMENTS` for a run with
+  attachments); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
   `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
-  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first
-  varies per run.
+  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`,
+  `LOCAL_INPUT_ATTACHMENTS_DIR`). Only the first varies per run.
+- **Run attachments need their own bucket.** Set `INPUTS_BUCKET` on `hackbot-api`. The
+  API's service account needs to create and read objects in it, and to sign URLs for
+  them. Agents need no access: they read their files through signed URLs. Add a
+  lifecycle rule that deletes old objects. A retrigger of a run whose files were
+  deleted is rejected with a 422.
 
 The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.
 
