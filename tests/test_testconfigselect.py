@@ -165,6 +165,16 @@ def test_live_tasks() -> None:
         "test-linux2404-64/opt-*",
         "test-windows11-64-25h2/asan-*-swr",
     ]
+    assert testconfigselect.task_labels(
+        tasks_by_group,
+        G2,
+        ["test-windows11-64-25h2/asan-*-swr", "test-linux2404-64/opt-*"],
+    ) == [
+        "test-linux2404-64/opt-mochitest-browser-chrome",
+        "test-windows11-64-25h2-asan/opt-mochitest-browser-chrome-swr",
+    ]
+    # Configs without tasks running the group (e.g. of another group) have no tasks.
+    assert testconfigselect.task_labels(tasks_by_group, G, ["test-other/opt-*"]) == []
 
 
 def synthetic_regressions() -> list[ConfigSelectRegression]:

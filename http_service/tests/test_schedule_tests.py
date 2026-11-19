@@ -17,7 +17,16 @@ from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
 
-from .conftest import MOCK_KNOWN_TASKS, MockModelCache
+from .conftest import MOCK_CONFIG_SELECTION_TASKS, MOCK_KNOWN_TASKS, MockModelCache
+
+
+def task_labels(group: str, configs: list[str]) -> list[str]:
+    """The labels of the mock tasks running the group on the configs."""
+    return sorted(
+        label
+        for label, task in MOCK_CONFIG_SELECTION_TASKS.items()
+        if task["config"] in configs and group in task["manifests"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -105,7 +114,7 @@ def test_simple_schedule(
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
-    assert len(result) == 7
+    assert len(result) == 8
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose
     assert result["reduced_tasks"] == reduced_labels
@@ -113,8 +122,12 @@ def test_simple_schedule(
     assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
-    assert {k: set(v) for k, v in result["config_groups"].items()} == {
+    assert {k: set(v) for k, v in result["config_group_configs"].items()} == {
         k: set(v) for k, v in config_groups.items()
+    }
+    # The taskgraph is given the labels of the tasks of the selected configs.
+    assert result["config_groups"] == {
+        group: task_labels(group, configs) for group, configs in config_groups.items()
     }
 
 
@@ -566,9 +579,13 @@ def test_schedule_config_selection_by_level(
         ({"test-group1": 0.99}, []),
         ({"test-group2": group2_confidence}, ["test-linux1804-64/opt-*"]),
     ]
-    assert result["config_groups"] == {
+    assert result["config_group_configs"] == {
         "test-group1": ["test-linux1804-64/opt-*"],
         "test-group2": ["test-windows10/opt-*"],
+    }
+    assert result["config_groups"] == {
+        "test-group1": ["test-linux1804-64/opt-mochitest"],
+        "test-group2": ["test-windows10/opt-mochitest"],
     }
 
 

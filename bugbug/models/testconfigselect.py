@@ -350,6 +350,19 @@ def live_candidates(
     return {group: sorted(configs) for group, configs in tasks_by_group.items()}
 
 
+def task_labels(
+    tasks_by_group: Mapping[str, Mapping[str, Sequence[str]]],
+    group: str,
+    configs: Iterable[str],
+) -> list[str]:
+    """The labels (without chunk number) of the tasks running a group on the given configs.
+
+    The taskgraph matches them with the labels of its tasks. `tasks_by_group` comes from live_tasks.
+    """
+    tasks = tasks_by_group.get(group, {})
+    return sorted({label for config in configs for label in tasks.get(config, ())})
+
+
 class GroupCandidates(NamedTuple):
     group: str
     candidates: Sequence[str]

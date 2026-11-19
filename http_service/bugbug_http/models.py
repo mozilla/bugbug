@@ -910,6 +910,7 @@ def _analyze_patch(
             "tasks": {},
             "groups": {},
             "config_groups": {},
+            "config_group_configs": {},
             "reduced_tasks": {},
             "reduced_tasks_higher": {},
             "known_tasks": get_known_tasks(),
@@ -1035,7 +1036,19 @@ def _analyze_patch(
     data = {
         "tasks": tasks,
         "groups": groups,
-        "config_groups": config_groups,
+        # The taskgraph matches the labels (without chunk number) of its tasks with the ones of the
+        # tasks of the selected configs (a group without any runs on all configs, see
+        # select_configs).
+        "config_groups": {
+            group: (
+                "*" not in configs
+                and testconfigselect.task_labels(get_live_tasks(), group, configs)
+            )
+            or ["*"]
+            for group, configs in config_groups.items()
+        },
+        # The selected configs, as the models (and mozci) name them.
+        "config_group_configs": config_groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": known_tasks,
