@@ -371,7 +371,11 @@ class MockModelCache:
 def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> None:
     with open("config_selection_tasks.json", "w") as f:
         json.dump(
-            {"backstop": "backstop-rev", "tasks": MOCK_CONFIG_SELECTION_TASKS},
+            {
+                "backstop": "backstop-rev",
+                "tasks": MOCK_CONFIG_SELECTION_TASKS,
+                "new_tasks": {},
+            },
             f,
         )
     with open("known_tasks", "w") as f:
@@ -383,6 +387,7 @@ def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> Non
     bugbug_http.models.get_known_tasks.cache_clear()
     bugbug_http.models._get_config_selection_tasks.cache_clear()
     bugbug_http.models.get_live_tasks.cache_clear()
+    bugbug_http.models.get_new_tasks.cache_clear()
     bugbug_http.models.get_live_config_candidates.cache_clear()
     bugbug_http.models.get_build_platforms.cache_clear()
 

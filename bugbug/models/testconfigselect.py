@@ -354,13 +354,22 @@ def task_labels(
     tasks_by_group: Mapping[str, Mapping[str, Sequence[str]]],
     group: str,
     configs: Iterable[str],
+    new_tasks: Mapping[str, str] | None = None,
 ) -> list[str]:
     """The labels (without chunk number) of the tasks running a group on the given configs.
 
     The taskgraph matches them with the labels of its tasks. `tasks_by_group` comes from live_tasks.
+    `new_tasks` are tasks whose manifests aren't known (e.g. renamed since the task graph the others
+    come from), by label, with their config: they are given for every group selected on their config,
+    as the taskgraph only runs a task for a group if the task runs it.
     """
+    configs = set(configs)
     tasks = tasks_by_group.get(group, {})
-    return sorted({label for config in configs for label in tasks.get(config, ())})
+    labels = {label for config in configs for label in tasks.get(config, ())}
+    labels |= {
+        label for label, config in (new_tasks or {}).items() if config in configs
+    }
+    return sorted(labels)
 
 
 class GroupCandidates(NamedTuple):

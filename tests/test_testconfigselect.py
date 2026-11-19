@@ -175,6 +175,17 @@ def test_live_tasks() -> None:
     ]
     # Configs without tasks running the group (e.g. of another group) have no tasks.
     assert testconfigselect.task_labels(tasks_by_group, G, ["test-other/opt-*"]) == []
+    # Tasks whose manifests aren't known (e.g. renamed) are given for all the groups of their config.
+    new_tasks = {
+        "test-linux2404-64/opt-mochitest-browser-chrome-renamed": "test-linux2404-64/opt-*",
+        "test-macosx1500-aarch64/opt-mochitest-browser-chrome": "test-macosx1500-aarch64/opt-*",
+    }
+    assert testconfigselect.task_labels(
+        tasks_by_group, G2, ["test-linux2404-64/opt-*"], new_tasks
+    ) == [
+        "test-linux2404-64/opt-mochitest-browser-chrome",
+        "test-linux2404-64/opt-mochitest-browser-chrome-renamed",
+    ]
 
 
 def synthetic_regressions() -> list[ConfigSelectRegression]:

@@ -589,6 +589,53 @@ def test_schedule_config_selection_by_level(
     }
 
 
+def test_schedule_config_groups_with_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify({}, {"test-group1": 0.99})
+
+    # A task renamed since the backstop push the other tasks come from.
+    with open("config_selection_tasks.json", "w") as f:
+        json.dump(
+            {
+                "backstop": "backstop-rev",
+                "tasks": MOCK_CONFIG_SELECTION_TASKS,
+                "new_tasks": {
+                    "test-linux1804-64/opt-mochitest-renamed": "test-linux1804-64/opt-*"
+                },
+            },
+            f,
+        )
+    monkeypatch.setattr(
+        models,
+        "select_configs",
+        lambda groups, modified_paths, very_likely_groups, used_configs=(): {
+            group: ["test-linux1804-64/opt-*"] for group in groups
+        },
+    )
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["config_groups"] == {
+        "test-group1": [
+            "test-linux1804-64/opt-mochitest",
+            "test-linux1804-64/opt-mochitest-renamed",
+        ]
+    }
+
+
 def test_select_configs_never_vetoes_groups(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(models, "MODEL_CACHE", MockModelCache())
 

@@ -576,7 +576,7 @@ def _get_config_selection_tasks() -> dict:
         with open("config_selection_tasks.json", "rb") as f:
             return orjson.loads(f.read())
     except FileNotFoundError:
-        return {"tasks": {}}
+        return {"tasks": {}, "new_tasks": {}}
 
 
 @lru_cache(maxsize=None)
@@ -588,6 +588,12 @@ def get_live_tasks() -> dict[str, dict[str, list[str]]]:
             for label, task in _get_config_selection_tasks()["tasks"].items()
         }
     )
+
+
+@lru_cache(maxsize=None)
+def get_new_tasks() -> dict[str, str]:
+    """The test tasks of the latest pushes which aren't in get_live_tasks, with their configs."""
+    return _get_config_selection_tasks()["new_tasks"]
 
 
 @lru_cache(maxsize=None)
@@ -1042,7 +1048,9 @@ def _analyze_patch(
         "config_groups": {
             group: (
                 "*" not in configs
-                and testconfigselect.task_labels(get_live_tasks(), group, configs)
+                and testconfigselect.task_labels(
+                    get_live_tasks(), group, configs, get_new_tasks()
+                )
             )
             or ["*"]
             for group, configs in config_groups.items()
