@@ -20,6 +20,8 @@ from logging import getLogger
 from typing import Literal
 
 import httpx
+import requests
+from libmozdata.phabricator import ConduitError
 from pydantic import BaseModel
 from unidiff import PatchSet
 
@@ -49,6 +51,10 @@ from bugbug.tools.code_review.review_context_schema import (
     tomllib,
 )
 from bugbug.tools.core.connection import get_github_api_headers, get_http_client
+from bugbug.tools.core.platforms.phabricator import (
+    PhabricatorPatch,
+    resolve_project_phid,
+)
 
 logger = getLogger(__name__)
 
@@ -150,10 +156,33 @@ def parse_diff_files(diff: str) -> set[str]:
         return files
 
 
+@dataclass(frozen=True)
+class ReviewInfo:
+    """Reviewer-related facts about a revision, used by the ``review`` predicate."""
+
+    author: str | None = None
+    # Reviewer-group (Phabricator project) PHIDs requested on the revision.
+    reviewer_groups: frozenset[str] = frozenset()
+    # The subset of reviewer groups that are *blocking* reviewers.
+    blocking_reviewer_groups: frozenset[str] = frozenset()
+
+
+def build_review_info(patch: PhabricatorPatch) -> ReviewInfo:
+    """Build a ReviewInfo from a patch's reviewer and author data."""
+    return ReviewInfo(
+        author=patch.author_email,
+        reviewer_groups=frozenset(patch.reviewer_project_phids),
+        blocking_reviewer_groups=frozenset(patch.blocking_reviewer_project_phids),
+    )
+
+
 def rule_matches(
-    rule: Rule, changed_files: set[str], bug_component: str | None = None
+    rule: Rule,
+    changed_files: set[str],
+    bug_component: str | None = None,
+    review: ReviewInfo | None = None,
 ) -> bool:
-    return predicate_matches(rule.when, changed_files, bug_component)
+    return predicate_matches(rule.when, changed_files, bug_component, review)
 
 
 def _normalise_path(path: str) -> str:
@@ -186,8 +215,57 @@ def _bugzilla_matches(
     return False
 
 
-def _review_matches(predicate: ReviewPredicate) -> bool:
-    return False
+def _resolve_group_slugs(slugs: list[str]) -> set[str]:
+    """Resolve reviewer-group slugs to project PHIDs.
+
+    A slug whose lookup fails is logged and left out, so the facet fails closed
+    rather than aborting the whole external-content load.
+    """
+    resolved = set()
+    for slug in slugs:
+        try:
+            phid = resolve_project_phid(slug)
+        except ConduitError, requests.RequestException:
+            logger.exception("Could not resolve reviewer group %s", slug)
+            continue
+        if phid:
+            resolved.add(phid)
+    return resolved
+
+
+def _review_matches(
+    predicate: ReviewPredicate, review: ReviewInfo | None = None
+) -> bool:
+    """Match a revision's reviewers/author against a ReviewPredicate.
+
+    Each specified facet (``author``, ``reviewer``, ``blocking_reviewer``) must
+    match — mirroring FilePredicate's include/exclude/ext conjunction. A
+    predicate with no facets, or a revision with no review info, never matches.
+    """
+    if review is None:
+        return False
+
+    matched_any_facet = False
+
+    if predicate.author:
+        if review.author not in predicate.author:
+            return False
+        matched_any_facet = True
+
+    if predicate.reviewer:
+        if not (review.reviewer_groups & _resolve_group_slugs(predicate.reviewer)):
+            return False
+        matched_any_facet = True
+
+    if predicate.blocking_reviewer:
+        if not (
+            review.blocking_reviewer_groups
+            & _resolve_group_slugs(predicate.blocking_reviewer)
+        ):
+            return False
+        matched_any_facet = True
+
+    return matched_any_facet
 
 
 def _patch_matches(predicate: PatchPredicate) -> bool:
@@ -198,20 +276,21 @@ def predicate_matches(
     predicate: Predicate,
     changed_files: set[str],
     bug_component: str | None = None,
+    review: ReviewInfo | None = None,
 ) -> bool:
     match predicate:
         case AllPredicate(children=children):
             return all(
-                predicate_matches(child, changed_files, bug_component)
+                predicate_matches(child, changed_files, bug_component, review)
                 for child in children
             )
         case AnyPredicate(children=children):
             return any(
-                predicate_matches(child, changed_files, bug_component)
+                predicate_matches(child, changed_files, bug_component, review)
                 for child in children
             )
         case NotPredicate(child=child):
-            return not predicate_matches(child, changed_files, bug_component)
+            return not predicate_matches(child, changed_files, bug_component, review)
         case AnyFilePredicate(predicate=file_predicate):
             return any(_file_matches(file_predicate, f) for f in changed_files)
         case AllFilesPredicate(predicate=file_predicate):
@@ -221,7 +300,7 @@ def predicate_matches(
         case BugzillaPredicate():
             return _bugzilla_matches(predicate, bug_component)
         case ReviewPredicate():
-            return _review_matches(predicate)
+            return _review_matches(predicate, review)
         case PatchPredicate():
             return _patch_matches(predicate)
     raise TypeError(f"Unknown predicate type: {type(predicate).__name__}")
@@ -357,6 +436,7 @@ def collect_actions(
     config: ReviewContextConfig,
     bug_component: str | None = None,
     extra_context_toml: str | None = None,
+    review: ReviewInfo | None = None,
 ) -> list[MatchedAction]:
     """Return deduplicated actions matched from config against the diff.
 
@@ -387,7 +467,7 @@ def collect_actions(
         enumerate(config.rules), key=lambda item: (-item[1].priority, item[0])
     )
     for _, rule in ordered_rules:
-        if not rule_matches(rule, changed_files, bug_component):
+        if not rule_matches(rule, changed_files, bug_component, review):
             continue
         rule_name = rule.name
         new_actions = []
@@ -531,11 +611,15 @@ async def load_external_content_for_diff(
         return []
 
     bug_component: str | None = None
+    review: ReviewInfo | None = None
     if patch is not None:
         bug_component = await patch.bug_component()
+        review = build_review_info(patch)
 
     try:
-        actions = collect_actions(diff, config, bug_component, extra_context_toml)
+        actions = collect_actions(
+            diff, config, bug_component, extra_context_toml, review
+        )
     except tomllib.TOMLDecodeError, ReviewContextValidationError:
         logger.exception("Could not parse extra review context")
         return []
