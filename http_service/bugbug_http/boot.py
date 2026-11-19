@@ -6,15 +6,17 @@
 import collections
 import concurrent.futures
 import contextlib
-import gzip
 import json
 import logging
 import os
 import re
+from typing import Iterable, Iterator
 
 import hglib
+import orjson
 import requests
 import tenacity
+import yaml
 from tqdm import tqdm
 
 from bugbug import build_platforms, repository, test_scheduling, utils
@@ -28,6 +30,7 @@ AUTOLAND_PUSHES = 50
 # How often the data about the current tasks, build platforms and commits is retrieved again (in
 # seconds, see bugbug_http.refresh).
 REFRESH_INTERVAL = 24 * 60 * 60
+CONFIG_SELECTION_TASKS_PATH = "config_selection_tasks.json"
 
 
 def _write(path: str, content: str) -> None:
@@ -36,6 +39,106 @@ def _write(path: str, content: str) -> None:
     with open(tmp_path, "w") as f:
         f.write(content)
     os.replace(tmp_path, path)
+
+
+def _decision_artifact_url(rev: str, path: str) -> str:
+    return f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/{path}"
+
+
+def _without_chunk(label: str) -> str:
+    return re.sub(r"-\d+$", "", label)
+
+
+def _eligible_tasks(
+    task_graph: dict[str, dict],
+) -> Iterator[tuple[str, str, list[str]]]:
+    """The test tasks of a task graph: (label without chunk number, config as mozci names it,
+    manifests)."""
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import get_configuration
+
+    utils.setup_mozci()
+
+    configurations: dict[str, str | None] = {}
+    for task in task_graph.values():
+        manifests = task["attributes"].get("test_manifests")
+        if not task["label"].startswith("test-") or not manifests:
+            continue
+
+        label = _without_chunk(task["label"])
+        if label not in configurations:
+            try:
+                configuration = get_configuration(task)
+            except Exception:
+                # E.g. a test variant that mozci doesn't know yet.
+                logger.warning(
+                    "Failed to get the configuration of %s",
+                    task["label"],
+                    exc_info=True,
+                )
+                configuration = None
+            configurations[label] = configuration
+
+        config = configurations[label]
+        if config is not None:
+            yield label, config, manifests
+
+
+def get_config_selection_tasks(
+    task_graph: dict[str, dict], target_tasks: Iterable[str]
+) -> dict[str, dict]:
+    """The test tasks among which configs are selected, by label without chunk number.
+
+    They are the eligible test tasks (see _eligible_tasks) of `task_graph` (a backstop push's
+    task-graph.json, which has all of them with all their manifests) which are among the push's
+    target tasks (`target_tasks`, its target-tasks.json: the task graph also has the tasks they
+    depend on), with their config and manifests (see testconfigselect.LiveTask).
+    """
+    targets = {_without_chunk(label) for label in target_tasks}
+    tasks: dict[str, dict] = {}
+    for label, config, manifests in _eligible_tasks(task_graph):
+        if label not in targets:
+            continue
+        task = tasks.setdefault(label, {"config": config, "manifests": []})
+        task["manifests"] = sorted(set(task["manifests"]) | set(manifests))
+    return tasks
+
+
+def _get(rev: str, path: str) -> requests.Response:
+    return requests.get(_decision_artifact_url(rev, path))
+
+
+def update_config_selection_tasks(revs: list[str]) -> None:
+    """Retrieve the test tasks among which configs are selected.
+
+    The tasks come from the task graph of the latest backstop push, which runs all of them with all
+    their manifests (the manifests of the test tasks of other pushes are restricted to the ones
+    selected by bugbug).
+
+    `revs` are the recent autoland pushes, from the oldest.
+    """
+    for rev in reversed(revs):
+        r = _get(rev, "parameters.yml")
+        if not r.ok or not yaml.safe_load(r.text).get("backstop"):
+            continue
+        r = _get(rev, "task-graph.json")
+        targets = _get(rev, "target-tasks.json")
+        if not r.ok or not targets.ok:
+            break
+        tasks = get_config_selection_tasks(orjson.loads(r.content), targets.json())
+        logger.info(
+            "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
+        )
+        if tasks:
+            _write(
+                CONFIG_SELECTION_TASKS_PATH,
+                orjson.dumps({"backstop": rev, "tasks": tasks}).decode(),
+            )
+            return
+        break
+
+    logger.warning("No backstop push with test tasks to retrieve")
 
 
 def get_recent_revs() -> list[str]:
@@ -59,19 +162,15 @@ def retrieve_schedulable_tasks() -> None:
 
     logger.info("Retrieving known tasks from %s...", revs)
 
-    # Store in a file the list of tasks in the latest autoland pushes, and the manifests run by
-    # their tasks (to select the configs to run manifests on among the current ones). Pushes
-    # don't all target the same tasks (only some of them target almost all), so we use the union
-    # of the target tasks of many pushes, which also protects us from broken decision tasks.
+    # Store in a file the list of tasks in the latest autoland pushes, and the test tasks among which
+    # configs are selected for the manifests. Pushes don't all target the same tasks (only some of
+    # them target almost all), so we use the union of the target tasks of many pushes, which also
+    # protects us from broken decision tasks.
     known_tasks = set()
-    targets_num = {}
     for rev in revs:
-        r = requests.get(
-            f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/target-tasks.json"
-        )
+        r = _get(rev, "target-tasks.json")
         if r.ok:
             known_tasks.update(r.json())
-            targets_num[rev] = len(r.json())
 
     logger.info("Retrieved %d tasks", len(known_tasks))
 
@@ -79,43 +178,8 @@ def retrieve_schedulable_tasks() -> None:
 
     _write("known_tasks", "\n".join(known_tasks))
 
-    # The manifests run by each task, from the push targeting the most tasks (pushes targeting few
-    # tasks have no test tasks).
-    manifests_by_task: dict[str, list[str]] = {}
-    for rev in sorted(targets_num, key=targets_num.__getitem__, reverse=True)[:3]:
-        r = requests.get(
-            f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/manifests-by-task.json.gz"
-        )
-        if not r.ok:
-            continue
-        try:
-            content = gzip.decompress(r.content)
-        except gzip.BadGzipFile:
-            content = r.content
-        manifests_by_task = json.loads(content)
-        if manifests_by_task:
-            break
-
-    # Only the target tasks, as the full task graph also has tasks that don't run on autoland
-    # (e.g. shippable variants), and a group given only configs without tasks on the push
-    # wouldn't run at all. Tasks are compared without their chunk number, which varies between
-    # pushes.
-    def without_chunk(label: str) -> str:
-        return re.sub(r"-\d+$", "", label)
-
-    target_tasks = {without_chunk(task) for task in known_tasks}
-    manifests_by_task = {
-        label: manifests
-        for label, manifests in manifests_by_task.items()
-        if without_chunk(label) in target_tasks
-    }
-    logger.info("Retrieved the manifests of %d tasks", len(manifests_by_task))
-    _write(
-        "manifests_by_task.json",
-        json.dumps(
-            {label: sorted(manifests) for label, manifests in manifests_by_task.items()}
-        ),
-    )
+    # The test tasks among which configs are selected for the manifests.
+    update_config_selection_tasks(revs)
 
 
 def retrieve_build_platforms() -> None:

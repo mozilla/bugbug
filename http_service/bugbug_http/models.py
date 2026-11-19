@@ -570,12 +570,30 @@ CONFIG_SELECTION_THRESHOLD = 0.00015
 
 
 @lru_cache(maxsize=None)
+def _get_config_selection_tasks() -> dict:
+    """The test tasks among which configs are selected (see boot.update_config_selection_tasks)."""
+    try:
+        with open("config_selection_tasks.json", "rb") as f:
+            return orjson.loads(f.read())
+    except FileNotFoundError:
+        return {"tasks": {}}
+
+
+@lru_cache(maxsize=None)
+def get_live_tasks() -> dict[str, dict[str, list[str]]]:
+    """The test tasks scheduled on autoland running each group, by config."""
+    return testconfigselect.live_tasks(
+        {
+            label: testconfigselect.LiveTask(task["config"], task["manifests"])
+            for label, task in _get_config_selection_tasks()["tasks"].items()
+        }
+    )
+
+
+@lru_cache(maxsize=None)
 def get_live_config_candidates() -> dict[str, list[str]]:
     """The configs of the tasks scheduled on autoland that run each group."""
-    with open("manifests_by_task.json", "rb") as f:
-        manifests_by_task = orjson.loads(f.read())
-    model = MODEL_CACHE.get(CONFIG_SELECTION_MODEL)
-    return testconfigselect.live_candidates(manifests_by_task, model.known_configs)
+    return testconfigselect.live_candidates(get_live_tasks())
 
 
 @lru_cache(maxsize=None)

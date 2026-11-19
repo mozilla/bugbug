@@ -130,37 +130,41 @@ def test_generate_rows() -> None:
     ]
 
 
-def test_live_candidates() -> None:
-    known_configs = {
+def test_live_tasks() -> None:
+    LiveTask = testconfigselect.LiveTask
+    tasks = {
+        "test-linux2404-64/opt-mochitest-browser-chrome": LiveTask(
+            "test-linux2404-64/opt-*", [G2]
+        ),
+        # The configs of some tasks aren't named after the platform of their label.
+        "test-windows11-64-25h2-asan/opt-mochitest-browser-chrome-swr": LiveTask(
+            "test-windows11-64-25h2/asan-*-swr", [G2]
+        ),
+        # Groups are named as by the models.
+        "test-linux2404-64/opt-web-platform-tests": LiveTask(
+            "test-linux2404-64/opt-*", ["/css/cssom-view", f"{G}:other.toml"]
+        ),
+    }
+    tasks_by_group = testconfigselect.live_tasks(tasks)
+    assert tasks_by_group == {
+        G2: {
+            "test-linux2404-64/opt-*": [
+                "test-linux2404-64/opt-mochitest-browser-chrome"
+            ],
+            "test-windows11-64-25h2/asan-*-swr": [
+                "test-windows11-64-25h2-asan/opt-mochitest-browser-chrome-swr"
+            ],
+        },
+        "testing/web-platform/tests/css/cssom-view": {
+            "test-linux2404-64/opt-*": ["test-linux2404-64/opt-web-platform-tests"]
+        },
+        G: {"test-linux2404-64/opt-*": ["test-linux2404-64/opt-web-platform-tests"]},
+    }
+
+    assert testconfigselect.live_candidates(tasks_by_group)[G2] == [
         "test-linux2404-64/opt-*",
-        "test-linux2404-64/opt-*-swr",
-        "test-macosx1015-64-qr/opt-*",
-    }
-    manifests_by_task: dict[str, list[str]] = {
-        "test-linux2404-64/opt-mochitest-browser-chrome-1": [G2],
-        "test-linux2404-64/opt-mochitest-browser-chrome-swr-2": [G2],
-        # A platform not in the training data yet: named after its label.
-        "test-macosx1500-aarch64/opt-mochitest-browser-chrome-3": [G2],
-        "test-linux2404-64/opt-mochitest-plain-4": [f"{G}:other.toml"],
-        # Web-platform test groups are relative to the root of their suite.
-        "test-linux2404-64/opt-web-platform-tests-5": [
-            "/css/cssom-view",
-            "/_mozilla/fetch",
-        ],
-        "build-linux64/opt": [],
-    }
-    assert testconfigselect.live_candidates(manifests_by_task, known_configs) == {
-        # The most specific known pattern names each task; the old macOS config isn't a candidate
-        # as no current task matches it.
-        G2: [
-            "test-linux2404-64/opt-*",
-            "test-linux2404-64/opt-*-swr",
-            "test-macosx1500-aarch64/opt-mochitest-browser-chrome",
-        ],
-        G: ["test-linux2404-64/opt-*"],
-        "testing/web-platform/tests/css/cssom-view": ["test-linux2404-64/opt-*"],
-        "testing/web-platform/mozilla/tests/fetch": ["test-linux2404-64/opt-*"],
-    }
+        "test-windows11-64-25h2/asan-*-swr",
+    ]
 
 
 def synthetic_regressions() -> list[ConfigSelectRegression]:

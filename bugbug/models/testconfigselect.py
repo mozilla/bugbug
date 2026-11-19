@@ -24,13 +24,11 @@ groups of the push are cheaper, as their tasks run anyway.
 """
 
 import collections
-import fnmatch
 import functools
 import logging
 import math
 import os
 import random
-import re
 from typing import Any, Collection, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
 import numpy as np
@@ -312,49 +310,44 @@ def generate_rows(
         history.add(regression)
 
 
-def _label_without_chunk(label: str) -> str:
-    parts = label.split("-")
-    return "-".join(parts[:-1] if parts[-1].isdigit() else parts)
+class LiveTask(NamedTuple):
+    """A test task of the current task graph, by label without chunk number (see live_candidates)."""
+
+    # Its config, as mozci names it (see mozci.task.get_configuration).
+    config: str
+    # The manifests run by its chunks.
+    manifests: Sequence[str]
+
+
+def live_tasks(tasks: Mapping[str, LiveTask]) -> dict[str, dict[str, list[str]]]:
+    """The tasks of the current task graph running each group, by config.
+
+    `tasks` are the test tasks of the push's project among which configs are selected (see
+    bugbug_http.boot), by label without chunk number. Groups are named as by the models (see
+    test_scheduling.normalize_group).
+    """
+    result: dict[str, dict[str, set[str]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    for label, task in tasks.items():
+        for manifest in task.manifests:
+            result[test_scheduling.normalize_group(manifest)][task.config].add(label)
+
+    return {
+        group: {config: sorted(labels) for config, labels in configs.items()}
+        for group, configs in result.items()
+    }
 
 
 def live_candidates(
-    manifests_by_task: Mapping[str, Iterable[str]], known_configs: Iterable[str]
+    tasks_by_group: Mapping[str, Mapping[str, Sequence[str]]],
 ) -> dict[str, list[str]]:
-    """The configs of the tasks in the current task graph that run each group.
-
-    `manifests_by_task` maps the labels of the tasks scheduled on the push's project to the manifests
-    they run (the decision task's manifests-by-task.json, restricted to its target tasks, as it comes
-    from the full task graph, which also has tasks of other projects, e.g. shippable variants). The
-    configs are patterns over task labels without their chunk number (e.g.
-    test-macosx1500-aarch64/debug-*-swr), as the taskgraph matches them: each task is named after
-    the most specific `known_configs` pattern it matches, or after its own label without the chunk
-    number if none matches (e.g. for a new platform).
+    """The configs of the tasks in the current task graph that run each group (see live_tasks).
 
     As the candidates come from the current task graph, configs that don't exist anymore (e.g. after
-    a platform migration) are never selected. Groups are named as by the models (see
-    test_scheduling.normalize_group).
+    a platform migration) are never selected.
     """
-    patterns = sorted(
-        ((len(c), c, re.compile(fnmatch.translate(c))) for c in set(known_configs)),
-        reverse=True,
-    )
-
-    @functools.cache
-    def config_of(label: str) -> str:
-        for _, config, pattern in patterns:
-            if pattern.match(label):
-                return config
-        return label
-
-    result: dict[str, set[str]] = collections.defaultdict(set)
-    for label, manifests in manifests_by_task.items():
-        if not label.startswith("test-"):
-            continue
-        config = config_of(_label_without_chunk(label))
-        for manifest in manifests:
-            result[test_scheduling.normalize_group(manifest)].add(config)
-
-    return {group: sorted(configs) for group, configs in result.items()}
+    return {group: sorted(configs) for group, configs in tasks_by_group.items()}
 
 
 class GroupCandidates(NamedTuple):

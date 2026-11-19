@@ -328,10 +328,20 @@ MOCK_KNOWN_TASKS = [
 ]
 
 
-MOCK_MANIFESTS_BY_TASK = {
-    "test-linux1804-64/opt-mochitest-1": ["test-group1", "test-group2"],
-    "test-windows10/debug-mochitest-1": ["test-group1"],
-    "test-windows10/opt-mochitest-2": ["test-group1", "test-group2"],
+# The test tasks among which configs are selected (see boot.get_config_selection_tasks).
+MOCK_CONFIG_SELECTION_TASKS = {
+    "test-linux1804-64/opt-mochitest": {
+        "config": "test-linux1804-64/opt-*",
+        "manifests": ["test-group1", "test-group2"],
+    },
+    "test-windows10/debug-mochitest": {
+        "config": "test-windows10/debug-*",
+        "manifests": ["test-group1"],
+    },
+    "test-windows10/opt-mochitest": {
+        "config": "test-windows10/opt-*",
+        "manifests": ["test-group1", "test-group2"],
+    },
 }
 
 
@@ -364,8 +374,11 @@ class MockModelCache:
 
 @pytest.fixture(autouse=True)
 def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> None:
-    with open("manifests_by_task.json", "w") as f:
-        json.dump(MOCK_MANIFESTS_BY_TASK, f)
+    with open("config_selection_tasks.json", "w") as f:
+        json.dump(
+            {"backstop": "backstop-rev", "tasks": MOCK_CONFIG_SELECTION_TASKS},
+            f,
+        )
     with open("known_tasks", "w") as f:
         f.write("\n".join(MOCK_KNOWN_TASKS))
 
@@ -373,6 +386,8 @@ def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> Non
     if os.path.exists("build_platforms.json"):
         os.remove("build_platforms.json")
     bugbug_http.models.get_known_tasks.cache_clear()
+    bugbug_http.models._get_config_selection_tasks.cache_clear()
+    bugbug_http.models.get_live_tasks.cache_clear()
     bugbug_http.models.get_live_config_candidates.cache_clear()
     bugbug_http.models.get_build_platforms.cache_clear()
 

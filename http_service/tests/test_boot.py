@@ -8,6 +8,9 @@ import os
 from pathlib import Path
 
 import pytest
+import requests
+import responses
+import tenacity
 
 from bugbug_http import boot, refresh
 
@@ -84,3 +87,140 @@ def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(Stop):
         refresh.main()
     assert calls == ["refresh", "refresh"]
+
+
+def _task(
+    label: str,
+    platform: str,
+    manifests: list[str],
+    optimization: dict | None = None,
+    runtime: dict | None = None,
+) -> dict:
+    return {
+        "label": label,
+        "attributes": {"test_manifests": manifests},
+        "optimization": optimization or {"test": ["firefox", "mochitest"]},
+        "task": {
+            "extra": {
+                "treeherder-platform": platform,
+                "suite": "mochitest-plain",
+                "test-setting": {"runtime": runtime or {}},
+            }
+        },
+    }
+
+
+TASK_GRAPH = {
+    "a": _task(
+        "test-linux2404-64/opt-mochitest-plain-1", "linux2404-64/opt", ["dom/a.toml"]
+    ),
+    "b": _task(
+        "test-linux2404-64/opt-mochitest-plain-2", "linux2404-64/opt", ["dom/b.toml"]
+    ),
+    "d": _task(
+        "test-windows11-64-25h2-asan/opt-mochitest-plain-1",
+        "windows11-64-25h2/asan",
+        ["dom/a.toml"],
+    ),
+    # The variants come from the test settings.
+    "h": _task(
+        "test-linux2404-64/opt-mochitest-plain-xorig-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        runtime={"xorigin": True},
+    ),
+    # Not a target task of the recent pushes.
+    "f": _task(
+        "test-linux2404-64/debug-mochitest-plain-1",
+        "linux2404-64/debug",
+        ["dom/a.toml"],
+    ),
+    # Not a test task running manifests.
+    "g": {
+        "label": "build-linux64/opt",
+        "attributes": {},
+        "optimization": None,
+        "task": {},
+    },
+}
+
+KNOWN_TASKS = {
+    "test-linux2404-64/opt-mochitest-plain-1",
+    "test-linux2404-64/opt-mochitest-plain-2",
+    "test-windows11-64-25h2-asan/opt-mochitest-plain-1",
+    "test-linux2404-64/opt-mochitest-plain-xorig-1",
+    "build-linux64/opt",
+}
+
+CONFIG_SELECTION_TASKS = {
+    # The manifests of all the chunks.
+    "test-linux2404-64/opt-mochitest-plain": {
+        "config": "test-linux2404-64/opt-*",
+        "manifests": ["dom/a.toml", "dom/b.toml"],
+    },
+    "test-windows11-64-25h2-asan/opt-mochitest-plain": {
+        "config": "test-windows11-64-25h2/asan-*",
+        "manifests": ["dom/a.toml"],
+    },
+    "test-linux2404-64/opt-mochitest-plain-xorig": {
+        "config": "test-linux2404-64/opt-*-xorig",
+        "manifests": ["dom/a.toml"],
+    },
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_test_variants() -> None:
+    # mozci retrieves the suffixes of the test variants.
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/mozilla-central/raw-file/default/taskcluster/test_configs/variants.yml",
+        body="xorigin:\n  suffix: xorig\n",
+    )
+
+
+def test_get_config_selection_tasks() -> None:
+    assert (
+        boot.get_config_selection_tasks(TASK_GRAPH, KNOWN_TASKS)
+        == CONFIG_SELECTION_TASKS
+    )
+
+
+def test_retrieve_schedulable_tasks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    # A transient failure is retried.
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/integration/autoland/json-pushes",
+        body=requests.ConnectionError("connection reset"),
+    )
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/integration/autoland/json-pushes",
+        json={"pushes": {"1": {"changesets": ["rev1"]}, "2": {"changesets": ["rev2"]}}},
+    )
+    for rev, backstop in (("rev1", True), ("rev2", False)):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "target-tasks.json"),
+            json=sorted(KNOWN_TASKS),
+        )
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "parameters.yml"),
+            body=f"backstop: {'true' if backstop else 'false'}\n",
+        )
+    # The tasks come from the latest backstop push.
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("rev1", "task-graph.json"),
+        json=TASK_GRAPH,
+    )
+    boot.retrieve_schedulable_tasks.retry_with(wait=tenacity.wait_none())()
+
+    with open("known_tasks") as f:
+        assert set(f.read().split("\n")) == KNOWN_TASKS
+    with open("config_selection_tasks.json") as f:
+        assert json.load(f) == {"backstop": "rev1", "tasks": CONFIG_SELECTION_TASKS}
