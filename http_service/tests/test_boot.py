@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 
+import orjson
 import pytest
 import requests
 import responses
@@ -265,3 +266,21 @@ def test_retrieve_schedulable_tasks(
         assert set(f.read().split("\n")) == KNOWN_TASKS
     with open("config_selection_tasks.json") as f:
         assert json.load(f) == {"backstop": "rev1", "tasks": CONFIG_SELECTION_TASKS}
+
+
+def test_get_full_graph_tasks() -> None:
+    graph = {"a": TASK_GRAPH["a"], "c": TASK_GRAPH["c"], "g": TASK_GRAPH["g"]}
+    graph = {task["label"]: task for task in graph.values()}
+    labels = {"test-linux2404-64/opt-mochitest-plain-1", "build-linux64/opt"}
+    expected = {label: graph[label] for label in labels}
+    # The definitions are found in the text, as the full task graph is compact JSON.
+    assert boot.get_full_graph_tasks(orjson.dumps(graph), labels) == expected
+    # Otherwise, the whole graph is parsed.
+    assert (
+        boot.get_full_graph_tasks(json.dumps(graph, indent=2).encode(), labels)
+        == expected
+    )
+    # Tasks which aren't in the graph are left out.
+    assert (
+        boot.get_full_graph_tasks(orjson.dumps(graph), {"test-unknown/opt-x-1"}) == {}
+    )
