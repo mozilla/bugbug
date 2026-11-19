@@ -56,6 +56,34 @@ def _without_chunk(label: str) -> str:
     return re.sub(r"-\d+$", "", label)
 
 
+def _set_test_variants(rev: str) -> None:
+    """Make mozci name the configurations of the tasks of a push with the push's test variants.
+
+    mozci memoizes the test variants of mozilla-central for the lifetime of the process (the refresh
+    runs for weeks), and a variant added on autoland isn't on mozilla-central until it's merged.
+    The variants are the ones of the push's taskcluster/test_configs/variants.yml, parsed like mozci
+    does; if they can't be retrieved, mozci retrieves the current ones of mozilla-central again.
+    """
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci import task as mozci_task
+
+    mozci_task.fetch_test_variant_yaml.clear()
+    try:
+        r = requests.get(
+            f"https://hg.mozilla.org/integration/autoland/raw-file/{rev}/taskcluster/test_configs/variants.yml",
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        variants = yaml.load(r.text, yaml.BaseLoader)
+        mozci_task.fetch_test_variant_yaml[()] = {
+            **mozci_task.REMOVED_TEST_VARIANTS,
+            **{name: variant["suffix"] for name, variant in variants.items()},
+        }
+    except Exception:
+        logger.warning("Failed to retrieve the test variants of %s", rev, exc_info=True)
+
+
 def _eligible_tasks(
     task_graph: dict[str, dict],
 ) -> Iterator[tuple[str, str, list[str]]]:
@@ -171,6 +199,7 @@ def _classify_new_tasks(
     for them (some can be missing, e.g. from the push's full task graph). The eligible ones become
     new tasks (unless they are candidates already), and the others are ignored.
     """
+    _set_test_variants(rev)
     eligible = {label: config for label, config, _ in _eligible_tasks(graph)}
     for label in labels:
         if label not in eligible:
@@ -228,6 +257,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             continue
         task_graph = orjson.loads(r.content)
         target_tasks = targets.json()
+        _set_test_variants(rev)
         tasks = get_config_selection_tasks(task_graph, target_tasks)
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev

@@ -6,13 +6,17 @@
 import contextlib
 import json
 import os
+import re
 from pathlib import Path
 
+# mozci.data needs to be imported before mozci.task to avoid a circular import.
+import mozci.data  # noqa: F401
 import orjson
 import pytest
 import requests
 import responses
 import tenacity
+from mozci import task as mozci_task
 
 from bugbug_http import boot, refresh
 
@@ -214,14 +218,22 @@ def assert_requests_have_timeouts() -> None:
         )
 
 
+AUTOLAND_VARIANTS = re.compile(
+    r"https://hg.mozilla.org/integration/autoland/raw-file/[^/]+/taskcluster/test_configs/variants.yml"
+)
+
+
 @pytest.fixture(autouse=True)
 def mock_test_variants() -> None:
-    # mozci retrieves the suffixes of the test variants.
+    # mozci memoizes the test variants.
+    mozci_task.fetch_test_variant_yaml.clear()
+    # The suffixes of the test variants, of mozilla-central (retrieved by mozci) and of the pushes.
     responses.add(
         responses.GET,
         "https://hg.mozilla.org/mozilla-central/raw-file/default/taskcluster/test_configs/variants.yml",
         body="xorigin:\n  suffix: xorig\n",
     )
+    responses.add(responses.GET, AUTOLAND_VARIANTS, body="xorigin:\n  suffix: xorig\n")
 
 
 def test_get_config_selection_tasks() -> None:
@@ -473,3 +485,69 @@ def test_update_config_selection_tasks(
     ]
     assert len(parameters_calls) == len(set(parameters_calls))
     assert_requests_have_timeouts()
+
+
+def test_update_config_selection_tasks_new_variant(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
+    # A test variant added on autoland, which isn't on mozilla-central yet.
+    new_variant = _task(
+        "test-linux2404-64/opt-mochitest-plain-newv-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        runtime={"newvariant": True},
+    )
+    # A task of the same variant in a later push.
+    renamed = _task(
+        "test-linux2404-64/opt-mochitest-plain-renamed-newv-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        runtime={"newvariant": True},
+    )
+    graph = {**TASK_GRAPH, "n": new_variant}
+    for rev, backstop in (("b1", True), ("p1", False)):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "parameters.yml"),
+            body=f"backstop: {'true' if backstop else 'false'}\n",
+        )
+    responses.add(
+        responses.GET, boot._decision_artifact_url("b1", "task-graph.json"), json=graph
+    )
+    targets = sorted(KNOWN_TASKS) + [new_variant["label"]]
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b1", "target-tasks.json"),
+        json=targets,
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p1", "target-tasks.json"),
+        json=targets + [renamed["label"]],
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p1", "full-task-graph.json"),
+        body=orjson.dumps({**graph, renamed["label"]: renamed}),
+    )
+    responses.replace(
+        responses.GET,
+        AUTOLAND_VARIANTS,
+        body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\n",
+    )
+
+    boot.update_config_selection_tasks(["b1", "p1"], KNOWN_TASKS)
+
+    with open(boot.CONFIG_SELECTION_TASKS_PATH) as f:
+        state = json.load(f)
+    # The configs are named with the push's test variants, on the first update.
+    assert state["tasks"]["test-linux2404-64/opt-mochitest-plain-newv"] == {
+        "config": "test-linux2404-64/opt-*-newv",
+        "manifests": ["dom/a.toml"],
+    }
+    assert state["new_tasks"] == {
+        "test-linux2404-64/opt-mochitest-plain-renamed-newv": "test-linux2404-64/opt-*-newv"
+    }
