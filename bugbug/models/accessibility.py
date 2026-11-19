@@ -78,10 +78,10 @@ class AccessibilityModel(BugModel):
             ]
         )
 
-    @staticmethod
     def get_rollback_point(self, item, label):
         return "creation"
 
+    @staticmethod
     def __is_accessibility_bug(bug):
         """Check if a bug is an accessibility bug."""
         return (
