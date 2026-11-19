@@ -17,6 +17,7 @@ from app.auth import verify_phabricator_signature
 from app.bugzilla_webhook import detect_needinfo_request
 from app.config import settings
 from app.database.connection import get_db
+from app.hackbot_client import get_hackbot_client
 from app.main import app
 from app.phabricator_authorization import PhabricatorAuthorizer
 from app.phabricator_webhook import (
@@ -620,6 +621,7 @@ def client(monkeypatch, authorizer, bugzilla_authorizer, phab_client, db):
         bugzilla_authorizer
     )
     app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_hackbot_client] = _FakeHackbotClient
     try:
         yield TestClient(app)
     finally:
@@ -689,7 +691,7 @@ def test_route_triggers_run(client, phab_client, authorizer, monkeypatch):
     detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
 
     resp = _post(
         client,
@@ -728,7 +730,7 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
     )
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
 
     payload = {
         "object": {"type": "DREV", "phid": "PHID-DREV-1"},
@@ -758,7 +760,7 @@ def test_route_keys_retry_same_but_later_submission_differently(client, monkeypa
 def test_route_passes_all_triggering_transactions_to_detection(client, monkeypatch):
     detect = AsyncMock(return_value=_DETECTED)
     monkeypatch.setattr(webhooks, "detect_mention_and_revision", detect)
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FakeHackbotClient()
+    app.dependency_overrides[get_hackbot_client] = lambda: _FakeHackbotClient()
 
     _post(
         client,
@@ -783,7 +785,7 @@ def test_route_surfaces_trigger_failure(client, monkeypatch):
         async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("conduit down")
 
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
+    app.dependency_overrides[get_hackbot_client] = lambda: _FailingClient()
 
     with pytest.raises(RuntimeError, match="conduit down"):
         _post(
@@ -811,7 +813,7 @@ def test_route_sends_follow_up_to_creating_agent(
     )
     db.matches = [creator]
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
 
     resp = _post(
         client,
@@ -867,7 +869,7 @@ def test_bugzilla_route_ignores_non_matching_event(client):
 
 def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
 
     response = _post_bugzilla(client, _bugzilla_payload())
 
@@ -898,7 +900,7 @@ def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
 def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
     bugzilla_authorizer.allowed = False
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
 
     response = _post_bugzilla(client, payload)
@@ -910,7 +912,7 @@ def test_bugzilla_route_ignores_unauthorized_actor(client, bugzilla_authorizer):
 
 def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
     fake_api = _FakeHackbotClient()
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: fake_api
+    app.dependency_overrides[get_hackbot_client] = lambda: fake_api
     payload = _bugzilla_payload()
 
     first = _post_bugzilla(client, payload)
@@ -936,7 +938,7 @@ def test_bugzilla_route_surfaces_failed_dispatch(client):
         async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
             raise RuntimeError("run creation failed")
 
-    app.dependency_overrides[webhooks.get_hackbot_client] = lambda: _FailingClient()
+    app.dependency_overrides[get_hackbot_client] = lambda: _FailingClient()
 
     with pytest.raises(RuntimeError, match="run creation failed"):
         _post_bugzilla(client, _bugzilla_payload())

@@ -35,20 +35,22 @@ record in its `config.py` and passes them to `actions_server_for`, which builds 
 carrying only those. `bug-fix`, for instance, allows `phabricator.submit_patch` on a fresh
 triage run but swaps it for `phabricator.update_patch` on a follow-up.
 
-| Action type                 | Records the intent to…                     | Params                                                          |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
-| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                             |
-| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
-| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields, `ref`                                     |
-| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
-| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
-| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
-| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
-| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
-| `feedback.report_problem`   | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
-| `agents.start_run`          | Start another agent on this run's output   | `agent`                                                         |
+| Action type                  | Records the intent to…                     | Params                                                          |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| `bugzilla.update_bug`        | Change a bug's fields                      | `bug_id`, `changes`                                             |
+| `bugzilla.add_comment`       | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
+| `bugzilla.add_attachment`    | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
+| `bugzilla.create_bug`        | File a new bug                             | the new bug's fields, `ref`                                     |
+| `phabricator.submit_patch`   | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
+| `phabricator.update_patch`   | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
+| `phabricator.add_comment`    | Reply on a revision without changing code  | `revision_id`, `text`                                           |
+| `github.add_comment`         | Comment on a pull request conversation     | `repo`, `pull_number`, `text`                                   |
+| `github.add_inline_comments` | Review a pull request with inline comments | `repo`, `pull_number`, `comments`, `summary`                    |
+| `testrail.submit_test_plan`  | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
+| `slack.post_message`         | Post a message to Slack                    | `channel`, `text`                                               |
+| `email.send`                 | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| `feedback.report_problem`    | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
+| `agents.start_run`           | Start another agent on this run's output   | `agent`                                                         |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. Each tool returns the
@@ -98,7 +100,10 @@ Triggered by the `run.completed` event, on a subscription filtered to **succeede
    `run_actions` row (`pending`), keyed `(run_id, idx)`. This happens for _all_ succeeded
    runs, whether or not the agent auto-applies, so the UI can always show and apply them.
 2. **Apply, if opted in.** With `auto_apply_actions=True` on the agent's registry entry,
-   pending rows are applied immediately. Otherwise they wait for a human to click apply.
+   pending rows are applied immediately, once any agent-specific consent check passes.
+   Otherwise they wait for a human to click apply. The agent's `always_apply_actions`
+   and `never_apply_actions` override this per action type. `require_review=true` on
+   the run holds every action, including `always_apply_actions`.
 3. **Dispatch.** Each row's `type` selects a handler from hackbot-api's registry. The
    handler gets the params and an `ApplyContext` — which can `download_artifact(key)`
    without knowing GCS is behind it.
@@ -119,7 +124,8 @@ Agents stay small and single-purpose; one hands its work on to the next by recor
 only among the agents its code declared with `allow_agents(recorder, [...])`; any other
 name is refused as a tool error, and a run that declared none can start nothing. Nothing
 starts until the run has succeeded and the action is applied, so the parent agent lists it
-in `always_apply_actions`.
+in `always_apply_actions`. On a run with `require_review=true`, the next agent starts only
+once someone applies the action.
 
 The handler starts the named agent with `{"parent_run_id": <this run>}`
 ([agents_handler.py](../../services/hackbot-api/app/action_handlers/agents_handler.py)). An
@@ -160,6 +166,18 @@ entry, instead of a burst. Other comments on that bug still apply separately. A 
 applied at its last member's index, once every earlier dependency has resolved, and any
 group with a member another pending action references is excluded (that action could run
 before the group is applied).
+
+## GitHub review grouping
+
+When general and inline comments for the same GitHub PR are pending in the same
+apply pass, they are submitted together as one review. General comment text and
+existing review summaries are joined with blank lines in action order. General
+comments without inline comments still post to the PR conversation.
+
+Only actions selected for that apply pass are grouped. Already-applied actions
+are skipped, and groups containing an action referenced by another pending
+action are excluded. Each grouped action retains its own status; general
+comments return the review URL as their `comment_url`.
 
 ## Where to look
 

@@ -46,8 +46,6 @@ class QANeededModel(BugModel):
                     bug_features.BugExtractor(
                         feature_extractors,
                         cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
                     ),
                 ),
             ]
@@ -73,7 +71,11 @@ class QANeededModel(BugModel):
             ]
         )
 
-    def rollback(self, change):
+    def get_rollback_point(self, item, label):
+        return self.rollback
+
+    @staticmethod
+    def rollback(change):
         return any(
             change["added"].startswith(prefix)
             for prefix in ["qawanted", "qe-verify", "qaurgent"]
@@ -97,6 +99,12 @@ class QANeededModel(BugModel):
             if not found_qa:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
+                        if change["field_name"] not in (
+                            "keywords",
+                            "flagtypes.name",
+                        ):
+                            continue
+
                         if any(
                             change["removed"].startswith(label)
                             for label in ["qawanted", "qe-verify", "qaurgent"]

@@ -84,6 +84,22 @@ def load_config(path: Path) -> DeployConfig | None:
         raise ManifestError(f"{path}: invalid [deploy] table\n{exc}") from exc
 
 
+def package_version(root: Path, deployable: str) -> str:
+    """Return a deployable's version: its VERSION file, which its package reads.
+
+    Bumping it is what releases it.
+    """
+    try:
+        version = (root / deployable / "VERSION").read_text().strip()
+    except OSError as exc:
+        raise ManifestError(f"{deployable}: no VERSION file ({exc})") from exc
+    if not version or any(c.isspace() for c in version):
+        raise ManifestError(
+            f"{deployable}: VERSION must hold one version, not {version!r}"
+        )
+    return version
+
+
 def load_configs(agents_dir: Path) -> dict[str, DeployConfig]:
     """Return every deployable agent under ``agents_dir``, keyed by directory name."""
     configs: dict[str, DeployConfig] = {}

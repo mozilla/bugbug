@@ -48,8 +48,11 @@ class HackbotClient:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._key_file = key_file
-        self._timeout_seconds = timeout_seconds
+        self._http = httpx.AsyncClient(timeout=timeout_seconds)
         self._credentials: credentials.Credentials | None = None
+
+    async def close(self) -> None:
+        await self._http.aclose()
 
     def _refresh_credentials(self) -> None:
         request = google_requests.Request()
@@ -100,16 +103,15 @@ class HackbotClient:
 
         params = {} if dedupe_key is None else {"dedupe_key": dedupe_key}
 
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            try:
-                response = await client.post(
-                    f"{self._base_url}/agents/{agent_name}/runs",
-                    json=dict(inputs),
-                    headers=headers,
-                    params=params,
-                )
-            except httpx.HTTPError as exc:
-                raise HackbotAPIError(f"Hackbot API request failed: {exc}") from exc
+        try:
+            response = await self._http.post(
+                f"{self._base_url}/agents/{agent_name}/runs",
+                json=dict(inputs),
+                headers=headers,
+                params=params,
+            )
+        except httpx.HTTPError as exc:
+            raise HackbotAPIError(f"Hackbot API request failed: {exc}") from exc
 
         if not response.is_success:
             raise HackbotAPIError(
@@ -148,14 +150,13 @@ class HackbotClient:
         Idempotent, because the API skips rows already marked applied: calling
         this on a run whose actions all landed is a no-op.
         """
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            try:
-                response = await client.post(
-                    f"{self._base_url}/runs/{run_id}/actions/apply",
-                    headers=await self._get_headers(),
-                )
-            except httpx.HTTPError as exc:
-                raise HackbotAPIError(f"Hackbot API request failed: {exc}") from exc
+        try:
+            response = await self._http.post(
+                f"{self._base_url}/runs/{run_id}/actions/apply",
+                headers=await self._get_headers(),
+            )
+        except httpx.HTTPError as exc:
+            raise HackbotAPIError(f"Hackbot API request failed: {exc}") from exc
 
         if not response.is_success:
             raise HackbotAPIError(

@@ -1,6 +1,6 @@
 [project]
 name = "hackbot-agent-autowebcompat-intervention"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cloud Run Job image that runs the autowebcompat-intervention agent for hackbot-api"
 requires-python = ">=3.14"
 dependencies = [
@@ -12,8 +12,6 @@ dependencies = [
     "bugsy",
     "claude-agent-sdk>=0.2.165",
     "mcp>=1.0.0",
-    "mozdownload",
-    "mozinstall",
     "starlette>=0.36.0",
     "uvicorn>=0.27.0",
 ]
@@ -31,6 +29,10 @@ phabricator-proxy = { workspace = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hackbot_agents"]

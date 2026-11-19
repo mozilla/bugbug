@@ -3,12 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from functools import partial
-from multiprocessing.pool import Pool
 
 import pandas as pd
 from dateutil import parser
@@ -16,7 +15,7 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, bugzilla, repository, utils
+from bugbug import bugzilla, repository, utils
 
 utils.setup_libmozdata()
 
@@ -203,7 +202,9 @@ class DeltaRequestMerge(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
-                if change["added"].startswith("approval-mozilla"):
+                if change["field_name"] == "flagtypes.name" and change[
+                    "added"
+                ].startswith("approval-mozilla"):
                     uplift_request_datetime = datetime.strptime(
                         history["when"], "%Y-%m-%dT%H:%M:%SZ"
                     ).replace(tzinfo=timezone.utc)
@@ -223,7 +224,8 @@ class DeltaNightlyRequestMerge(SingleBugFeature):
         for history in bug["history"]:
             for change in history["changes"]:
                 if not (
-                    change["added"].startswith("approval-mozilla")
+                    change["field_name"] == "flagtypes.name"
+                    and change["added"].startswith("approval-mozilla")
                     and change["added"].endswith("?")
                 ):
                     continue
@@ -517,7 +519,8 @@ class OpSys(SingleBugFeature):
 
 class FiledVia(SingleBugFeature):
     def __call__(self, bug, **kwargs):
-        return bug["filed_via"]
+        # Old bugs in the DB might not have the field.
+        return bug.get("filed_via")
 
 
 class IsReporterADeveloper(SingleBugFeature):
@@ -600,7 +603,8 @@ class CCNumber(SingleBugFeature):
 class IsUplifted(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return any(
-            change["added"].startswith("approval-mozilla")
+            change["field_name"] == "flagtypes.name"
+            and change["added"].startswith("approval-mozilla")
             and change["added"].endswith("+")
             for history in bug["history"]
             for change in history["changes"]
@@ -624,13 +628,104 @@ def get_author_ids():
     return author_ids
 
 
+class MentionedPathsComponents(SingleBugFeature):
+    """Components of the files and directories mentioned in a bug.
+
+    The components are taken from the mapping defined by the moz.build files of
+    mozilla-central. The mapping is downloaded the first time the feature is used,
+    and then stored with the feature (so a trained model doesn't need it).
+    """
+
+    name = "Component of mentioned paths"
+
+    URL_RE = re.compile(r"\w+://\S+")
+    PATH_RE = re.compile(r"(?:[\w.-]+/)+[\w.-]+\.[a-zA-Z0-9]+")
+    FILE_NAME_RE = re.compile(
+        r"\b[\w-]+\.(?:cpp|h|c|cc|mm|js|mjs|jsm|py|rs|html|xhtml|css|webidl|ftl|toml|"
+        r"yaml|yml|json|java|kt|idl|ipdl|xml|svg|properties)\b"
+    )
+    DIRECTORY_RE = re.compile(r"\b(?:[a-z0-9_-]+/)+[a-z0-9_-]+\b")
+
+    def __init__(self):
+        self.path_to_component = None
+
+    def load_mapping(self):
+        repository.download_component_mapping()
+        with open("data/component_mapping.json", "r") as f:
+            self.path_to_component = {
+                path: sys.intern("::".join(component))
+                for path, component in json.load(f).items()
+            }
+
+        file_names = defaultdict(Counter)
+        directories = defaultdict(Counter)
+        for path, component in self.path_to_component.items():
+            parts = path.split("/")
+            file_names[parts[-1]][component] += 1
+            for i in range(1, len(parts)):
+                directories["/".join(parts[:i])][component] += 1
+
+        def shares(counter, n=None):
+            total = counter.total()
+            return [(c, count / total) for c, count in counter.most_common(n)]
+
+        # Files with the same name can be in different components.
+        self.file_name_to_components = {
+            file_name: shares(counter) for file_name, counter in file_names.items()
+        }
+        self.directory_to_components = {
+            directory: shares(counter, 3) for directory, counter in directories.items()
+        }
+
+    def __call__(self, bug, **kwargs):
+        if self.path_to_component is None:
+            self.load_mapping()
+
+        text = self.URL_RE.sub(
+            " ", "\n".join([bug["summary"]] + [c["text"] for c in bug["comments"]])
+        )
+
+        weights = defaultdict(float)
+
+        # Full or partial paths (e.g. "dom/base/Element.cpp"). They might have extra
+        # leading directories (e.g. from a local checkout or a stack trace), so try
+        # progressively shorter suffixes. In stack traces the first paths are the most
+        # indicative, so weigh each path by the reciprocal of its position.
+        found_first = False
+        for i, match in enumerate(self.PATH_RE.finditer(text)):
+            parts = match.group().split("/")
+            for j in range(len(parts)):
+                component = self.path_to_component.get("/".join(parts[j:]))
+                if component is not None:
+                    weights[f"{component} (path)"] += 1 / (i + 1)
+                    if not found_first:
+                        weights[f"{component} (first path)"] = 1
+                        found_first = True
+                    break
+
+        # File names without directories (e.g. "nsDocShell.cpp").
+        for file_name in set(self.FILE_NAME_RE.findall(text)):
+            for component, share in self.file_name_to_components.get(file_name, ()):
+                weights[f"{component} (file name)"] += share
+
+        # Directories (e.g. "dom/media").
+        for directory in set(self.DIRECTORY_RE.findall(text)):
+            parts = directory.split("/")
+            for i in range(len(parts), 0, -1):
+                components = self.directory_to_components.get("/".join(parts[:i]))
+                if components is not None:
+                    for component, share in components:
+                        weights[f"{component} (directory)"] += share
+                    break
+
+        return dict(weights)
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         feature_extractors,
         cleanup_functions,
-        rollback=False,
-        rollback_when=None,
         commit_data=False,
         merge_data=True,
     ):
@@ -643,8 +738,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             cleanup_functions
         ), "Duplicate Cleanup Functions"
         self.cleanup_functions = cleanup_functions
-        self.rollback = rollback
-        self.rollback_when = rollback_when
         self.commit_data = commit_data
         self.merge_data = merge_data
 
@@ -684,6 +777,11 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                         data[sys.intern(f"{item} in {feature_extractor_name}")] = True
                     continue
 
+                if isinstance(res, dict):
+                    for item, weight in res.items():
+                        data[sys.intern(f"{item} in {feature_extractor_name}")] = weight
+                    continue
+
                 data[feature_extractor_name] = res
 
             reporter_experience_map[bug["creator"]] += 1
@@ -700,17 +798,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 "first_comment": "" if len(comments) == 0 else comments[0],
                 "comments": " ".join(comments),
             }
-
-        def apply_rollback(bugs_iter):
-            with Pool() as p:
-                yield from p.imap(
-                    partial(bug_snapshot.rollback, when=self.rollback_when),
-                    bugs_iter,
-                    chunksize=1024,
-                )
-
-        if self.rollback:
-            bugs_iter = apply_rollback(bugs_iter)
 
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
 

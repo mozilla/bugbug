@@ -33,10 +33,14 @@ Follow this systematic approach to review the patch:
 - When uncertain about an issue, use available tools to verify before commenting
 - Do not suggest issues you cannot verify with available context
 
-**Step 4: Sort and Order Comments**
-- Sort comments by descending confidence and importance
-- Start with issues you are certain are valid and that are most critical
-- Assign each comment a numeric order starting at 1
+**Step 4: Classify Each Comment**
+- Assign a `severity` using this rubric:
+  - `critical`: a security vulnerability, data loss or corruption, a crash, or a break that would affect users if the patch landed
+  - `major`: a functional bug, logic error, or regression on a realistic code path; the code does not do what the patch intends
+  - `minor`: correct but not ideal; performance, robustness, error handling, or maintainability problems that will not break users
+  - `nit`: style, naming, readability, or a coding-standard preference that is safe to ignore
+- Assign a `category`: `security`, `correctness`, `performance`, `maintainability`, `style`, or `scope`
+- When unsure between two severities, pick the lower one
 
 **Step 5: Write Clear, Constructive Comments**
 - Use direct, declarative language - state the problem definitively, then suggest the fix

@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 
+from bugbug import repository
 from bugbug.model import Model
 
 MODEL_NAME = "Perf Regression Predictor"
@@ -79,17 +80,7 @@ class PatchCommitMessageExtractor:
 
     def __call__(self, patch: str) -> str | None:
         if patch.startswith("# HG changeset patch"):
-            message_lines: list[str] = []
-            metadata_finished = False
-            for line in patch.splitlines()[1:]:
-                if not metadata_finished and (line.startswith("#") or not line.strip()):
-                    continue
-                metadata_finished = True
-                if line.startswith(("diff -r ", "diff --git ")):
-                    break
-                message_lines.append(line)
-            message = "\n".join(message_lines).strip()
-            return message or None
+            return repository.parse_hg_export(patch).message or None
 
         if self.subject_pattern.search(patch):
             email_message = Parser(policy=policy.default).parsestr(patch)
@@ -425,10 +416,23 @@ class PerfRegressionPredictorModel(Model):
             return class_probabilities
         return class_probabilities.argmax(axis=-1)
 
+    @property
+    def version(self) -> str:
+        """The version ``bugbug_model.json`` declares, else the published artifact's name.
+
+        Retrained checkpoints are published under a new versioned path, so the
+        artifact name identifies the checkpoint when its metadata does not.
+        """
+        version = self.model_metadata.get("model_version")
+        if version:
+            return str(version)
+        name = self.artifact_url.rsplit("/", 1)[-1]
+        return name[: -len(".tar.zst")] if name.endswith(".tar.zst") else name
+
     def get_extra_data(self) -> dict[str, Any]:
         return {
             "model_name": MODEL_NAME,
-            "model_version": self.model_metadata.get("model_version"),
+            "model_version": self.version,
             "max_length": self.max_length,
             "calibrated": False,
         }

@@ -17,13 +17,15 @@ from dataclasses import asdict, dataclass, field
 
 import mozci.push  # noqa: F401  (imported so mozci registers its data sources)
 import requests
+from mozci import config as mozci_config
 from mozci import data
-from mozci.task import is_no_groups_suite
+from mozci.task import is_verify
 
 logger = logging.getLogger(__name__)
 
 _TC_TASK_URL = "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}"
 _LANDO_HG2GIT = "https://lando.moz.tools/api/hg2git/firefox/{rev}"
+_LANDO_GIT2HG = "https://lando.moz.tools/api/git2hg/firefox/{rev}"
 _HG_BASE = "https://hg.mozilla.org"
 # Taskcluster ``project`` tag -> hg pushlog repository path.
 _REPO_PATHS = {
@@ -48,6 +50,8 @@ RANGE_PUSHES = 20
 MAX_RANGE_COMMITS = 500
 # What the analysis publishes for the test-repair-fix run it hands on to.
 INVESTIGATION_ARTIFACT = "investigation.json"
+
+mozci_config.set(user_agent=_HEADERS["User-Agent"])
 
 
 @dataclass(frozen=True)
@@ -290,13 +294,17 @@ def resolve_investigation(
     task = _get_json(_TC_TASK_URL.format(task_id=task_id))
     tags = task.get("tags") or {}
     project = tags.get("project") or "autoland"
-    hg_revision = (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV")
+    env = (task.get("payload") or {}).get("env") or {}
+    hg_revision = env.get("GECKO_HEAD_REV")
     if not hg_revision:
         raise ValueError(f"task {task_id} has no GECKO_HEAD_REV")
+    if env.get("GECKO_HEAD_REPOSITORY", "").startswith("https://github.com/"):
+        hg_revision = _get_json(_LANDO_GIT2HG.format(rev=hg_revision))["hg_hash"]
     logger.info("Resolved task %s: project=%s rev=%s", task_id, project, hg_revision)
 
     label = tags.get("label") or ""
-    group_based = not is_no_groups_suite(label)
+    # Same check as mozci's TestTask.has_group_results.
+    group_based = tags.get("tests_grouped") == "1" or is_verify(label)
     groups = _failing_groups(task_id) if group_based else []
     logger.info(
         "Failing groups: %s",

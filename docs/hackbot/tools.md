@@ -39,11 +39,16 @@ Collect a module's tools with `tools_in(__name__)`, conventionally exported as `
 - **`hackbot_runtime.actions.claude_sdk.actions_server_for(recorder, types)`** — the shared
   `actions` server for write-actions. Namespace-prefixed (`bugzilla_update_bug`) because
   one server hosts every write domain.
+- **`agent_tools.mcp_server.build_mcp_server(name, ctx, tools)`** and
+  **`hackbot_runtime.actions.mcp_server.actions_server_for(recorder, types)`** — the same two
+  servers for harnesses that only call tools on MCP servers, like Codex. The agent serves
+  each one on loopback with `async with serve(server) as url:`; for Codex, it passes
+  `hackbot_runtime.codex.mcp_servers_config({name: url})` as `thread_start(config=...)`.
 
 [claude_sdk.py](../../libs/agent-tools/agent_tools/claude_sdk.py) is the only module in the library that imports `claude-agent-sdk`, behind
-the `[claude-sdk]` extra. Adding LangChain support means adding one adapter, not touching
-any handler — `ToolDefinition.args_model` is already a plain pydantic model usable as an
-`args_schema`.
+the `[claude-sdk]` extra; [mcp_server.py](../../libs/agent-tools/agent_tools/mcp_server.py) serves the same tools as an MCP server, behind `[mcp-server]`.
+Adding LangChain support means adding one adapter, not touching any handler —
+`ToolDefinition.args_model` is already a plain pydantic model usable as an `args_schema`.
 
 Handlers raise **`ToolError`** for expected failures; the adapter renders it as the
 framework's error signal, optionally with a structured payload the model can act on rather
@@ -68,7 +73,8 @@ it wants in its `config.py`, by their MCP name (`mcp__<server>__<tool>`, e.g.
 | ------------- | ----------------------- | --------------------------------------------------------------- |
 | `bugzilla`    | `search_bugs`           | Bugs matching raw REST query parameters                         |
 |               | `get_bugs`              | One or more bugs by id, in a single bulk request                |
-|               | `get_bug_comments`      | Every comment on a bug                                          |
+|               | `get_bug_comments`      | A bug's comments, all or one page by comment number             |
+|               | `get_bug_history`       | Who changed which fields of a bug, and when                     |
 |               | `get_bug_attachments`   | A bug's attachments                                             |
 |               | `download_attachment`   | One attachment decoded to a local file                          |
 | `phabricator` | `get_revision`          | A revision's title, summary, status, reviewers                  |

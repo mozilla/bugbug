@@ -1,0 +1,668 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+"""Retrieve Perfherder alerts and derive performance regression datasets.
+
+Four commands, run in order by the Taskcluster pipeline: ``retrieve``
+snapshots alerts, pushes, regression bugs and task costs; ``generate`` applies
+the labeling policy to produce regressions, scheduling pairs and push status;
+``export`` writes the commit dataset for the regression predictor from a local
+Mercurial clone; ``calibrate`` fits the mapping from the predictor's raw risk
+scores, as the commit risk scorer stored them, to observed culprit rates. Each
+command reads the others' output through ``bugbug.db``, downloading it from
+the Taskcluster index when absent locally.
+"""
+
+import argparse
+import logging
+import os
+from datetime import date, datetime, timedelta, timezone
+
+from dateutil.relativedelta import relativedelta
+
+from bugbug import bugzilla, db, redash
+from bugbug.perf import (
+    calibration,
+    datasets,
+    extraction,
+    push_status,
+    regression_commits,
+    regression_labeling,
+    selection_pairs,
+    task_costs,
+)
+from bugbug.repository import clone as clone_repository
+from bugbug.utils import get_secret, parse_timestamp, utcnow, zstd_compress
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+COST_COVERAGE_DAYS = 30
+# Alerts fire up to two weeks after their culprit push (Perfherder's detection
+# window), so pushes start earlier than alerts; three weeks leaves a margin.
+PUSHES_LEAD_DAYS = 21
+
+# CLI flag defaults. The pipeline tasks in infra/data-pipeline.yml only pass
+# export's --repo-dir and --refresh-repo, so these are the production values.
+DEFAULT_MONTHS = 14
+DEFAULT_WINDOW_DAYS = 3
+DEFAULT_RERETRIEVE_DAYS = 30
+DEFAULT_COSTS_WINDOW_DAYS = 2
+DEFAULT_SETTLE_DAYS = 21
+DEFAULT_NEGATIVE_RATIO = 5.0
+DEFAULT_SEED = 0
+DEFAULT_TEST_FRACTION = 0.1
+DEFAULT_HOLDOUT_DAYS = 60
+DEFAULT_MIN_POSITIVES = 50
+
+
+class Retriever:
+    """The pipeline commands, over autoland (``bugbug.perf.label_policy.REPOSITORY``)."""
+
+    def retrieve(
+        self,
+        months: int,
+        window_days: int,
+        reretrieve_days: int,
+        costs_window_days: int,
+        skip_alerts: bool = False,
+        skip_pushes: bool = False,
+        skip_bugs: bool = False,
+        skip_costs: bool = False,
+    ) -> None:
+        """Snapshot the raw sources for the last ``months``.
+
+        Alerts are refetched whole, since sheriffs keep editing them, and
+        merged into the previous snapshot so nothing is lost; bugs are small
+        and refetched whole; pushes and costs are large and append-only, so
+        only the recent ``reretrieve_days`` are refreshed. The ``skip_*`` flags
+        let a failed step be rerun alone.
+        """
+        client = redash.RedashClient(redash.get_redash_api_key())
+        since = date.today() - relativedelta(months=months)
+
+        if not skip_alerts:
+            self.retrieve_alerts(client, since)
+
+        if not skip_pushes:
+            self.retrieve_pushes(client, since, window_days, reretrieve_days)
+
+        if not skip_bugs:
+            # Public bugs need no credentials; a token lifts the rate limits.
+            token = get_secret("BUGZILLA_TOKEN", default_value="")
+            if token:
+                bugzilla.set_token(token)
+            bug_ids = {
+                alert["bug_number"]
+                for alert in datasets.get_perf_alerts()
+                if alert["bug_number"]
+            }
+            db.write(datasets.PERF_ALERT_BUGS_DB, extraction.fetch_bugs(bug_ids))
+            zstd_compress(datasets.PERF_ALERT_BUGS_DB)
+
+        if not skip_costs:
+            self.retrieve_costs(client, since, costs_window_days, reretrieve_days)
+
+    def retrieve_alerts(self, client: redash.RedashClient, since: date) -> None:
+        """Refresh every alert the source still has and keep the ones it no longer returns.
+
+        Perfherder keeps alerts for roughly a year and loses the job behind a
+        datapoint after 120 days, so the merged snapshot is the only archive of
+        older alerts and of their task labels.
+        """
+        previous: list[dict] = []
+        if datasets.load_previous_snapshot(datasets.PERF_ALERTS_DB):
+            previous = list(datasets.get_perf_alerts())
+
+        fetched = list(extraction.fetch_alerts(client, since))
+        merged = extraction.merge_alerts(previous, fetched)
+        logger.info(
+            "Alerts snapshot: %d fetched, %d kept from the previous snapshot, %d total",
+            len(fetched),
+            len(merged) - len(fetched),
+            len(merged),
+        )
+        db.write(datasets.PERF_ALERTS_DB, merged)
+        zstd_compress(datasets.PERF_ALERTS_DB)
+
+    def retrieve_costs(
+        self,
+        client: redash.RedashClient,
+        since: date,
+        window_days: int,
+        reretrieve_days: int,
+    ) -> None:
+        """Refresh the recent window of costs and keep older rows untouched."""
+        today = utcnow().date()
+        cutoff = since
+        have_previous = datasets.load_previous_snapshot(datasets.PERF_TASK_COSTS_DB)
+        if have_previous:
+            newest = max(
+                (row["submission_date"] for row in datasets.get_perf_task_costs()),
+                default=None,
+            )
+            if newest:
+                cutoff = max(
+                    since, date.fromisoformat(newest) - timedelta(days=reretrieve_days)
+                )
+
+        def rows():
+            if have_previous:
+                for row in datasets.get_perf_task_costs():
+                    if row["submission_date"] < cutoff.isoformat():
+                        yield extraction.normalize_cost_row(row)
+            yield from extraction.fetch_task_costs(client, cutoff, today, window_days)
+
+        new_path = datasets.PERF_TASK_COSTS_DB.replace(".json", "_new.json")
+        db.DATABASES[new_path] = db.DATABASES[datasets.PERF_TASK_COSTS_DB]
+        db.write(new_path, rows())
+        os.replace(new_path, datasets.PERF_TASK_COSTS_DB)
+        del db.DATABASES[new_path]
+        zstd_compress(datasets.PERF_TASK_COSTS_DB)
+
+    def retrieve_pushes(
+        self,
+        client: redash.RedashClient,
+        since: date,
+        window_days: int,
+        reretrieve_days: int,
+    ) -> None:
+        """Extend the pushes snapshot, refetching the recent window whose jobs still change.
+
+        Pushes start ``PUSHES_LEAD_DAYS`` before the alerts so the culprit of
+        the earliest alert is present, and stop a day ago so no push is stored
+        while its jobs are still running. A refetched push keeps the jobs the
+        source has deleted since, see :func:`extraction.merge_push`. Every push
+        without a pushlog id, archived ones included, then gets it from
+        hg.mozilla.org.
+        """
+        pushes = {}
+        if datasets.load_previous_snapshot(datasets.PERF_PUSHES_DB):
+            pushes = {
+                push["push_id"]: push for push in datasets.get_stored_perf_pushes()
+            }
+
+        now = utcnow()
+        time_from = datetime(
+            since.year, since.month, since.day, tzinfo=timezone.utc
+        ) - timedelta(days=PUSHES_LEAD_DAYS)
+        stored = [
+            time
+            for push in pushes.values()
+            if (time := parse_timestamp(push["time"])) is not None
+        ]
+        if stored:
+            time_from = max(time_from, max(stored) - timedelta(days=reretrieve_days))
+        # Jobs on the newest pushes are still running.
+        time_to = now - timedelta(days=1)
+
+        for push in extraction.fetch_pushes(client, time_from, time_to, window_days):
+            pushes[push["push_id"]] = extraction.merge_push(
+                pushes.get(push["push_id"]), push
+            )
+
+        self.fill_pushlog_ids(pushes.values(), window_days)
+
+        db.write(
+            datasets.PERF_PUSHES_DB,
+            (pushes[push_id] for push_id in sorted(pushes)),
+        )
+        zstd_compress(datasets.PERF_PUSHES_DB)
+
+    def fill_pushlog_ids(self, pushes, window_days: int) -> None:
+        """Fetch the pushlog id of every push that lacks one.
+
+        Treeherder pushes carry none, and the taskgraph's push-count rules,
+        such as the backstop's, are defined on it. Pushes the pushlog does not
+        list keep ``None`` and are looked up again on the next run.
+        """
+        missing = [push for push in pushes if push.get("pushlog_id") is None]
+        times = [
+            time
+            for push in missing
+            if (time := parse_timestamp(push["time"])) is not None
+        ]
+        if not times:
+            return
+        pushlog_ids = extraction.fetch_pushlog_ids(
+            extraction.pushlog_windows(times, window_days)
+        )
+        still_missing = extraction.set_pushlog_ids(missing, pushlog_ids)
+        logger.info(
+            "Pushlog ids: %d pushes filled, %d not found in the pushlog",
+            len(missing) - still_missing,
+            still_missing,
+        )
+
+    def get_settle_cutoff(self, settle_days: int, until: datetime | None) -> datetime:
+        """End of the dataset window; ``until`` can only tighten it."""
+        settle_before = utcnow() - timedelta(days=settle_days)
+        if until is not None:
+            if until > settle_before:
+                logger.warning(
+                    "--until %s is inside the settle window, using %s",
+                    until.date(),
+                    settle_before.date(),
+                )
+            settle_before = min(until, settle_before)
+        return settle_before
+
+    def get_negatives_start(self, since: datetime | None) -> datetime | None:
+        """Where negatives begin: the first alert summary, unless ``since`` is later."""
+        labeled_from = self.get_alerts_window_start()
+        if since is not None and (labeled_from is None or since > labeled_from):
+            labeled_from = since
+        return labeled_from
+
+    def generate(
+        self,
+        settle_days: int,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> None:
+        """Apply the labeling policy and write the three derived datasets.
+
+        Regressions come first; scheduling pairs and push status are views of
+        them. Finishes by logging how well the cost snapshot covers recent runs.
+        """
+        for path in (
+            datasets.PERF_ALERTS_DB,
+            datasets.PERF_PUSHES_DB,
+            datasets.PERF_ALERT_BUGS_DB,
+        ):
+            datasets.ensure_dataset(path)
+
+        settle_before = self.get_settle_cutoff(settle_days, until)
+        labeled_from = self.get_negatives_start(since)
+        logger.info(
+            "Dataset window: culprit pushes from %s, negatives from %s, both before %s",
+            since or "the first fetched alert",
+            labeled_from,
+            settle_before,
+        )
+        push_index = regression_labeling.PushIndex(datasets.get_perf_pushes())
+        bugs = {bug["id"]: bug for bug in datasets.get_perf_alert_bugs()}
+
+        regressions = list(
+            regression_labeling.generate_regressions(
+                datasets.get_perf_alerts(), push_index, bugs, settle_before, since
+            )
+        )
+        db.write(datasets.PERF_REGRESSIONS_DB, regressions)
+        zstd_compress(datasets.PERF_REGRESSIONS_DB)
+
+        db.write(
+            datasets.PERF_PAIRS_DB,
+            selection_pairs.generate_scheduling_pairs(regressions, push_index),
+        )
+        zstd_compress(datasets.PERF_PAIRS_DB)
+
+        db.write(
+            datasets.PERF_PUSH_STATUS_DB,
+            push_status.generate_push_status(
+                push_index, regressions, settle_before, labeled_from
+            ),
+        )
+        zstd_compress(datasets.PERF_PUSH_STATUS_DB)
+        logger.info(
+            "Wrote %d regressions, %d pairs, %d push status rows",
+            len(regressions),
+            db.size(datasets.PERF_PAIRS_DB),
+            db.size(datasets.PERF_PUSH_STATUS_DB),
+        )
+        self.report_cost_coverage(push_index)
+
+    def get_alerts_window_start(self) -> datetime | None:
+        """Earliest summary creation in the snapshot: pushes before it were never labeled."""
+        created = [
+            time
+            for alert in datasets.get_perf_alerts()
+            if (time := parse_timestamp(alert["summary_created"])) is not None
+        ]
+        return min(created) if created else None
+
+    def report_cost_coverage(self, push_index: regression_labeling.PushIndex) -> None:
+        """Log how many recent perf runs match a cost record, so gaps are noticed early."""
+        try:
+            datasets.ensure_dataset(datasets.PERF_TASK_COSTS_DB)
+        except Exception:
+            logger.warning("No perf task costs DB available, skipping coverage")
+            return
+
+        # Recent pushes only, so memory stays bounded as the history grows.
+        recent_after = utcnow() - timedelta(days=COST_COVERAGE_DAYS)
+        recent = [
+            push
+            for push in push_index.by_id.values()
+            if (time := parse_timestamp(push["time"])) is not None
+            and time >= recent_after
+        ]
+        costs = task_costs.load_task_costs(task_costs.collect_push_task_ids(recent))
+        totals = {"runs": 0, "runs_with_pool": 0}
+        for push in recent:
+            summary = task_costs.summarize_push_cost(push, costs)
+            for key in totals:
+                totals[key] += summary[key]
+        logger.info(
+            "Cost coverage over the last %d days: %d perf runs, %d with a worker pool",
+            COST_COVERAGE_DAYS,
+            totals["runs"],
+            totals["runs_with_pool"],
+        )
+
+    def export(
+        self,
+        repo_dir: str,
+        settle_days: int,
+        negative_ratio: float,
+        seed: int,
+        test_fraction: float,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        refresh_repo: bool = False,
+    ) -> None:
+        """Write the commit dataset for the regression predictor.
+
+        Culprit commits come from the regressions, clean commits from the push
+        status rows, and the message and diff of each from ``repo_dir``.
+        Commits missing from the clone are dropped, so with ``refresh_repo``
+        the clone is first created or pulled from mozilla-central. That also
+        reverts local changes and strips unpushed commits, which is right for
+        the pipeline's cache but not for a working checkout.
+        """
+        for path in (datasets.PERF_REGRESSIONS_DB, datasets.PERF_PUSH_STATUS_DB):
+            datasets.ensure_dataset(path)
+
+        settle_before = self.get_settle_cutoff(settle_days, until)
+        logger.info(
+            "Dataset window: pushes from %s before %s",
+            since or "the snapshot start",
+            settle_before,
+        )
+        regressions = [
+            regression
+            for regression in datasets.get_perf_regressions()
+            if regression_labeling.is_within_window(
+                regression["push_time"], since, settle_before
+            )
+        ]
+        statuses = [
+            status
+            for status in push_status.read_push_status()
+            if regression_labeling.is_within_window(
+                status["push_time"], since, settle_before
+            )
+        ]
+        selected = regression_commits.select_export_commits(
+            regressions, statuses, negative_ratio, seed
+        )
+        regression_commits.assign_train_test_splits(selected, test_fraction)
+
+        if refresh_repo:
+            logger.info("Refreshing the Mercurial clone in %s", repo_dir)
+            clone_repository(repo_dir)
+
+        db.write(
+            datasets.PERF_REGRESSION_COMMITS_DB,
+            regression_commits.attach_commit_patches(selected, repo_dir),
+        )
+        zstd_compress(datasets.PERF_REGRESSION_COMMITS_DB)
+        logger.info(
+            "Wrote %d commits with patches",
+            db.size(datasets.PERF_REGRESSION_COMMITS_DB),
+        )
+
+    def calibrate(
+        self,
+        settle_days: int,
+        holdout_days: int,
+        min_positives: int,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> None:
+        """Fit the risk score calibration of every model version in the risk archive.
+
+        Culprit and clean commits come from the regressions and push status
+        rows, their raw scores from ``perf_commit_risk.json``. One record per
+        model version with at least ``min_positives`` culprits is written to
+        ``perf_risk_calibration.json``, with the reliability of a mapping
+        fitted without the newest ``holdout_days`` on those days.
+        """
+        for path in (
+            datasets.PERF_REGRESSIONS_DB,
+            datasets.PERF_PUSH_STATUS_DB,
+            datasets.PERF_COMMIT_RISK_DB,
+        ):
+            datasets.ensure_dataset(path)
+
+        settle_before = self.get_settle_cutoff(settle_days, until)
+        logger.info(
+            "Calibration window: pushes from %s before %s",
+            since or "the snapshot start",
+            settle_before,
+        )
+        regressions = [
+            regression
+            for regression in datasets.get_perf_regressions()
+            if regression_labeling.is_within_window(
+                regression["push_time"], since, settle_before
+            )
+        ]
+        statuses = [
+            status
+            for status in push_status.read_push_status()
+            if regression_labeling.is_within_window(
+                status["push_time"], since, settle_before
+            )
+        ]
+
+        records = []
+        for version, scores in sorted(
+            calibration.scores_by_version(datasets.get_perf_commit_risk()).items()
+        ):
+            rows = calibration.label_scored_commits(regressions, statuses, scores)
+            record = calibration.build_calibration_record(
+                rows, version, holdout_days, min_positives
+            )
+            if record is None:
+                continue
+            records.append(record)
+            holdout = record["holdout"]
+            logger.info(
+                "%s: calibrated on %d commits with %d culprits (base rate %.2f%%), "
+                "%d breakpoints%s",
+                version,
+                record["commits"],
+                record["positives"],
+                100 * record["base_rate"],
+                len(record["x"]),
+                (
+                    "; holdout of %d commits: log loss %.4f raw, %.4f calibrated, "
+                    "ECE %.4f raw, %.4f calibrated"
+                    % (
+                        holdout["commits"],
+                        holdout["raw"]["log_loss"],
+                        holdout["calibrated"]["log_loss"],
+                        holdout["raw"]["ece"],
+                        holdout["calibrated"]["ece"],
+                    )
+                    if holdout
+                    else ""
+                ),
+            )
+        db.write(datasets.PERF_RISK_CALIBRATION_DB, records)
+        zstd_compress(datasets.PERF_RISK_CALIBRATION_DB)
+        logger.info("Wrote %d calibration records", len(records))
+
+
+def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the dataset window flags shared by ``generate``, ``export`` and ``calibrate``."""
+    parser.add_argument(
+        "--settle-days",
+        type=int,
+        default=DEFAULT_SETTLE_DAYS,
+        help="Ignore pushes younger than this many days; their alerts may still be pending. Default: %(default)s.",
+    )
+    parser.add_argument(
+        "--since",
+        type=parse_timestamp,
+        metavar="DATE",
+        help="Only pushes from this date (ISO 8601, UTC). Default: the alerts snapshot start.",
+    )
+    parser.add_argument(
+        "--until",
+        type=parse_timestamp,
+        metavar="DATE",
+        help="Only pushes before this date; never later than the settle cutoff.",
+    )
+
+
+def main() -> None:
+    """Parse the command line and dispatch to the matching ``Retriever`` command."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="op", required=True)
+
+    retrieve = subparsers.add_parser(
+        "retrieve",
+        help="Snapshot alerts, pushes, regression bugs and task costs.",
+    )
+    retrieve.add_argument(
+        "--months",
+        type=int,
+        default=DEFAULT_MONTHS,
+        help="How many months of alert history to snapshot. Default: %(default)s.",
+    )
+    retrieve.add_argument(
+        "--window-days",
+        type=int,
+        default=DEFAULT_WINDOW_DAYS,
+        help="Days per pushes query; smaller windows keep each Redash result small. Default: %(default)s.",
+    )
+    retrieve.add_argument(
+        "--reretrieve-days",
+        type=int,
+        default=DEFAULT_RERETRIEVE_DAYS,
+        help="Refetch pushes and costs newer than this, since their jobs and cost rows keep arriving. Default: %(default)s.",
+    )
+    retrieve.add_argument(
+        "--costs-window-days",
+        type=int,
+        default=DEFAULT_COSTS_WINDOW_DAYS,
+        help="Days per task costs query against BigQuery. Default: %(default)s.",
+    )
+    retrieve.add_argument(
+        "--skip-alerts", action="store_true", help="Keep the existing alerts snapshot."
+    )
+    retrieve.add_argument(
+        "--skip-pushes", action="store_true", help="Keep the existing pushes snapshot."
+    )
+    retrieve.add_argument(
+        "--skip-bugs",
+        action="store_true",
+        help="Keep the existing regression bugs snapshot.",
+    )
+    retrieve.add_argument(
+        "--skip-costs",
+        action="store_true",
+        help="Keep the existing task costs snapshot.",
+    )
+
+    generate = subparsers.add_parser(
+        "generate",
+        help="Derive labeled regressions, scheduling pairs and push status.",
+    )
+    _add_window_arguments(generate)
+
+    export = subparsers.add_parser(
+        "export",
+        help="Export commit messages and diffs for the regression predictor.",
+    )
+    export.add_argument(
+        "--repo-dir",
+        required=True,
+        help="Local Mercurial clone to read commit messages and diffs from.",
+    )
+    export.add_argument(
+        "--refresh-repo",
+        action="store_true",
+        help="Clone or pull --repo-dir from mozilla-central first. This reverts local changes and strips unpushed commits, so only use it on a dedicated clone, as the pipeline does.",
+    )
+    _add_window_arguments(export)
+    export.add_argument(
+        "--negative-ratio",
+        type=float,
+        default=DEFAULT_NEGATIVE_RATIO,
+        help="Clean commits to sample per culprit commit. Default: %(default)s.",
+    )
+    export.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help="Random seed for the negative sample, so reruns pick the same commits. Default: %(default)s.",
+    )
+    export.add_argument(
+        "--test-fraction",
+        type=float,
+        default=DEFAULT_TEST_FRACTION,
+        help="Share of commits, the newest by push date, held out as the test split. Default: %(default)s.",
+    )
+
+    calibrate = subparsers.add_parser(
+        "calibrate",
+        help="Fit the mapping from the predictor's raw risk scores to culprit rates.",
+    )
+    _add_window_arguments(calibrate)
+    calibrate.add_argument(
+        "--holdout-days",
+        type=int,
+        default=DEFAULT_HOLDOUT_DAYS,
+        help="Newest days of labeled commits scored by a mapping fitted on the older ones, to report how the calibration holds up. Default: %(default)s.",
+    )
+    calibrate.add_argument(
+        "--min-positives",
+        type=int,
+        default=DEFAULT_MIN_POSITIVES,
+        help="Culprits a model version needs before its calibration is published. Default: %(default)s.",
+    )
+
+    args = parser.parse_args()
+    retriever = Retriever()
+
+    if args.op == "retrieve":
+        retriever.retrieve(
+            args.months,
+            args.window_days,
+            args.reretrieve_days,
+            args.costs_window_days,
+            args.skip_alerts,
+            args.skip_pushes,
+            args.skip_bugs,
+            args.skip_costs,
+        )
+    elif args.op == "generate":
+        retriever.generate(args.settle_days, args.since, args.until)
+    elif args.op == "export":
+        retriever.export(
+            args.repo_dir,
+            args.settle_days,
+            args.negative_ratio,
+            args.seed,
+            args.test_fraction,
+            args.since,
+            args.until,
+            args.refresh_repo,
+        )
+    elif args.op == "calibrate":
+        retriever.calibrate(
+            args.settle_days,
+            args.holdout_days,
+            args.min_positives,
+            args.since,
+            args.until,
+        )
+
+
+if __name__ == "__main__":
+    main()

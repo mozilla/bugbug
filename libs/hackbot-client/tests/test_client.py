@@ -31,12 +31,10 @@ def _capture_post(monkeypatch, response: httpx.Response) -> dict:
     class _FakeAsyncClient:
         def __init__(self, timeout=None):
             captured["timeout"] = timeout
+            captured["instances"] = captured.get("instances", 0) + 1
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
+        async def aclose(self):
+            captured["closed"] = True
 
         async def post(self, url, json=None, headers=None, params=None):
             captured.update(url=url, json=json, headers=headers, params=params)
@@ -86,6 +84,7 @@ async def test_trigger_run_posts_inputs_and_returns_typed_reference(monkeypatch)
     assert run.is_new is True
     assert captured == {
         "timeout": 30.0,
+        "instances": 1,
         "url": "https://hackbot.example/agents/bug-fix/runs",
         "json": {"bug_id": 1234},
         "headers": {
@@ -181,6 +180,18 @@ async def test_trigger_run_sends_the_dedupe_key_as_a_query_parameter(monkeypatch
     )
 
     assert captured["params"] == {"dedupe_key": "push:autoland:abc123"}
+
+
+async def test_one_client_reuses_a_single_http_client(monkeypatch):
+    captured = _capture_post(monkeypatch, httpx.Response(200, json=[]))
+
+    client = _client()
+    await client.apply_actions(RUN_ID)
+    await client.apply_actions(RUN_ID)
+    await client.close()
+
+    assert captured["instances"] == 1
+    assert captured["closed"] is True
 
 
 async def test_apply_actions_posts_to_the_runs_apply_endpoint(monkeypatch):

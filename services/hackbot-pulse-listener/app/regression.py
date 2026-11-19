@@ -15,12 +15,15 @@ import logging
 import re
 import time
 
+from mozci import config as mozci_config
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
 
 from app import treeherder
 
 logger = logging.getLogger(__name__)
+
+mozci_config.set(user_agent="hackbot-pulse-listener")
 
 # Poll an unsettled ancestor for up to MAX_WAIT_SECONDS before giving up and running
 # the agent. An ancestor that has not settled within ten minutes is usually not about

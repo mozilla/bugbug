@@ -25,7 +25,11 @@ from bugbug.tools.code_review.utils import (
     format_patch_set,
     get_associated_file_to_function,
 )
-from bugbug.tools.core.data_types import InlineComment
+from bugbug.tools.core.data_types import (
+    CommentCategory,
+    CommentSeverity,
+    InlineComment,
+)
 from bugbug.tools.core.platforms.base import ReviewData
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
@@ -309,6 +313,8 @@ def test_convert_generated_comments_to_inline(file_path):
         comment="Comment",
         explanation="Explanation",
         order=1,
+        severity=CommentSeverity.MAJOR,
+        category=CommentCategory.CORRECTNESS,
     )
 
     (inline,) = convert_generated_comments_to_inline(

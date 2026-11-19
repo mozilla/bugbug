@@ -11,22 +11,27 @@ async def _no_download(key, max_bytes=None):
     raise AssertionError("not expected")
 
 
-def _fake_trigger(calls, child, status="pending"):
-    async def fake_trigger(self, agent_name, inputs, *, dedupe_key=None):
-        calls.append((agent_name, inputs, dedupe_key))
-        return TriggeredRun(run_id=child, agent=agent_name, status=status, is_new=True)
+class _FakeHackbotClient:
+    def __init__(self, calls, child, status="pending"):
+        self.calls = calls
+        self.child = child
+        self.status = status
 
-    return fake_trigger
+    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
+        self.calls.append((agent_name, inputs, dedupe_key))
+        return TriggeredRun(
+            run_id=self.child, agent=agent_name, status=self.status, is_new=True
+        )
 
 
-async def test_the_chained_run_is_keyed_by_its_parent(monkeypatch):
+async def test_the_chained_run_is_keyed_by_its_parent():
     calls = []
     child = uuid.uuid4()
-    fake_trigger = _fake_trigger(calls, child)
-
-    monkeypatch.setattr(agents_handler.HackbotClient, "trigger_run", fake_trigger)
     ctx = ApplyContext(
-        run_id="p-1", agent="first-agent", download_artifact=_no_download
+        run_id="p-1",
+        agent="first-agent",
+        download_artifact=_no_download,
+        hackbot_client=_FakeHackbotClient(calls, child),
     )
 
     result = await agents_handler.StartRunHandler().apply({"agent": "next-agent"}, ctx)
@@ -37,14 +42,12 @@ async def test_the_chained_run_is_keyed_by_its_parent(monkeypatch):
     assert result.result["url"].endswith(f"/runs/{child}")
 
 
-async def test_a_child_that_failed_to_start_fails_the_action(monkeypatch):
-    monkeypatch.setattr(
-        agents_handler.HackbotClient,
-        "trigger_run",
-        _fake_trigger([], uuid.uuid4(), status="failed"),
-    )
+async def test_a_child_that_failed_to_start_fails_the_action():
     ctx = ApplyContext(
-        run_id="p-1", agent="first-agent", download_artifact=_no_download
+        run_id="p-1",
+        agent="first-agent",
+        download_artifact=_no_download,
+        hackbot_client=_FakeHackbotClient([], uuid.uuid4(), status="failed"),
     )
 
     result = await agents_handler.StartRunHandler().apply({"agent": "next-agent"}, ctx)

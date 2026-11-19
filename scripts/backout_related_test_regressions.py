@@ -9,7 +9,9 @@ from logging import INFO, basicConfig, getLogger
 from mozci.push import Push
 from tqdm import tqdm
 
-from bugbug import db, repository
+from bugbug import db, repository, utils
+
+utils.setup_mozci()
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)

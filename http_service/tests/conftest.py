@@ -24,6 +24,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
 
 import bugbug.models
+import bugbug.models.testconfigselect
 import bugbug.models.testselect
 import bugbug_http
 import bugbug_http.models
@@ -60,7 +61,10 @@ def patch_resources(monkeypatch, jobs):
             self.data = {}
             self.expirations = {}
 
-        def set(self, k, v):
+        def set(self, k, v, ex=None):
+            if ex is not None:
+                self.expirations[k] = ex
+
             # keep track of job ids for testing purposes
             if k.startswith("bugbug:job_id"):
                 key = k.split(":", 2)[-1]
@@ -81,12 +85,9 @@ def patch_resources(monkeypatch, jobs):
         def exists(self, k):
             return k in self.data
 
-        def delete(self, k):
-            if self.exists(k):
-                del self.data[k]
-
-        def expire(self, key, expiration):
-            self.expirations[key] = expiration
+        def delete(self, *keys):
+            for k in keys:
+                self.data.pop(k, None)
 
     class QueueMock:
         """Mock class to mimic rq.Queue."""
@@ -315,12 +316,61 @@ def mock_component_taskcluster_artifact() -> None:
     repository.download_component_mapping()
 
 
+MOCK_KNOWN_TASKS = [
+    "prova",
+    "test-linux1804-64/opt-mochitest-1",
+    "test-windows10/debug-mochitest-1",
+    "test-windows10/opt-mochitest-2",
+]
+
+
+MOCK_MANIFESTS_BY_TASK = {
+    "test-linux1804-64/opt-mochitest-1": ["test-group1", "test-group2"],
+    "test-windows10/debug-mochitest-1": ["test-group1"],
+    "test-windows10/opt-mochitest-2": ["test-group1", "test-group2"],
+}
+
+
+def mock_config_select_model() -> bugbug.models.testconfigselect.TestConfigSelectModel:
+    """A config selection model predicting 0.5 for a group's first config, 0 for the following ones."""
+    model = bugbug.models.testconfigselect.TestConfigSelectModel()
+    model.known_configs = {
+        "test-linux1804-64/opt-*",
+        "test-windows10/debug-*",
+        "test-windows10/opt-*",
+    }
+    model._predict = lambda test_jobs: np.array(  # type: ignore[method-assign]
+        [0.0 if test_job["selected"] else 0.5 for test_job in test_jobs]
+    )
+    return model
+
+
 class MockModelCache:
+    def __init__(self):
+        self.config_select_model = mock_config_select_model()
+
     def get(self, model_name):
-        if "group" in model_name:
+        if model_name == bugbug_http.models.CONFIG_SELECTION_MODEL:
+            return self.config_select_model
+        elif "group" in model_name:
             return bugbug.models.testselect.TestGroupSelectModel()
         else:
             return bugbug.models.testselect.TestLabelSelectModel()
+
+
+@pytest.fixture(autouse=True)
+def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> None:
+    with open("manifests_by_task.json", "w") as f:
+        json.dump(MOCK_MANIFESTS_BY_TASK, f)
+    with open("known_tasks", "w") as f:
+        f.write("\n".join(MOCK_KNOWN_TASKS))
+
+    # No build platforms: every platform might build the modified files.
+    if os.path.exists("build_platforms.json"):
+        os.remove("build_platforms.json")
+    bugbug_http.models.get_known_tasks.cache_clear()
+    bugbug_http.models.get_live_config_candidates.cache_clear()
+    bugbug_http.models.get_build_platforms.cache_clear()
 
 
 @pytest.fixture
@@ -328,7 +378,7 @@ def mock_get_config_specific_groups(
     monkeypatch: MonkeyPatch,
 ) -> None:
     with open("known_tasks", "w") as f:
-        f.write("prova")
+        f.write("\n".join(MOCK_KNOWN_TASKS))
 
     # Initialize a mock past failures DB.
     past_failures_data = test_scheduling.PastFailures("group", False)
@@ -381,7 +431,7 @@ def mock_schedule_tests_classify(
     monkeypatch: MonkeyPatch,
 ) -> Callable[[dict[str, float], dict[str, float]], None]:
     with open("known_tasks", "w") as f:
-        f.write("prova")
+        f.write("\n".join(MOCK_KNOWN_TASKS))
 
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):

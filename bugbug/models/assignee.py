@@ -63,8 +63,6 @@ class AssigneeModel(BugModel):
                     bug_features.BugExtractor(
                         feature_extractors,
                         cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
                     ),
                 ),
             ]
@@ -92,6 +90,9 @@ class AssigneeModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return self.rollback
 
     def get_labels(self):
         classes = {}
@@ -125,5 +126,6 @@ class AssigneeModel(BugModel):
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
 
-    def rollback(self, change):
+    @staticmethod
+    def rollback(change):
         return change["field_name"].startswith("assigned_to")

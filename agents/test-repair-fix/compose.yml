@@ -8,7 +8,9 @@ services:
       - RUN_ID
       # The test-repair run to continue from. Locally its artifacts are read
       # from /artifacts/<PARENT_RUN_ID>, where that run wrote them.
-      - PARENT_RUN_ID=${PARENT_RUN_ID:?error}
+      # TODO: Make it required again (`${PARENT_RUN_ID:?error}`) once
+      # https://github.com/mozilla/bugbug/issues/7394 is resolved.
+      - PARENT_RUN_ID
       - SKIP_FIREFOX_BUILD=${SKIP_FIREFOX_BUILD:-}
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}

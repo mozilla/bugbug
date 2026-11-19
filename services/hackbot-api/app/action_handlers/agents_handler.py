@@ -7,7 +7,7 @@ the parent run, so a redelivered completion event cannot start it twice.
 
 from typing import Any
 
-from hackbot_client import HackbotClient, RunStatus
+from hackbot_client import RunStatus
 
 from app.action_handlers.base import ActionResult, ApplyContext
 from app.config import settings
@@ -15,10 +15,7 @@ from app.config import settings
 
 class StartRunHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
-        client = HackbotClient(
-            base_url=settings.hackbot_api_url, api_key=settings.external_api_key
-        )
-        run = await client.trigger_run(
+        run = await ctx.hackbot_client.trigger_run(
             params["agent"],
             {"parent_run_id": ctx.run_id},
             dedupe_key=f"parent-{ctx.run_id}",

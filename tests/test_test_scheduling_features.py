@@ -275,3 +275,94 @@ def test_get_task_os():
     )
     assert get_task_os("build-ios-non-unified/plain") == "ios"
     assert get_task_os("build-unknown/opt") == "other"
+
+
+CONFIG_TEST_JOB = {
+    "name": "dom/base/test/mochitest.toml",
+    "config": "test-windows11-64-25h2/debug-*-swr",
+    "history": {"likelihood": 0.4, "runs_group_config": 3},
+    "candidates": [
+        "test-linux2404-64/opt-*",
+        "test-windows11-64-25h2/debug-*-swr",
+        "test-windows11-64-25h2/opt-*",
+    ],
+    "cost": 7,
+    "selected": ["test-linux2404-64/opt-*", "test-windows11-64-25h2/opt-*"],
+    "selected_likelihoods": [0.5, 0.3],
+    "selected_costs": [2, 6],
+    "patch_hints": {"windows": 2, "macosx": 1},
+    "patch_files_num": 4,
+}
+
+
+def test_config_tokens():
+    assert test_scheduling_features.ConfigTokens()(CONFIG_TEST_JOB) == [
+        "test",
+        "windows11",
+        "25h2",
+        "debug",
+        "swr",
+        "windows",
+    ]
+
+
+def test_config_failure_history():
+    assert test_scheduling_features.ConfigFailureHistory()(CONFIG_TEST_JOB) == {
+        "likelihood": 0.4,
+        "runs_group_config": 3,
+    }
+
+
+def test_candidate_configs():
+    assert test_scheduling_features.CandidateConfigs()(CONFIG_TEST_JOB) == {
+        "cost": 7,
+        "candidates": 3,
+        "candidate_platforms": 2,
+        "candidates_same_platform": 2,
+    }
+
+
+def test_selected_configs():
+    assert test_scheduling_features.SelectedConfigs()(CONFIG_TEST_JOB) == {
+        "selected": 2,
+        # test-windows11-64-25h2/opt-* shares test, windows11, 25h2 and windows.
+        "selected_max_shared_tokens": 4,
+        "selected_mean_shared_tokens": 2.5,
+        "selected_covered_tokens": 4 / 6,
+        "selected_same_platform": 1,
+        "selected_platforms": 2,
+        "selected_max_likelihood": 0.5,
+        "selected_mean_likelihood": 0.4,
+        "selected_cost": 8,
+    }
+
+    nothing_selected = dict(
+        CONFIG_TEST_JOB, selected=[], selected_likelihoods=[], selected_costs=[]
+    )
+    assert test_scheduling_features.SelectedConfigs()(nothing_selected) == {
+        "selected": 0,
+        "selected_max_shared_tokens": 0,
+        "selected_mean_shared_tokens": 0.0,
+        "selected_covered_tokens": 0.0,
+        "selected_same_platform": 0,
+        "selected_platforms": 0,
+        "selected_max_likelihood": 0.0,
+        "selected_mean_likelihood": 0.0,
+        "selected_cost": 0,
+    }
+
+
+def test_patch_platform_hints():
+    hints = test_scheduling_features.PatchPlatformHints()
+    assert hints(CONFIG_TEST_JOB) == {
+        "patch_hints_own_family": 0.5,
+        "patch_hints_other_families": 0.25,
+        "patch_hints_only_own_family": False,
+    }
+    assert hints(dict(CONFIG_TEST_JOB, patch_hints={"windows": 1})) == {
+        "patch_hints_own_family": 0.25,
+        "patch_hints_other_families": 0.0,
+        "patch_hints_only_own_family": True,
+    }
+    # Unknown patch.
+    assert hints(dict(CONFIG_TEST_JOB, patch_hints={}, patch_files_num=0)) is None

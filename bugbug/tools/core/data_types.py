@@ -6,6 +6,27 @@
 """Core data types used across bugbug tools."""
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class CommentSeverity(StrEnum):
+    """How much a review comment matters, from most to least urgent."""
+
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+    NIT = "nit"
+
+
+class CommentCategory(StrEnum):
+    """The kind of problem a review comment reports."""
+
+    SECURITY = "security"
+    CORRECTNESS = "correctness"
+    PERFORMANCE = "performance"
+    MAINTAINABILITY = "maintainability"
+    STYLE = "style"
+    SCOPE = "scope"
 
 
 @dataclass
@@ -28,6 +49,8 @@ class InlineComment:
     is_generated: bool | None = None
     explanation: str | None = None
     order: int | None = None
+    severity: CommentSeverity | None = None
+    category: CommentCategory | None = None
     details: dict | None = None
 
 

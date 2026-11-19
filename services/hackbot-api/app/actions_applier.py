@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from hackbot_client import HackbotClient
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,11 @@ from app.action_handlers import (
     merge_resolved,
     plan_coalesced_groups,
 )
+from app.action_handlers.github_handler import (
+    merge_review,
+    plan_review_groups,
+    review_member_result,
+)
 from app.agents import AGENT_REGISTRY, AgentSpec
 from app.database.models import Run, RunAction
 from app.schemas import RunStatus
@@ -34,6 +40,24 @@ from app.schemas import RunStatus
 log = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{actions\.([^.}]+)\.([^}]+)\}\}")
+
+
+def _shared_result(action_type: str, result: dict) -> dict:
+    return result
+
+
+# Actions that share one API request: how to find their groups (indices into the
+# pending actions), the action type a group applies as, how its members' params
+# merge into that action's params, and the result each member keeps.
+_COALESCERS = (
+    (plan_coalesced_groups, "bugzilla.update_bug", merge_resolved, _shared_result),
+    (
+        plan_review_groups,
+        "github.add_inline_comments",
+        merge_review,
+        review_member_result,
+    ),
+)
 
 
 _CLAIMABLE_STATUSES = ("pending", "failed")
@@ -112,12 +136,15 @@ def _auto_apply_blocker(spec: AgentSpec | None, run: Run) -> str | None:
 
 
 def _should_auto_apply(
-    spec: AgentSpec | None, action_type: str, *, run_level_auto_apply: bool
+    spec: AgentSpec | None,
+    action_type: str,
+    *,
+    require_review: bool,
+    run_level_auto_apply: bool,
 ) -> bool:
     """Apply per-action overrides, falling back to the run-level decision."""
-    if spec is None:
-        return False
-    if action_type in spec.never_apply_actions:
+    # A review request holds every action, even `always_apply_actions`.
+    if spec is None or require_review or action_type in spec.never_apply_actions:
         return False
     if action_type in spec.always_apply_actions:
         return True
@@ -158,7 +185,11 @@ async def ensure_action_rows(
 
 
 async def _dispatch(
-    run: Run, action_type: str, params: dict, attachments: list[dict]
+    run: Run,
+    action_type: str,
+    params: dict,
+    attachments: list[dict],
+    hackbot_client: HackbotClient,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -178,6 +209,10 @@ async def _dispatch(
         ),
         attachments=attachments,
         agent=run.agent,
+        hackbot_client=hackbot_client,
+        # TODO: use ["agent_version"] once no runs from before #7337 have
+        # pending actions.
+        agent_version=run.summary.get("agent_version"),
     )
     try:
         return await handler.apply(params, ctx)
@@ -234,14 +269,18 @@ async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
 
 
 async def _apply_pending_rows(
-    db: AsyncSession, run: Run, rows: list[tuple[RunAction, list[dict]]]
+    db: AsyncSession,
+    run: Run,
+    rows: list[tuple[RunAction, list[dict]]],
+    hackbot_client: HackbotClient,
 ) -> None:
     """Apply every not-yet-`applied` row in `rows`, committing per action.
 
     Same-bug Bugzilla field changes are coalesced with the closest comment into
     a single `PUT /bug/{id}` so Bugzilla applies them as one transaction (one
     bugmail, one history entry); any other comments on that bug still apply
-    separately. See `plan_coalesced_groups`/`merge_resolved` in `app.action_handlers`.
+    separately. General and inline GitHub comments on the same PR are submitted
+    together as one review when both are pending in this apply pass.
 
     Cross-action `{{actions.<action_id>.<field>}}` placeholders resolve against rows
     that are already `applied` (seeded from prior applies) plus ones applied
@@ -262,7 +301,7 @@ async def _apply_pending_rows(
 
     pending = [(row, att) for row, att in rows if row.status != "applied"]
 
-    # Plan which pending rows coalesce into one bug PUT (indices into `pending`).
+    # Plan which pending rows share one API request (indices into `pending`).
     # Drop any group with a member another pending action references: a group
     # applies at its last member, possibly after the action that needs the
     # result. Everything else applies one row at a time as before.
@@ -271,17 +310,16 @@ async def _apply_pending_rows(
         for row, _ in pending
         for match in _PLACEHOLDER_RE.finditer(json.dumps(row.params))
     }
-    groups = [
-        group
-        for group in plan_coalesced_groups(
-            [(row.type, row.params) for row, _ in pending]
-        )
-        if all(pending[i][0].ref not in referenced for i in group)
-    ]
+    actions = [(row.type, row.params) for row, _ in pending]
     # Rows sit in idx order, so a group's last member is its max idx: apply the
     # whole group there, once every earlier (backward) dependency is resolved.
-    anchor_of = {i: max(group) for group in groups for i in group}
-    group_at = {max(group): group for group in groups}
+    group_at = {
+        max(group): (group, action_type, merge, member_result)
+        for plan, action_type, merge, member_result in _COALESCERS
+        for group in plan(actions)
+        if all(pending[i][0].ref not in referenced for i in group)
+    }
+    anchor_of = {i: anchor for anchor, (group, *_) in group_at.items() for i in group}
 
     for pos, (row, attachments) in enumerate(pending):
         anchor = anchor_of.get(pos)
@@ -289,18 +327,22 @@ async def _apply_pending_rows(
             continue  # non-anchor member: applied together with its anchor
 
         if anchor is not None:
-            member_rows = [pending[i][0] for i in group_at[anchor]]
+            group, action_type, merge, member_result = group_at[anchor]
+            member_rows = [pending[i][0] for i in group]
             entries = [
                 (member.type, resolve_placeholders(member.params, results_by_ref))
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run, "bugzilla.update_bug", merge_resolved(entries), []
+                run, action_type, merge(entries), [], hackbot_client
             )
         else:
             member_rows = [row]
+            member_result = _shared_result
             params = resolve_placeholders(row.params, results_by_ref)
-            outcome = await _dispatch(run, row.type, params, attachments)
+            outcome = await _dispatch(
+                run, row.type, params, attachments, hackbot_client
+            )
 
         # Only stamp applied_at on a real success, so a failed row isn't
         # mistaken for one that was applied.
@@ -308,6 +350,8 @@ async def _apply_pending_rows(
         for member in member_rows:
             member.status = outcome.status
             member.result = outcome.result
+            if outcome.status == "applied" and outcome.result is not None:
+                member.result = member_result(member.type, outcome.result)
             member.error = outcome.error
             if applied_at is not None:
                 member.applied_at = applied_at
@@ -316,10 +360,12 @@ async def _apply_pending_rows(
         if outcome.status == "applied" and outcome.result is not None:
             for member in member_rows:
                 if member.ref:
-                    results_by_ref[member.ref] = outcome.result
+                    results_by_ref[member.ref] = member.result
 
 
-async def on_run_completed(db: AsyncSession, run: Run) -> None:
+async def on_run_completed(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Record a completed run's actions and auto-apply each eligible action.
 
     Called from the `apply-run-actions` push route. Actions are always recorded (so the
@@ -344,12 +390,15 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
     to_apply: list[tuple[RunAction, list[dict]]] = []
     for action, attachments in rows:
         if _should_auto_apply(
-            spec, action.type, run_level_auto_apply=run_level_auto_apply
+            spec,
+            action.type,
+            require_review=run.inputs["require_review"],
+            run_level_auto_apply=run_level_auto_apply,
         ):
             to_apply.append((action, attachments))
 
     if to_apply:
-        await _apply_pending_rows(db, run, to_apply)
+        await _apply_pending_rows(db, run, to_apply, hackbot_client)
 
     held_count = len(rows) - len(to_apply)
     if held_count:
@@ -362,7 +411,9 @@ async def on_run_completed(db: AsyncSession, run: Run) -> None:
         )
 
 
-async def apply_all_pending(db: AsyncSession, run: Run) -> None:
+async def apply_all_pending(
+    db: AsyncSession, run: Run, hackbot_client: HackbotClient
+) -> None:
     """Apply all of a run's not-yet-`applied` actions on demand (manual).
 
     Ensures the rows exist first, so this works whether or not they were
@@ -370,4 +421,4 @@ async def apply_all_pending(db: AsyncSession, run: Run) -> None:
     """
     rows = await ensure_action_rows(db, run)
     await db.commit()
-    await _apply_pending_rows(db, run, rows)
+    await _apply_pending_rows(db, run, rows, hackbot_client)

@@ -22,13 +22,14 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Collection, Iterable, Iterator, NewType, Set, Union
+from typing import Collection, Iterable, Iterator, NamedTuple, NewType, Set, Union
 
 import hglib
 import lmdb
 import requests
 import rs_parsepatch
 import tenacity
+from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -49,7 +50,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    24,
+    25,
     [COMMIT_EXPERIENCES_DB],
 )
 
@@ -61,6 +62,11 @@ REPO_DIR = None
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+
+# How far back to recompute the backout and ignore information of already mined
+# commits. Backouts and .hg-annotate-ignore-revs entries usually land within days
+# or weeks of the commit they refer to.
+REFRESH_MONTHS = 6
 
 SOURCE_CODE_TYPES_TO_EXT = {
     "Assembly": [".asm", ".S"],
@@ -668,6 +674,9 @@ def set_commit_metrics(
     before_metrics: dict,
     after_metrics: dict,
 ) -> None:
+    previous_totals = {
+        metric: commit.metrics[f"{metric}_total"] for metric in METRIC_NAMES
+    }
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
@@ -686,11 +695,12 @@ def set_commit_metrics(
             "rust-code-analysis error on commit %s, path %s", commit.node, path
         )
 
-    commit.metrics_diff = {
-        f"{metric}_total": commit.metrics[f"{metric}_total"]
-        - before_metrics_dict[f"{metric}_total"]
-        for metric in METRIC_NAMES
-    }
+    # The metrics of the commit are the sum of the metrics of its files, so the
+    # difference is accumulated over the files too.
+    for metric in METRIC_NAMES:
+        commit.metrics_diff[f"{metric}_total"] += (
+            commit.metrics[f"{metric}_total"] - previous_totals[metric]
+        ) - before_metrics_dict[f"{metric}_total"]
 
     touched_functions = get_touched_functions(
         after_metrics["spaces"],
@@ -731,6 +741,47 @@ def get_commit_patch(hg: hglib.client, rev: bytes) -> bytes:
     The payload carries the commit message header followed by the diff.
     """
     return hg.export(revs=[rev], git=True)
+
+
+class HgExport(NamedTuple):
+    """The parts of an ``hg export`` payload, see parse_hg_export."""
+
+    author: str
+    parents: list[str]
+    message: str
+    diff: str
+
+
+def parse_hg_export(patch: bytes | str) -> HgExport:
+    """Split an ``hg export`` payload into its header fields, message and diff.
+
+    The header is the leading run of ``#`` lines: ``# User`` gives the author
+    and each ``# Parent`` line a parent, two for a merge. The message runs from
+    the header to the first ``diff`` line, where the diff starts; both are
+    empty when the payload has none.
+    """
+    text = patch.decode("utf-8", "replace") if isinstance(patch, bytes) else patch
+    author = ""
+    parents: list[str] = []
+    message_lines: list[str] = []
+    in_header = True
+    offset = 0
+    diff_start = len(text)
+    for line in text.splitlines(keepends=True):
+        if in_header and line.startswith("#"):
+            if line.startswith("# User "):
+                author = line[len("# User ") :].strip()
+            elif line.startswith("# Parent "):
+                parents.append(line[len("# Parent ") :].strip())
+            offset += len(line)
+            continue
+        in_header = False
+        if line.startswith("diff "):
+            diff_start = offset
+            break
+        message_lines.append(line)
+        offset += len(line)
+    return HgExport(author, parents, "".join(message_lines).strip(), text[diff_start:])
 
 
 def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
@@ -808,7 +859,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
                             try:
                                 before = hg.cat(
                                     [os.path.join(repo_dir, path).encode("utf-8")],
-                                    rev=commit.node.encode("ascii"),
+                                    rev=f"{commit.node}^".encode("ascii"),
                                 )
 
                                 before_metrics = code_analysis_server.metrics(
@@ -1220,22 +1271,28 @@ def calculate_experiences(
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(
-    hg: hglib.client, repo_dir: str, commits: Iterable[Commit]
-) -> None:
-    # Skip commits which are in .hg-annotate-ignore-revs or which have
-    # 'ignore-this-changeset' in their description (mostly consisting of very
-    # large and not meaningful formatting changes).
+def get_ignore_revs(hg: hglib.client, repo_dir: str) -> set[str]:
     ignore_revs_content = hg.cat(
         [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")],
         rev=b"default",
     ).decode("utf-8")
-    ignore_revs = set(line[:40] for line in ignore_revs_content.splitlines())
+    return set(line[:40] for line in ignore_revs_content.splitlines())
+
+
+def is_ignored(node: str, desc: str, ignore_revs: set[str]) -> bool:
+    # Skip commits which are in .hg-annotate-ignore-revs or which have
+    # 'ignore-this-changeset' in their description (mostly consisting of very
+    # large and not meaningful formatting changes).
+    return node in ignore_revs or "ignore-this-changeset" in desc
+
+
+def set_commits_to_ignore(
+    hg: hglib.client, repo_dir: str, commits: Iterable[Commit]
+) -> None:
+    ignore_revs = get_ignore_revs(hg, repo_dir)
 
     for commit in commits:
-        commit.ignored = (
-            commit.node in ignore_revs or "ignore-this-changeset" in commit.desc
-        )
+        commit.ignored = is_ignored(commit.node, commit.desc, ignore_revs)
 
 
 def download_coverage_mapping() -> None:
@@ -1480,7 +1537,106 @@ def download_commits(
     )
 
 
-def update_commits() -> None:
+def get_backsout(hg: hglib.client, revs: list[bytes]) -> dict[str, list[str]]:
+    """Get the (short) nodes of the commits backed out by each of the given commits."""
+    if len(revs) == 0:
+        return {}
+
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\\0{backsoutnodes}\\0",
+        no_merges=True,
+        rev=revs,
+    )
+    out = hg.rawcommand(args).split(b"\x00")[:-1]
+
+    return {
+        node.decode("ascii"): list(set(backsout.decode("ascii").split(" ")))
+        if backsout != b""
+        else []
+        for node, backsout in hglib.util.grouper(2, out)
+    }
+
+
+BACKOUT_DESC_RE = re.compile(
+    r"^(Backed out|Back out|Backout|Revert\b)|This reverts commit", re.I | re.M
+)
+
+
+def refresh_backouts_and_ignored(
+    repo_dir: str, commits: list[CommitDict], months: int = REFRESH_MONTHS
+) -> None:
+    """Recompute the backout and ignore information of already mined commits.
+
+    This information is computed when a commit is mined, but it can change
+    afterwards: a commit can be backed out after it was mined, it can be added
+    to .hg-annotate-ignore-revs in a follow-up patch, and the hg extensions that
+    detect backouts can be improved (e.g. to detect git reverts). Everything is
+    repaired in place, so no full re-mining of the commits DB is needed:
+    - `ignored` is recomputed for all commits (a lookup in the current
+      .hg-annotate-ignore-revs);
+    - `backsout` is recomputed for recent commits and for older commits that look
+      like backouts or reverts but were not detected as such when mined;
+    - `backedoutby` is derived from the `backsout` of all commits.
+
+    The experiences (e.g. the number of backouts in the touched files) are not
+    updated, as they are computed incrementally in push order when commits are
+    mined.
+    """
+    cutoff = str(datetime.utcnow() - relativedelta(months=months))
+    to_refresh = [
+        commit
+        for commit in commits
+        if commit["pushdate"] >= cutoff
+        or (not commit["backsout"] and BACKOUT_DESC_RE.search(commit["desc"]))
+    ]
+
+    with hglib.open(repo_dir) as hg:
+        backsout = get_backsout(
+            hg, [commit["node"].encode("ascii") for commit in to_refresh]
+        )
+        ignore_revs = get_ignore_revs(hg, repo_dir)
+
+    updated_backsout = 0
+    for commit in to_refresh:
+        new_backsout = backsout.get(commit["node"], commit["backsout"])
+        if set(new_backsout) != set(commit["backsout"]):
+            updated_backsout += 1
+        commit["backsout"] = new_backsout
+
+    updated_ignored = 0
+    for commit in commits:
+        new_ignored = is_ignored(commit["node"], commit["desc"], ignore_revs)
+        if new_ignored != commit["ignored"]:
+            updated_ignored += 1
+        commit["ignored"] = new_ignored
+
+    # Commits can be backed out by commits mined in a later run, so we derive
+    # {backedoutby} from the backouts instead of relying on its value at mining
+    # time (this is also much faster than the {backedoutby} template keyword,
+    # which searches the descendants of each commit). Commits are in push order,
+    # so the first backout of a commit wins.
+    backedoutby: dict[str, str] = {}
+    for commit in commits:
+        for backedout in commit["backsout"]:
+            backedoutby.setdefault(backedout[:12], commit["node"])
+
+    updated_backedoutby = 0
+    for commit in commits:
+        if not commit["backedoutby"] and commit["node"][:12] in backedoutby:
+            commit["backedoutby"] = backedoutby[commit["node"][:12]]
+            updated_backedoutby += 1
+
+    logger.info(
+        "Refreshed %d commits: updated backsout of %d, ignored of %d, backedoutby of %d",
+        len(to_refresh),
+        updated_backsout,
+        updated_ignored,
+        updated_backedoutby,
+    )
+
+
+def update_commits(repo_dir: str | None = None) -> None:
     if not os.path.exists("data/coverage_mapping.lmdb"):
         logger.info("Downloading commit->coverage mapping...")
         download_coverage_mapping()
@@ -1492,6 +1648,9 @@ def update_commits() -> None:
     # Add coverage information for previous commits too.
     # We need to do this because coverage information is sometimes slow to come in.
     set_commit_coverage(commits)
+
+    if repo_dir is not None:
+        refresh_backouts_and_ignored(repo_dir, commits)
 
     db.write(COMMITS_DB, commits)
 

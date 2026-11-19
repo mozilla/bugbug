@@ -66,7 +66,7 @@ def _client() -> storage.Client:
     )
 
 
-def _generate_post_policy_sync(run_id: str) -> dict[str, Any]:
+def _generate_post_policy_sync(run_id: str, timeout_seconds: int) -> dict[str, Any]:
     """Mint a V4 signed POST policy for uploads under `runs/<run_id>/`.
 
     `storage.Client.generate_signed_post_policy_v4` insists on adding an
@@ -80,9 +80,7 @@ def _generate_post_policy_sync(run_id: str) -> dict[str, Any]:
         raise RuntimeError("results_bucket not configured")
 
     prefix = run_prefix(run_id)
-    expiration_seconds = (
-        settings.job_execution_timeout_seconds + settings.signed_policy_grace_seconds
-    )
+    expiration_seconds = timeout_seconds + settings.signed_policy_grace_seconds
 
     creds = _signing_credentials()
     sa_email = creds.service_account_email
@@ -123,8 +121,8 @@ def _generate_post_policy_sync(run_id: str) -> dict[str, Any]:
     return {"url": url, "fields": fields}
 
 
-async def generate_results_policy(run_id: str) -> dict[str, Any]:
-    return await asyncio.to_thread(_generate_post_policy_sync, run_id)
+async def generate_results_policy(run_id: str, timeout_seconds: int) -> dict[str, Any]:
+    return await asyncio.to_thread(_generate_post_policy_sync, run_id, timeout_seconds)
 
 
 def _read_summary_sync(run_id: str) -> RunSummary | None:

@@ -45,14 +45,14 @@ async def test_list_run_actions_returns_rows(monkeypatch):
 
 async def test_apply_run_actions_404():
     with pytest.raises(HTTPException) as exc:
-        await runs_router.apply_run_actions(uuid.uuid4(), _FakeDB(None))
+        await runs_router.apply_run_actions(uuid.uuid4(), _FakeDB(None), object())
     assert exc.value.status_code == 404
 
 
 async def test_apply_run_actions_applies_then_returns(monkeypatch):
     applied = {"called": False}
 
-    async def fake_apply(db, run):
+    async def fake_apply(db, run, hackbot_client):
         applied["called"] = True
 
     async def fake_list(db, run_id):
@@ -61,6 +61,8 @@ async def test_apply_run_actions_applies_then_returns(monkeypatch):
     monkeypatch.setattr(runs_router, "apply_all_pending", fake_apply)
     monkeypatch.setattr(runs_router, "_list_actions", fake_list)
 
-    out = await runs_router.apply_run_actions(uuid.uuid4(), _FakeDB(SimpleNamespace()))
+    out = await runs_router.apply_run_actions(
+        uuid.uuid4(), _FakeDB(SimpleNamespace()), object()
+    )
     assert applied["called"] is True
     assert out is _ACTIONS

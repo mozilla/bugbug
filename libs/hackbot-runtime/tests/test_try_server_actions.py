@@ -114,6 +114,7 @@ def test_agent_facing_schema():
         "tasks",
         "auto",
         "tests",
+        "rebuild",
         "reasoning",
         "title",
     }
@@ -176,3 +177,26 @@ def test_validate_test_paths_accepts_any_plausible_suite_name():
     assert try_server.validate_test_paths(
         {"some-new-suite-2027": ["dom/base/test"]}
     ) == {"some-new-suite-2027": ["dom/base/test"]}
+
+
+async def test_push_records_a_rebuild_count():
+    rec = ActionsRecorder()
+    await try_server.push(rec, tasks=["perftest-a55"], rebuild=10, reasoning="r")
+    assert rec.actions[0]["params"]["rebuild"] == 10
+
+
+@pytest.mark.parametrize("rebuild", [None, 1])
+async def test_push_records_no_rebuild_for_a_single_run(rebuild):
+    rec = ActionsRecorder()
+    await try_server.push(rec, tasks=["perftest-a55"], rebuild=rebuild, reasoning="r")
+    assert "rebuild" not in rec.actions[0]["params"]
+
+
+@pytest.mark.parametrize("rebuild", [0, -1, try_server.MAX_REBUILD + 1])
+async def test_push_rejects_a_rebuild_out_of_range(rebuild):
+    rec = ActionsRecorder()
+    with pytest.raises(ToolError, match="rebuild"):
+        await try_server.push(
+            rec, tasks=["perftest-a55"], rebuild=rebuild, reasoning="r"
+        )
+    assert rec.actions == []

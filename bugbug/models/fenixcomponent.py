@@ -8,78 +8,16 @@ from collections import Counter
 from datetime import datetime, timezone
 
 import dateutil.parser
-import xgboost
 from dateutil.relativedelta import relativedelta
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
-from sklearn.compose import ColumnTransformer
-from sklearn.feature_extraction import DictVectorizer
-from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
-from bugbug.model import BugModel
+from bugbug import bugzilla
+from bugbug.models.component import BaseComponentModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class FenixComponentModel(BugModel):
-    def __init__(self, lemmatization=False):
-        BugModel.__init__(self, lemmatization)
-
-        self.cross_validation_enabled = False
-        self.calculate_importance = False
-
-        feature_extractors = [
-            bug_features.HasSTR(),
-            bug_features.Severity(),
-            bug_features.Keywords(),
-            bug_features.HasCrashSignature(),
-            bug_features.HasURL(),
-            bug_features.HasW3CURL(),
-            bug_features.HasGithubURL(),
-            bug_features.Whiteboard(),
-            bug_features.Patches(),
-            bug_features.Landings(),
-        ]
-
-        cleanup_functions = [
-            feature_cleanup.fileref(),
-            feature_cleanup.url(),
-            feature_cleanup.synonyms(),
-        ]
-
-        self.extraction_pipeline = Pipeline(
-            [
-                (
-                    "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
-                ),
-            ]
-        )
-
-        self.clf = ImblearnPipeline(
-            [
-                (
-                    "union",
-                    ColumnTransformer(
-                        [
-                            ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(), "title"),
-                            ("comments", self.text_vectorizer(), "comments"),
-                        ]
-                    ),
-                ),
-                ("smote", SMOTE(random_state=42)),
-                ("undersample", RandomUnderSampler(random_state=42)),
-                (
-                    "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
-                ),
-            ]
-        )
-
+class FenixComponentModel(BaseComponentModel):
     def get_labels(self):
         classes = {}
 
@@ -94,9 +32,9 @@ class FenixComponentModel(BugModel):
             ):
                 continue
 
-            # Exclude 'General' because it contains bugs that may belong to
-            # other components, thus introducing noise. However, include
-            # 'GeckoView::General' because the model should be able to move
+            # Exclude 'Firefox for Android::General' because it contains bugs that
+            # may belong to other components, thus introducing noise. However,
+            # include 'GeckoView::General' because the model should be able to move
             # bugs to GeckoView.
             if (
                 bug_data["component"] == "General"
@@ -107,10 +45,13 @@ class FenixComponentModel(BugModel):
             if dateutil.parser.parse(bug_data["creation_time"]) < date_limit:
                 continue
 
-            classes[int(bug_data["id"])] = bug_data["component"]
+            # Include the product, as some components exist in both products
+            # (e.g. Media).
+            classes[int(bug_data["id"])] = (
+                f"{bug_data['product']}::{bug_data['component']}"
+            )
 
-        # Components with less than 100 bugs are not not be very useful, so we
-        # we ignore them.
+        # Components with less than 100 bugs are not very useful, so we ignore them.
         low_count_components = {
             component: count
             for component, count in Counter(classes.values()).items()
@@ -125,6 +66,3 @@ class FenixComponentModel(BugModel):
             del classes[bug_id]
 
         return classes, set(classes.values())
-
-    def get_feature_names(self):
-        return self.clf.named_steps["union"].get_feature_names_out()

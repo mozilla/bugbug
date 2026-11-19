@@ -18,7 +18,7 @@ import requests
 import tenacity
 from tqdm import tqdm
 
-from bugbug import db, repository, utils
+from bugbug import db, redash, repository, utils
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -52,7 +52,7 @@ def query_push_id_by_revision(revision):
     # FROM push p
     # WHERE p.repository_id = '{{ repository_id }}'
     #   AND p.revision = '{{ revision }}';
-    results = utils.query_redash(
+    results = redash.query_redash(
         120004,
         {
             "repository_id": 77,
@@ -68,7 +68,7 @@ def query_first_push_id_by_date(date):
     # FROM push p
     # WHERE p.repository_id = '{{ repository_id }}'
     #   AND p.time >= '{{ startdate }}';
-    results = utils.query_redash(
+    results = redash.query_redash(
         119896,
         {
             "repository_id": 77,
@@ -79,7 +79,7 @@ def query_first_push_id_by_date(date):
 
 
 def get_fixed_by_commit_data(first_push_id, last_push_id):
-    return utils.query_redash(
+    return redash.query_redash(
         111789,
         {
             "first_push_id": first_push_id,

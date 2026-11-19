@@ -5,6 +5,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
+from hackbot_client import HackbotClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from app.actions_applier import on_run_completed
 from app.auth import require_push_auth
 from app.database.connection import get_db
 from app.database.models import Run
+from app.hackbot_client import get_hackbot_client
 from app.routers.runs import finalize_run
 
 log = logging.getLogger(__name__)
@@ -113,7 +115,9 @@ async def agent_run_finished(
 
 @router.post("/apply-run-actions", status_code=204)
 async def apply_run_actions(
-    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hackbot_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
 ) -> None:
     """Consumer of `run.completed`: record the run's actions, auto-apply if opted in.
 
@@ -132,4 +136,4 @@ async def apply_run_actions(
         log.warning("No run found for run_id %s", run_id)
         return
 
-    await on_run_completed(db, run)
+    await on_run_completed(db, run, hackbot_client)

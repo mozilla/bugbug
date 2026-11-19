@@ -10,7 +10,7 @@ from logging import INFO, basicConfig, getLogger
 
 from tqdm import tqdm
 
-from bugbug import db, utils
+from bugbug import db, redash, utils
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -30,7 +30,7 @@ def query_first_push_id_by_date(date):
     # FROM push p
     # WHERE p.repository_id = '{{ repository_id }}'
     #   AND p.time >= '{{ startdate }}';
-    results = utils.query_redash(
+    results = redash.query_redash(
         119896,
         {
             "repository_id": 4,
@@ -55,7 +55,7 @@ def query_try_pushes(first_push_id, last_push_id):
     # ORDER BY p.id,
     #             jt.name,
     #             j.result;
-    return utils.query_redash(
+    return redash.query_redash(
         119580,
         {
             "first_push_id": first_push_id,

@@ -1,27 +1,54 @@
-# Build hackbot-ui once and ship it to dev, then stage.
+# Release hackbot-ui: build it and deploy it to one environment.
 #
-# Its trigger (webservices-infra, hackbot/tf/modules/resources/build.tf) runs
-# this on a push to the default branch touching the Console. Prod is a
-# separate, approved promotion; nothing here reaches it. services/cloudbuild.yaml
-# is hackbot-dev's older config and goes away at cutover.
+# Two triggers (webservices-infra, hackbot/tf/modules/resources/build.tf) run
+# this, telling it which environment in _ENV:
+#   stage-hackbot-ui  a push to the default branch touching
+#                     services/hackbot-ui/VERSION. Deploys only
+#                     if its version isn't the one stage runs; run by hand, it
+#                     deploys regardless.
+#   dev-hackbot-ui    a push to dev/services/hackbot-ui or
+#                     dev/services/hackbot-ui/<anything>. Deploys to dev,
+#                     always.
+# Prod is a separate, approved promotion; nothing here reaches it.
+# services/cloudbuild.yaml is hackbot-dev's older config and goes away at
+# cutover.
+#
+# `release-plan` decides whether to release and `release` deploys it. The
+# Sentry release is hackbot-ui@<version> (dev builds add +<commit>), with the
+# commits since what the environment ran before, and a deploy in its
+# environment; prod's deploy is marked by the prod workflow.
+#
+# The Console bakes its Sentry DSN and release into the bundle at build time
+# (_SENTRY_DSN) and uploads its source maps then, which needs the Sentry token
+# as a build secret. It picks its Sentry environment at runtime from its
+# hostname, so one image serves every environment.
 #
 # Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
 # build on unknown ones, so shell variables below are written `$$name`.
-#
-# The Console bakes its Sentry DSN into the bundle at build time
-# (_SENTRY_DSN), and picks its Sentry environment at runtime from its hostname,
-# so one image serves every environment. The build also uploads source maps,
-# which needs the Sentry token as a build secret.
 
 steps:
-  # Before anything else: if an older build of this trigger is still going,
-  # stop here rather than deploy over it.
-  - id: One at a time
+  # Builds of one trigger deploy to one environment: take turns. The wait
+  # allows for an older build's own work; the timeout is that plus this one's.
+  - id: Wait
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
-      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy check-build "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION"
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy wait-turn "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION" --timeout 3600
+
+  # /workspace/plan.txt: "name version previous-commit - -", or empty when
+  # there is nothing to release (every step below then does nothing).
+  - id: Plan
+    name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    entrypoint: bash
+    # The tool reads these from the environment: in a command, a run by hand's
+    # unresolved pusher ("$(push.pusher.name)") would run as a command.
+    env:
+      - BRANCH_NAME=$BRANCH_NAME
+      - PUSHER=${_PUSHER}
+    args:
+      - -c
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release-plan services/hackbot-ui --env "${_ENV}" --output /workspace/plan.txt
 
   - id: Build
     name: gcr.io/cloud-builders/docker
@@ -34,20 +61,24 @@ steps:
       - -c
       - |
         set -euo pipefail
+        read -r _ version _ < /workspace/plan.txt || exit 0
+        release="hackbot-ui@$$version"
+        sha="$COMMIT_SHA"
+        if [ "${_ENV}" = dev ]; then release="$$release+$${sha:0:12}"; fi
         image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/hackbot-ui:$COMMIT_SHA"
         docker build --no-cache -f services/hackbot-ui/Dockerfile \
           --secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
           --build-arg "SENTRY_DSN=${_SENTRY_DSN}" \
-          --build-arg "SENTRY_RELEASE=hackbot-ui@$COMMIT_SHA" \
+          --build-arg "SENTRY_RELEASE=$$release" \
+          --label "org.opencontainers.image.version=$$version" \
           --label "org.opencontainers.image.revision=$COMMIT_SHA" \
           --label "org.opencontainers.image.created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           -t "$$image" .
         docker push "$$image"
-        docker inspect --format='{{index .RepoDigests 0}}' "$$image" > /workspace/image.digest
+        docker inspect --format='{{index .RepoDigests 0}}' "$$image" > /workspace/hackbot-ui.digest
 
-  # Same digest to dev, then stage. Services have no shape gate: their
-  # infrastructure is written by hand in webservices-infra and changes there
-  # first.
+  # Services have no shape gate: their infrastructure is written by hand in
+  # webservices-infra and changes there first.
   - id: Deploy
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
@@ -58,34 +89,40 @@ steps:
       - BUILD_ID=$BUILD_ID
     args:
       - -c
-      - |
-        set -euo pipefail
-        for env in dev stage; do
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy services/hackbot-ui --env "$$env" --image "$$(cat /workspace/image.digest)"
-        done
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release --env "${_ENV}" --plan /workspace/plan.txt --digests /workspace
 
   # After the deploy, so a Sentry outage can't hold one up.
-  - id: Sentry release
+  - id: Sentry
     name: getsentry/sentry-cli
-    secretEnv:
-      - SENTRY_AUTH_TOKEN
-    args: ["releases", "new", "hackbot-ui@$COMMIT_SHA", "--finalize"]
-  - id: Sentry commits
-    name: getsentry/sentry-cli
+    entrypoint: sh
     secretEnv:
       - SENTRY_AUTH_TOKEN
     args:
-      [
-        "releases",
-        "set-commits",
-        "hackbot-ui@$COMMIT_SHA",
-        "--commit",
-        "mozilla/bugbug@$COMMIT_SHA",
-      ]
+      - -c
+      - |
+        set -eu
+        read -r _ version previous _ < /workspace/plan.txt || exit 0
+        release="hackbot-ui@$$version"
+        environment=staging
+        sha="$COMMIT_SHA"
+        if [ "${_ENV}" = dev ]; then
+          release="$$release+$$(echo "$$sha" | cut -c1-12)"
+          environment=development
+        fi
+        commits="mozilla/bugbug@$COMMIT_SHA"
+        if [ "$$previous" != - ]; then commits="mozilla/bugbug@$$previous..$COMMIT_SHA"; fi
+        sentry-cli releases new "$$release"
+        sentry-cli releases set-commits "$$release" --commit "$$commits"
+        sentry-cli releases finalize "$$release"
+        sentry-cli deploys new --release "$$release" -e "$$environment"
 
-# The trigger sets it from the push event; empty when run any other way.
+# _ENV is set by each trigger; _PUSHER from the push event, empty when run
+# any other way.
 substitutions:
+  _ENV: stage
   _PUSHER: ""
+
+timeout: 5400s
 
 options:
   substitutionOption: MUST_MATCH

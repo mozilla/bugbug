@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _TC_TASK_URL = "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}"
 _LANDO_HG2GIT = "https://lando.moz.tools/api/hg2git/firefox/{rev}"
+_LANDO_GIT2HG = "https://lando.moz.tools/api/git2hg/firefox/{rev}"
 _HG_BASE = "https://hg.mozilla.org"
 # Taskcluster ``project`` tag -> hg pushlog repository path. Unknown projects
 # fall back to a same-named repo under the hg base url.
@@ -75,16 +76,32 @@ def linux_build_env(task_id: str) -> dict[str, str] | None:
     return env
 
 
+def _task_env(task: dict) -> dict:
+    return (task.get("payload") or {}).get("env") or {}
+
+
+def _git_head_rev(task: dict) -> str | None:
+    """``GECKO_HEAD_REV`` when the task checked out the GitHub mirror, else None."""
+    env = _task_env(task)
+    if env.get("GECKO_HEAD_REPOSITORY", "").startswith("https://github.com/"):
+        return env.get("GECKO_HEAD_REV")
+    return None
+
+
 def _task_push(task: dict) -> tuple[str | None, str | None]:
-    tags = task.get("tags") or {}
+    git_rev = _git_head_rev(task)
     return (
-        tags.get("project"),
-        (task.get("payload") or {}).get("env", {}).get("GECKO_HEAD_REV"),
+        (task.get("tags") or {}).get("project"),
+        _git_to_hg(git_rev) if git_rev else _task_env(task).get("GECKO_HEAD_REV"),
     )
 
 
 def _hg_to_git(rev: str) -> str:
     return _get_json(_LANDO_HG2GIT.format(rev=rev))["git_hash"]
+
+
+def _git_to_hg(rev: str) -> str:
+    return _get_json(_LANDO_GIT2HG.format(rev=rev))["hg_hash"]
 
 
 def _bug_from_desc(desc: str) -> int | None:
@@ -161,7 +178,7 @@ def resolve_push(task_id: str, git_commit: str | None = None) -> PushInfo:
         _push_git_commits(project, hg_rev) if hg_rev and project else ([], {})
     )
 
-    failure_commit = git_commit
+    failure_commit = git_commit or _git_head_rev(task)
     if not failure_commit:
         if not hg_rev:
             raise ValueError(

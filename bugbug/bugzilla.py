@@ -10,7 +10,7 @@ import math
 import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable, Iterator, NewType
+from typing import Collection, Iterable, Iterator, NewType
 from urllib.parse import urlencode
 
 import tenacity
@@ -198,6 +198,28 @@ def get(ids_or_query):
     return new_bugs
 
 
+def get_fields(
+    bug_ids: Iterable[int], include_fields: Iterable[str]
+) -> dict[int, BugDict]:
+    """Fetch only ``include_fields`` of the given bugs, keyed by id.
+
+    Unlike :func:`get`, no comments, attachments or history are requested and
+    ``BUGS_DB`` is left alone.
+    """
+    bugs: dict[int, BugDict] = {}
+    ids = sorted({int(bug_id) for bug_id in bug_ids})
+    if not ids:
+        return bugs
+
+    def bughandler(bug: BugDict) -> None:
+        bugs[int(bug["id"])] = bug
+
+    Bugzilla(
+        ids, include_fields=",".join(include_fields), bughandler=bughandler
+    ).get_data().wait()
+    return bugs
+
+
 def get_ids_between(date_from, date_to=None, security=False, resolution=None):
     params = {
         "f1": "creation_ts",
@@ -221,16 +243,29 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
     return get_ids(params)
 
 
-def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDict]:
-    old_bug_count = 0
-    new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
-    for bug in get_bugs(
-        include_invalid=True, include_additional_products=ADDITIONAL_PRODUCTS
-    ):
-        old_bug_count += 1
-        new_bug_ids_set.discard(int(bug["id"]))
+def download_bugs(
+    bug_ids: Iterable[int],
+    security: bool = False,
+    existing_ids: Collection[int] | None = None,
+) -> list[BugDict]:
+    """Download the given bugs and append them to the bugs DB.
 
-    logger.info("Loaded %d bugs.", old_bug_count)
+    Bugs already in the DB are skipped. If `existing_ids` is passed, it is
+    used as the set of IDs of the bugs already in the DB, instead of scanning
+    the whole DB to find them.
+    """
+    new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
+    if existing_ids is None:
+        old_bug_count = 0
+        for bug in get_bugs(
+            include_invalid=True, include_additional_products=ADDITIONAL_PRODUCTS
+        ):
+            old_bug_count += 1
+            new_bug_ids_set.discard(int(bug["id"]))
+
+        logger.info("Loaded %d bugs.", old_bug_count)
+    else:
+        new_bug_ids_set.difference_update(existing_ids)
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 

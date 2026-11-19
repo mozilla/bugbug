@@ -742,7 +742,7 @@ def check_profile_analysis(binary, tmp_path, *, native_symbols):
     """Profile a page busy in a JS function, and find the function in it.
 
     As the Firefox tree's profiler-analysis skill would: with profiler-cli,
-    symbolicating with samply. Needs what bootstrap installs (node, samply).
+    symbolicating with samply. Needs what bootstrap installs (profiler-cli, samply).
     """
     page = tmp_path / "busy.html"
     page.write_text(BUSY_PAGE)

@@ -57,8 +57,6 @@ class WorksForMeModel(BugModel):
                     bug_features.BugExtractor(
                         feature_extractors,
                         cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
                     ),
                 ),
             ]
@@ -88,7 +86,11 @@ class WorksForMeModel(BugModel):
             ]
         )
 
-    def rollback(self, change):
+    def get_rollback_point(self, item, label):
+        return self.rollback
+
+    @staticmethod
+    def rollback(change):
         return change["field_name"] == "cf_last_resolved" and change["added"]
 
     def get_labels(self):

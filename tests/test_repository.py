@@ -243,6 +243,71 @@ def test_hg_modified_files(fake_hg_repo, tmp_path):
     repository.close_component_mapping()
 
 
+def test_refresh_backouts_and_ignored(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, ".hg-annotate-ignore-revs", "")
+    commit(hg, "Bug 1 - Initial commit. r=moz")
+
+    add_file(hg, local, "file1", "1\n2\n3\n")
+    revision1 = commit(hg, "Bug 123 - Prova. r=moz")
+
+    add_file(hg, local, "file2", "1\n2\n3\n")
+    revision2 = commit(hg, "Bug 456 - Prova. r=moz")
+
+    hg.backout(
+        rev=revision1,
+        message=f"Backout {revision1[:12]}",
+        user="sheriff",
+        date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    )
+    revision3 = hg.log(limit=1)[0][1].decode("ascii")
+
+    # The commit is added to .hg-annotate-ignore-revs in a follow-up patch.
+    add_file(hg, local, ".hg-annotate-ignore-revs", f"{revision2}\n")
+    revision4 = commit(hg, "Bug 456 - Ignore the previous commit in annotate. r=moz")
+
+    hg.push(dest=bytes(remote, "ascii"))
+    copy_pushlog_database(remote, local)
+
+    now = str(datetime.utcnow())
+    old = str(datetime.utcnow() - relativedelta(years=2))
+
+    def commit_dict(node, desc, pushdate):
+        # The information as it was when the commit was mined: the backout was
+        # not detected, and the commit was not in .hg-annotate-ignore-revs yet.
+        return {
+            "node": node,
+            "desc": desc,
+            "pushdate": pushdate,
+            "backsout": [],
+            "backedoutby": "",
+            "ignored": False,
+        }
+
+    # Everything is older than the refreshed window, except the last commit: old
+    # backouts that were not detected when mined are repaired anyway (they look like
+    # backouts), and ignore information is refreshed for all commits.
+    commits = [
+        commit_dict(revision1, "Bug 123 - Prova. r=moz", old),
+        commit_dict(revision2, "Bug 456 - Prova. r=moz", old),
+        commit_dict(revision3, f"Backout {revision1[:12]}", old),
+        commit_dict(
+            revision4, "Bug 456 - Ignore the previous commit in annotate. r=moz", now
+        ),
+    ]
+
+    repository.refresh_backouts_and_ignored(local, commits)
+
+    assert commits[2]["backsout"] == [revision1[:12]]
+    assert commits[0]["backedoutby"] == revision3
+    assert commits[0]["ignored"] is False
+    assert commits[1]["backedoutby"] == ""
+    assert commits[1]["backsout"] == []
+    assert commits[1]["ignored"] is True
+    assert commits[3]["ignored"] is False
+
+
 def test_hg_log(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
@@ -2373,6 +2438,38 @@ def test_commit_dict_matches_expected():
     # commit_features.source_code_metrics_diff()(commit)
 
 
+def test_transform_metrics_diff(fake_hg_repo, monkeypatch):
+    hg, local, remote = fake_hg_repo
+
+    monkeypatch.setattr(repository, "path_to_component", {})
+
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 1; }\n")
+    commit(hg, "Bug 1 - Add the files. r=moz")
+
+    # A function is added to a.cpp, and a function of b.cpp is changed.
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\nint h() { return 2; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 2; }\n")
+    revision = commit(hg, "Bug 2 - Change the files. r=moz")
+
+    (mined_commit,) = repository.hg_log(hg, [revision.encode("ascii")])
+
+    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer(
+        1
+    )
+    try:
+        mined_commit = repository.transform(hg, local, mined_commit)
+    finally:
+        repository.code_analysis_server.terminate()
+
+    assert mined_commit.metrics["functions_total"] == 3
+    # The difference is computed from the files before the commit, for all files.
+    assert mined_commit.metrics_diff["functions_total"] == 1
+
+
 def test_set_commit_metrics():
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
@@ -2874,6 +2971,77 @@ void main() {
     }
 
 
+def test_set_commit_metrics_accumulates_diff_over_files():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    # (path, before, after, deleted_lines, added_lines)
+    files = [
+        # A function is added: +1.
+        (
+            "a.cpp",
+            "int f() { return 1; }\n",
+            "int f() { return 1; }\nint g() { return 2; }\n",
+            [],
+            [2],
+        ),
+        # Two functions are removed: -2.
+        (
+            "b.cpp",
+            "int h() { return 1; }\nint i() { return 2; }\nint j() { return 3; }\n",
+            "int h() { return 1; }\n",
+            [2, 3],
+            [],
+        ),
+        # A new file with three functions: +3.
+        (
+            "c.cpp",
+            None,
+            "int k() { return 1; }\nint l() { return 2; }\nint m() { return 3; }\n",
+            [],
+            [1, 2, 3],
+        ),
+    ]
+
+    for path, before, after, deleted_lines, added_lines in files:
+        after_metrics = code_analysis_server.metrics(path, after, unit=False)
+        before_metrics = (
+            code_analysis_server.metrics(path, before, unit=False)
+            if before is not None
+            else {}
+        )
+
+        repository.set_commit_metrics(
+            commit,
+            path,
+            deleted_lines,
+            added_lines,
+            before_metrics,
+            after_metrics,
+        )
+
+    # The metrics of the commit are the sum of the metrics of its files after
+    # the commit.
+    assert commit.metrics["functions_total"] == 2 + 1 + 3
+    # The difference is the sum of the differences of each file, not only the
+    # difference of the last one.
+    assert commit.metrics_diff["functions_total"] == 1 - 2 + 3
+
+
 def test_import_commits_single_commit(fake_hg_repo):
     """Test that a patch with a single commit returns one commit."""
     hg, local, _ = fake_hg_repo
@@ -2963,3 +3131,40 @@ new file mode 100644
     assert commits[0].desc == "First commit message"
     assert commits[1].desc == "Second commit message"
     assert commits[2].desc == "Third commit message"
+
+
+def test_parse_hg_export():
+    patch = (
+        b"# HG changeset patch\n# User Developer <dev@example.com>\n# Date 1 0\n"
+        b"#      Thu Jan 01 00:00:00 1970 +0000\n# Node ID " + b"1" * 40 + b"\n"
+        b"# Parent  " + b"2" * 40 + b"\n# Parent  " + b"3" * 40 + b"\n"
+        b"Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset\n\n"
+        b"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+    )
+    export = repository.parse_hg_export(patch)
+    assert export.author == "Developer <dev@example.com>"
+    assert export.parents == ["2" * 40, "3" * 40]
+    # Only the leading header lines are metadata: the message keeps its own
+    # "#" line.
+    assert export.message == "Bug 1 - Reformat the tree r=me\n\n# ignore-this-changeset"
+    assert export.diff == "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n"
+    assert repository.parse_hg_export(patch.decode("utf-8")) == export
+
+
+def test_parse_hg_export_without_diff():
+    export = repository.parse_hg_export(
+        b"# HG changeset patch\n# User a@b.c\n# Parent  "
+        + b"0" * 40
+        + b"\nMerge a to b\n"
+    )
+    assert export.parents == ["0" * 40]
+    assert export.message == "Merge a to b"
+    assert export.diff == ""
+
+
+def test_parse_hg_export_mercurial_diff_header():
+    export = repository.parse_hg_export(
+        "# HG changeset patch\n# User a@b.c\nSpeed up\n\ndiff -r def -r abc w.py\n--- a/w.py\n"
+    )
+    assert export.message == "Speed up"
+    assert export.diff == "diff -r def -r abc w.py\n--- a/w.py\n"

@@ -195,6 +195,19 @@ class GoogleCloud:
                 container.image = images[container.name]
             self.jobs.update_job(job=job).result(timeout=self.timeout_seconds)
 
+    def run_job(self, project: str, region: str, name: str) -> None:
+        with _calling(f"running Cloud Run Job {name}"):
+            operation = self.jobs.run_job(
+                name=self.jobs.job_path(project, region, name)
+            )
+            # Longer than the Job's own timeout, so a slow run ends as the
+            # Job's failure rather than as this wait giving up.
+            execution = operation.result(timeout=self.timeout_seconds + 300)
+        if execution.failed_count or not execution.succeeded_count:
+            raise DeployError(
+                f"{name}: execution {execution.name.rsplit('/', 1)[-1]} failed; see its logs"
+            )
+
     def get_service(self, project: str, region: str, name: str) -> dict[str, Any]:
         with _calling(f"reading Cloud Run service {name}"):
             return _as_dict(

@@ -22,7 +22,13 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
             "title": "No tool to read bug history",
             "message": "Needed it to see who changed the priority.",
         },
-        ApplyContext(run_id="run-1", agent="bug-fix", download_artifact=download),
+        ApplyContext(
+            run_id="run-1",
+            agent="bug-fix",
+            download_artifact=download,
+            hackbot_client=object(),
+            agent_version="1.2.3",
+        ),
     )
     client.close()
 
@@ -33,6 +39,7 @@ async def test_report_is_sent_to_sentry_grouped_by_title(monkeypatch):
         "kind": "agent_feedback",
         "agent": "bug-fix",
         "run_id": "run-1",
+        "agent_version": "1.2.3",
     }
     assert event["fingerprint"] == ["agent-feedback", "No tool to read bug history"]
     assert (

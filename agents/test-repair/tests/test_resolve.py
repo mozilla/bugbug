@@ -92,6 +92,7 @@ def test_resolve_investigation_assembles_context(monkeypatch):
         "tags": {
             "project": "autoland",
             "test-suite": "mochitest-browser-chrome",
+            "tests_grouped": "1",
             "test-platform": "linux1804-64-qr/debug",
         },
         "payload": {"env": {"GECKO_HEAD_REV": "hghead"}},
@@ -157,6 +158,34 @@ def test_resolve_investigation_requires_revision(monkeypatch):
     monkeypatch.setattr(resolve, "_get_json", lambda url: {"tags": {}, "payload": {}})
     with pytest.raises(ValueError):
         resolve.resolve_investigation("TASK")
+
+
+def test_resolve_investigation_maps_a_github_checkout_to_hg(monkeypatch):
+    task = {
+        "tags": {"project": "autoland"},
+        "payload": {
+            "env": {
+                "GECKO_HEAD_REV": "githead",
+                "GECKO_HEAD_REPOSITORY": "https://github.com/mozilla-firefox/firefox",
+            }
+        },
+    }
+    monkeypatch.setattr(
+        resolve,
+        "_get_json",
+        lambda url: {"hg_hash": "hghead"} if "git2hg/firefox/githead" in url else task,
+    )
+    monkeypatch.setattr(resolve, "_failing_groups", lambda tid: [])
+    monkeypatch.setattr(resolve, "_known_intermittent_bugs", lambda *a: [])
+    ranges = []
+    monkeypatch.setattr(
+        resolve,
+        "_resolve_range",
+        lambda project, rev, n: ranges.append(rev) or resolve.CommitRange("githead", 1),
+    )
+
+    assert resolve.resolve_investigation("TASK").hg_revision == "hghead"
+    assert ranges == ["hghead"]
 
 
 def _suggestion(line, bugs, resolution="", keywords="intermittent-failure"):

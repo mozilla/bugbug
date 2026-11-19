@@ -1,23 +1,49 @@
-# Build one agent's images and ship them to dev, then stage.
+# Release agents: build their images and deploy them to one environment.
+#
+# Two triggers (webservices-infra, hackbot/tf/modules/resources/build.tf) run
+# this, telling it which environment in _ENV:
+#   stage-agents  a push to the default branch touching an agent's VERSION
+#                 file. Releases every agent whose version isn't
+#                 the one stage runs. Run by hand, it releases every agent
+#                 regardless of version, or those in _AGENTS=a,b.
+#   dev-agents    a push to dev/agents/<agent> or dev/agents/<agent>/<anything>.
+#                 Releases that agent to dev, always.
+# Prod is a separate, approved promotion; nothing here reaches it.
+#
+# `release-plan` decides what to release and `release` deploys it, one agent
+# after another: one failing doesn't stop the rest, and the build fails at the
+# end, naming them.
+#
+# Cloud Build reads every `$NAME` as a substitution, and MUST_MATCH fails the
+# build on unknown ones, so shell variables below are written `$$name`.
 steps:
-  # Before anything else: if an older build of this trigger is still going,
-  # stop here rather than deploy over it.
-  - id: One at a time
+  # Builds of one trigger deploy to one environment: take turns. The wait
+  # allows for an older build's own work; the timeout is that plus this one's.
+  - id: Wait
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
     args:
       - -c
-      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy check-build "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION"
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy wait-turn "$BUILD_ID" --project "$PROJECT_ID" --location "$LOCATION" --timeout 7200
 
-  - id: Shape
+  # /workspace/plan.txt: one "name version previous-commit config-hash broker"
+  # line per agent to release.
+  - id: Plan
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
+    # The tool reads these from the environment: in a command, a run by hand's
+    # unresolved pusher ("$(push.pusher.name)") would run as a command.
+    env:
+      - BRANCH_NAME=$BRANCH_NAME
+      - AGENTS=${_AGENTS}
+      - PUSHER=${_PUSHER}
     args:
       - -c
-      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy info "${_AGENT}" > /workspace/shape.env
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release-plan --env "${_ENV}" --output /workspace/plan.txt
 
-  # Every image carries the shape it was built for (hackbot.config_hash); the
-  # deploy step only puts it on infrastructure with that shape applied.
+  # Every image carries the shape it was built for (hackbot.config_hash) and
+  # its version. An agent whose images don't build gets no digest files, and
+  # `release` reports it.
   - id: Build
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
@@ -26,25 +52,26 @@ steps:
     args:
       - -c
       - |
-        set -euo pipefail
-        source /workspace/shape.env
-        created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        targets=agent
-        if [ "$$HAS_BROKER" = true ]; then targets="agent broker"; fi
-        for target in $$targets; do
-          image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_AGENT}-$$target:$COMMIT_SHA"
-          docker build -f "agents/${_AGENT}/Dockerfile" --target "$$target" \
-            --label "hackbot.config_hash=$$CONFIG_HASH" \
-            --label "org.opencontainers.image.revision=$COMMIT_SHA" \
-            --label "org.opencontainers.image.created=$$created" \
-            -t "$$image" .
-          docker push "$$image"
-          docker inspect --format='{{index .RepoDigests 0}}' "$$image" > "/workspace/$$target.digest"
-        done
+        set -uo pipefail
+        while read -r name version _ config_hash broker; do
+          agent="$${name#agents/}"
+          targets=agent
+          if [ "$$broker" = broker ]; then targets="agent broker"; fi
+          for target in $$targets; do
+            image="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/$$agent-$$target:$COMMIT_SHA"
+            if ! { docker build -f "agents/$$agent/Dockerfile" --target "$$target" \
+                     --label "hackbot.config_hash=$$config_hash" \
+                     --label "org.opencontainers.image.version=$$version" \
+                     --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+                     --label "org.opencontainers.image.created=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                     -t "$$image" . && docker push "$$image"; } < /dev/null; then
+              rm -f "/workspace/$$agent-agent.digest"
+              break
+            fi
+            docker inspect --format='{{index .RepoDigests 0}}' "$$image" > "/workspace/$$agent-$$target.digest"
+          done
+        done < /workspace/plan.txt
 
-  # Dev first, then stage with the same digests. If the shape isn't applied
-  # yet (exit 3), stop without failing: the deploy is rerun once the infra PR
-  # for this change is applied.
   - id: Deploy
     name: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
     entrypoint: bash
@@ -55,28 +82,20 @@ steps:
       - BUILD_ID=$BUILD_ID
     args:
       - -c
-      - |
-        set -uo pipefail
-        images=(--agent-image "$$(cat /workspace/agent.digest)")
-        if [ -f /workspace/broker.digest ]; then images+=(--broker-image "$$(cat /workspace/broker.digest)"); fi
-        for env in dev stage; do
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy deploy "agents/${_AGENT}" --env "$$env" "$${images[@]}"
-          status=$$?
-          if [ "$$status" -eq 3 ]; then
-            echo "Waiting for infra: not deploying past $$env."
-            exit 0
-          fi
-          if [ "$$status" -ne 0 ]; then exit "$$status"; fi
-        done
+      - uv run --frozen --package hackbot-deploy python -m hackbot_deploy release --env "${_ENV}" --plan /workspace/plan.txt --digests /workspace
 
-# The trigger sets it from the push event; empty when run any other way.
+# _ENV is set by each trigger; _AGENTS only when run by hand; _PUSHER from the
+# push event, empty when run any other way.
 substitutions:
+  _ENV: stage
+  _AGENTS: ""
   _PUSHER: ""
+
+timeout: 14400s
 
 options:
   substitutionOption: MUST_MATCH
   logging: CLOUD_LOGGING_ONLY
-  # Agent images can be large; size the builder for them rather than the
-  # default.
+  # Agent images are large, and one build can release several of them.
   machineType: E2_HIGHCPU_8
-  diskSizeGb: 100
+  diskSizeGb: 200
