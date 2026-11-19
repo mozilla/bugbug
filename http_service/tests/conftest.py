@@ -82,6 +82,9 @@ def patch_resources(monkeypatch, jobs):
         def get(self, k):
             return self.data.get(k)
 
+        def mget(self, keys):
+            return [self.data.get(k) for k in keys]
+
         def exists(self, k):
             return k in self.data
 
