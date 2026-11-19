@@ -19,4 +19,4 @@ ENV MPLCONFIGDIR=/opt/matplotlib
 RUN python -c "import matplotlib.font_manager" && chmod -R a+rwX $MPLCONFIGDIR
 
 # Run the Pulse listener in the background
-CMD (bugbug-http-pulse-listener &) && gunicorn -b 0.0.0.0:$PORT bugbug_http.app --preload --timeout 30 -w 3
+CMD (bugbug-http-pulse-listener &) && gunicorn -c python:bugbug_http.gunicorn_conf -b 0.0.0.0:$PORT bugbug_http.app --preload --timeout 30 -w 3
