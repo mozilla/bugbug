@@ -1,17 +1,75 @@
 """Prepare a source checkout for agents that operate on a code repository."""
 
 import logging
+import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 log = logging.getLogger("hackbot_runtime.source")
+
+_GITHUB_REPO = re.compile(r"https://github\.com/([^/]+/[^/]+?)(?:\.git)?")
+
+
+def _download(bucket: str, name: str):
+    """Yield the bytes of ``gs://bucket/name`` as the agent's own identity."""
+    import google.auth
+    from google.auth.transport.requests import AuthorizedSession
+
+    credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/devstorage.read_only"]
+    )
+    url = (
+        f"https://storage.googleapis.com/storage/v1/b/{bucket}"
+        f"/o/{quote(name, safe='')}?alt=media"
+    )
+    with AuthorizedSession(credentials).get(url, stream=True, timeout=60) as resp:
+        resp.raise_for_status()
+        yield from resp.iter_content(chunk_size=1 << 20)
+
+
+def _restore_snapshot(source_repo: Path, repo_url: str) -> bool:
+    """Unpack the full-history snapshot of a GitHub repository, if one is set up.
+
+    The snapshot is a daily ``.git`` tar (``SOURCE_SNAPSHOT_BUCKET``). Returns
+    False, leaving nothing behind, when there is none or it cannot be read.
+    """
+    bucket = os.environ.get("SOURCE_SNAPSHOT_BUCKET")
+    match = _GITHUB_REPO.fullmatch(repo_url)
+    if not bucket or not match:
+        return False
+    name = f"github/{match[1]}.tar"
+    log.info("restoring %s from gs://%s/%s", source_repo, bucket, name)
+    try:
+        source_repo.mkdir(parents=True, exist_ok=True)
+        tar = subprocess.Popen(
+            ["tar", "-x", "-C", str(source_repo)], stdin=subprocess.PIPE
+        )
+        try:
+            for chunk in _download(bucket, name):
+                tar.stdin.write(chunk)
+        finally:
+            tar.stdin.close()
+            returncode = tar.wait()
+        if returncode:
+            raise RuntimeError(f"tar exited with {returncode}")
+    except Exception:
+        log.warning("snapshot restore failed; cloning instead", exc_info=True)
+        shutil.rmtree(source_repo / ".git", ignore_errors=True)
+        return False
+    return True
 
 
 def ensure_source_repo(
     source_repo: Path, repo_url: str, ref: str | None = None, depth: int | None = None
 ) -> None:
-    """Ensure a shallow checkout of ``repo_url`` exists at ``source_repo``.
+    """Ensure a checkout of ``repo_url`` exists at ``source_repo``.
+
+    A fresh checkout starts from the full-history snapshot when one is set up
+    (``_restore_snapshot``) and is otherwise a shallow clone.
 
     Idempotent: clones if absent, otherwise shallow-fetches and hard-resets to
     the requested ``ref`` (``origin/HEAD`` when ``ref`` is None). Recovers from a
@@ -82,6 +140,20 @@ def ensure_source_repo(
             stdout=sys.stderr,
             stderr=sys.stderr,
         )
+        return
+    if _restore_snapshot(source_repo, repo_url):
+        # The snapshot has full history, so fetching only adds newer commits.
+        for args in (
+            ["fetch", "origin", fetch_target],
+            ["checkout", "-q", "-f", "FETCH_HEAD"],
+        ):
+            subprocess.run(
+                ["git", "-C", str(source_repo), *args],
+                check=True,
+                stdout=sys.stderr,
+                stderr=sys.stderr,
+            )
+        log.info("snapshot checkout complete")
         return
     source_repo.mkdir(parents=True, exist_ok=True)
     if ref:

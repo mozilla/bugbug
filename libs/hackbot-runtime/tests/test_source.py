@@ -1,9 +1,10 @@
-"""Tests for ensure_source_repo (shallow git checkout helper)."""
+"""Tests for ensure_source_repo (snapshot or shallow git checkout)."""
 
 import subprocess
 from pathlib import Path
 
-from hackbot_runtime import ensure_source_repo
+import pytest
+from hackbot_runtime import ensure_source_repo, source
 
 
 def _commit(path: Path, message: str) -> str:
@@ -130,3 +131,69 @@ def test_depth_applies_to_fresh_clone_without_ref(tmp_path):
         text=True,
     )
     assert int(count.stdout.strip()) == 3
+
+
+GITHUB_URL = "https://github.com/org/repo.git"
+
+
+def _snapshot(tmp_path: Path, remote: Path) -> bytes:
+    """A .git tar of a full clone of ``remote``, as the daily snapshot Job makes."""
+    clone = tmp_path / "snapshot-clone"
+    subprocess.run(
+        ["git", "clone", "-q", "--no-checkout", f"file://{remote}", str(clone)],
+        check=True,
+    )
+    tar = subprocess.run(
+        ["tar", "-c", "-C", str(clone), ".git"], check=True, capture_output=True
+    )
+    return tar.stdout
+
+
+def test_fresh_checkout_uses_snapshot_and_fetches_newer_commits(tmp_path, monkeypatch):
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    snapshot = _snapshot(tmp_path, remote)
+    (remote / "README.md").write_text("newer")
+    newer = _commit(remote, "after the snapshot")
+    requested = []
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(
+        source,
+        "_download",
+        lambda bucket, name: requested.append((bucket, name)) or iter([snapshot]),
+    )
+
+    dest = tmp_path / "dest"
+    ensure_source_repo(dest, GITHUB_URL, depth=1)
+
+    assert requested == [("snapshots", "github/org/repo.tar")]
+    rev = subprocess.run(
+        ["git", "-C", str(dest), "rev-list", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert rev[0] == newer
+    assert len(rev) == 2  # full history, not the requested depth
+    assert (dest / "README.md").read_text() == "newer"
+
+
+def test_failed_snapshot_restore_leaves_no_git_dir(tmp_path, monkeypatch):
+    def fail(bucket, name):
+        yield b"not a tar"
+        raise OSError("connection reset")
+
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(source, "_download", fail)
+    dest = tmp_path / "dest"
+
+    assert not source._restore_snapshot(dest, GITHUB_URL)
+    assert not (dest / ".git").exists()
+
+
+def test_snapshot_is_skipped_without_bucket_or_for_other_hosts(monkeypatch, tmp_path):
+    monkeypatch.setattr(source, "_download", lambda *a: pytest.fail("downloaded"))
+    monkeypatch.delenv("SOURCE_SNAPSHOT_BUCKET", raising=False)
+    assert not source._restore_snapshot(tmp_path / "a", GITHUB_URL)
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    assert not source._restore_snapshot(tmp_path / "b", "https://hg.mozilla.org/x")
