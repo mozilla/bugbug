@@ -1,4 +1,4 @@
-"""Build preparation keeps the caller's configuration and is opt-in."""
+"""Opt-in bootstrap before the first build."""
 
 import asyncio
 
@@ -33,9 +33,7 @@ def commands(tmp_path):
     return (tmp_path / "mach.log").read_text().splitlines()
 
 
-async def test_first_build_prepares_once_and_preserves_config_on_reused_workspace(
-    tree, tmp_path
-):
+async def test_first_build_prepares_once_and_keeps_the_mozconfig(tree, tmp_path):
     config = (tree / ".mozconfig").read_bytes()
     ctx = firefox.FirefoxContext.from_source_repo(tree)
     ctx.bootstrap_before_build = True
@@ -50,17 +48,7 @@ async def test_first_build_prepares_once_and_preserves_config_on_reused_workspac
         "build --quiet",
         "build --quiet",
     ]
-
-    # Readiness is per run, not a persistent marker that can outlive the checkout.
-    next_run = firefox.FirefoxContext.from_source_repo(tree)
-    next_run.bootstrap_before_build = True
-    assert (await firefox.build_firefox(next_run))["success"]
-    assert commands(tmp_path)[-2:] == [
-        "--no-interactive bootstrap --application-choice=browser",
-        "build --quiet",
-    ]
     assert (tree / ".mozconfig").read_bytes() == config
-    assert not (tree / "fetches").exists()
 
 
 async def test_build_does_not_prepare_without_opt_in(tree, tmp_path):
@@ -125,33 +113,5 @@ async def test_source_error_does_not_repeat_preparation(tree, tmp_path):
     assert commands(tmp_path) == [
         "--no-interactive bootstrap --application-choice=browser",
         "build --quiet",
-        "build --quiet",
-    ]
-
-
-async def test_missing_config_does_not_download_tools(tree, tmp_path):
-    ctx = firefox.FirefoxContext.from_source_repo(tree)
-    ctx.bootstrap_before_build = True
-    ctx.mozconfig.unlink()
-
-    result = await firefox.build_firefox(ctx)
-    assert not result["success"]
-    assert result["message"].startswith("MOZCONFIG file not found")
-    assert not (tmp_path / "mach.log").exists()
-
-
-async def test_source_override_gets_its_own_preparation(tree, tmp_path):
-    ctx = firefox.FirefoxContext.from_source_repo(tree)
-    ctx.bootstrap_before_build = True
-    assert (await firefox.build_firefox(ctx))["success"]
-    other = tmp_path / "other-firefox"
-    other.mkdir()
-    (other / "mach").symlink_to(tree / "mach")
-
-    assert (await firefox.build_firefox(ctx, firefox_dir=str(other)))["success"]
-    assert commands(tmp_path) == [
-        "--no-interactive bootstrap --application-choice=browser",
-        "build --quiet",
-        "--no-interactive bootstrap --application-choice=browser",
         "build --quiet",
     ]

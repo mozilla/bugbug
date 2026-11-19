@@ -117,8 +117,6 @@ async def test_ci_build_setup_supports_reused_workspaces_without_changing_proces
         '. "$topsrcdir/browser/config/mozconfigs/linux64/nightly"',
         f"mk_add_options MOZ_OBJDIR={objdir}",
     ]
-    await first.configure_ci_build(None)
-    assert first._ci_build_env is None
 
 
 async def test_failed_ci_setup_does_not_write_a_build_mozconfig(tmp_path, monkeypatch):

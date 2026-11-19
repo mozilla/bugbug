@@ -38,21 +38,21 @@ class FirefoxContext:
     js_binary: Path
     # What bootstrap_firefox last set up, which build_firefox then builds for.
     application: str = "browser"
-    # Opt in without changing the agent's mozconfig or preparing triage-only runs.
+    # Bootstrap before the first build, so triage-only runs skip it.
     bootstrap_before_build: bool = False
     _ci_build_env: dict[str, str] | None = field(default=None, init=False, repr=False)
-    _bootstrapped: tuple[Path, str] | None = field(default=None, init=False, repr=False)
+    _bootstrapped: bool = field(default=False, init=False, repr=False)
     _build_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock, init=False, repr=False
     )
 
-    async def configure_ci_build(self, env: dict[str, str] | None) -> None:
-        """Fetch a CI task's toolchains and use its mozconfig, or clear overrides."""
-        self._ci_build_env = (
-            await prepare_ci_build(self.source_dir, self.mozconfig, self.objdir, env)
-            if env is not None
-            else None
+    async def configure_ci_build(self, env: dict[str, str]) -> None:
+        """Fetch a CI task's toolchains and use its mozconfig."""
+        self._ci_build_env = await prepare_ci_build(
+            self.source_dir, self.mozconfig, self.objdir, env
         )
+        # CI's toolchains replace bootstrap; bootstrapping over them would break the build.
+        self._bootstrapped = True
 
     @property
     def android_mozconfig(self) -> Path:
@@ -173,11 +173,7 @@ async def build_firefox(
     """Build Firefox using the configured mozconfig.
 
     For Android once ``bootstrap_firefox`` has been called for it, with the
-    mozconfig it wrote for that; for desktop Firefox otherwise. Agents can opt
-    into toolchain bootstrap before the first native build, without replacing
-    their mozconfig. Select desktop artifact mode with
-    ``bootstrap_firefox(application="browser_artifact_mode")`` before using an
-    artifact mozconfig; native bootstrap is then skipped.
+    mozconfig it wrote for that; for desktop Firefox otherwise.
 
     Slow on a full tree build (tens of minutes cold, faster incremental); pass a
     `target` directory to build just the part you changed. Returns JSON: success
@@ -189,19 +185,11 @@ async def build_firefox(
         firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
         mozconfig, objdir = ctx.build_config()
         mozconfig_p = Path(mozconfig_path) if mozconfig_path else mozconfig
-        bootstrap_key = (firefox_dir_p.resolve(), ctx.application)
-        if (
-            ctx.bootstrap_before_build
-            and ctx._ci_build_env is None
-            and not ctx.application.endswith("_artifact_mode")
-            and ctx._bootstrapped != bootstrap_key
-            and firefox_dir_p.is_dir()
-            and mozconfig_p.is_file()
-        ):
+        if ctx.bootstrap_before_build and not ctx._bootstrapped:
             result = await _bootstrap_firefox(firefox_dir_p, ctx.application)
             if not result["success"]:
                 return result
-            ctx._bootstrapped = bootstrap_key
+            ctx._bootstrapped = True
         return await _build_firefox(
             firefox_dir_p,
             mozconfig_p,
@@ -290,10 +278,10 @@ async def bootstrap_firefox(
     """
     async with ctx._build_lock:
         firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
-        ctx._bootstrapped = None
         result = await _bootstrap_firefox(firefox_dir_p, application)
         if result["success"]:
             ctx.application = application
+            ctx._bootstrapped = True
             if application.startswith("mobile_android"):
                 mozconfig, objdir = ctx.build_config()
                 mozconfig.write_text(_android_mozconfig(application, objdir))
@@ -301,7 +289,6 @@ async def bootstrap_firefox(
                     f"; build_firefox now builds Firefox for Android, with {mozconfig} "
                     f"(for mach from Bash: MOZCONFIG={mozconfig} ./mach ...)"
                 )
-            ctx._bootstrapped = (firefox_dir_p.resolve(), application)
         return result
 
 
