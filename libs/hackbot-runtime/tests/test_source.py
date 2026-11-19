@@ -136,12 +136,26 @@ def test_depth_applies_to_fresh_clone_without_ref(tmp_path):
 GITHUB_URL = "https://github.com/org/repo.git"
 
 
+def _redirect_github(monkeypatch, remote: Path) -> None:
+    """Send git's requests for GITHUB_URL to the local ``remote``."""
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.file://{remote}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", GITHUB_URL)
+
+
 def _snapshot(tmp_path: Path, remote: Path) -> bytes:
-    """A .git tar of a full clone of ``remote``, as the daily snapshot Job makes."""
+    """A .git tar of a full clone of ``remote``, as the daily snapshot Job makes.
+
+    Its origin is a path that no longer exists, so a restore must fetch from the
+    requested URL instead.
+    """
     clone = tmp_path / "snapshot-clone"
     subprocess.run(
         ["git", "clone", "-q", "--no-checkout", f"file://{remote}", str(clone)],
         check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(clone), "remote", "set-url", "origin", "/gone"], check=True
     )
     tar = subprocess.run(
         ["tar", "-c", "-C", str(clone), ".git"], check=True, capture_output=True
@@ -156,6 +170,7 @@ def test_fresh_checkout_uses_snapshot_and_fetches_newer_commits(tmp_path, monkey
     (remote / "README.md").write_text("newer")
     newer = _commit(remote, "after the snapshot")
     requested = []
+    _redirect_github(monkeypatch, remote)
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
     monkeypatch.setattr(
         source,
@@ -187,13 +202,52 @@ def test_failed_snapshot_restore_leaves_no_git_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(source, "_download", fail)
     dest = tmp_path / "dest"
 
-    assert not source._restore_snapshot(dest, GITHUB_URL)
-    assert not (dest / ".git").exists()
+    assert not source._restore_snapshot(dest, GITHUB_URL, "HEAD")
+    assert not dest.exists()
+
+
+def test_failed_fetch_after_restore_falls_back_to_clone(tmp_path, monkeypatch):
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    snapshot = _snapshot(tmp_path, remote)
+    _redirect_github(monkeypatch, remote)
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(source, "_download", lambda bucket, name: iter([snapshot]))
+    real_run = subprocess.run
+
+    def fail_snapshot_fetch(cmd, **kwargs):
+        if cmd[-2:] == ["origin", "HEAD"] and "--depth=1" not in cmd:
+            raise subprocess.CalledProcessError(128, cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(source.subprocess, "run", fail_snapshot_fetch)
+    dest = tmp_path / "dest"
+    ensure_source_repo(dest, GITHUB_URL)
+
+    assert (dest / "README.md").read_text() == "hello"
+    shallow = real_run(
+        ["git", "-C", str(dest), "rev-parse", "--is-shallow-repository"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert shallow.stdout.strip() == "true"  # the fallback clone, not the snapshot
+
+
+def test_snapshot_is_skipped_for_a_non_empty_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(source, "_download", lambda *a: pytest.fail("downloaded"))
+    (tmp_path / "keep.txt").write_text("not ours")
+
+    assert not source._restore_snapshot(tmp_path, GITHUB_URL, "HEAD")
+    assert (tmp_path / "keep.txt").exists()
 
 
 def test_snapshot_is_skipped_without_bucket_or_for_other_hosts(monkeypatch, tmp_path):
     monkeypatch.setattr(source, "_download", lambda *a: pytest.fail("downloaded"))
     monkeypatch.delenv("SOURCE_SNAPSHOT_BUCKET", raising=False)
-    assert not source._restore_snapshot(tmp_path / "a", GITHUB_URL)
+    assert not source._restore_snapshot(tmp_path / "a", GITHUB_URL, "HEAD")
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
-    assert not source._restore_snapshot(tmp_path / "b", "https://hg.mozilla.org/x")
+    assert not source._restore_snapshot(
+        tmp_path / "b", "https://hg.mozilla.org/x", "HEAD"
+    )

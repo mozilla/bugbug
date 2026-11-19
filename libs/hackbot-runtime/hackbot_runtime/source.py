@@ -31,15 +31,17 @@ def _download(bucket: str, name: str):
         yield from resp.iter_content(chunk_size=1 << 20)
 
 
-def _restore_snapshot(source_repo: Path, repo_url: str) -> bool:
-    """Unpack the full-history snapshot of a GitHub repository, if one is set up.
+def _restore_snapshot(source_repo: Path, repo_url: str, fetch_target: str) -> bool:
+    """Check out ``fetch_target`` from the full-history snapshot, if one is set up.
 
-    The snapshot is a daily ``.git`` tar (``SOURCE_SNAPSHOT_BUCKET``). Returns
-    False, leaving nothing behind, when there is none or it cannot be read.
+    The snapshot is a daily ``.git`` tar (``SOURCE_SNAPSHOT_BUCKET``); fetching
+    then adds only newer commits. Returns False, leaving nothing behind, when
+    there is none or any step fails, so the caller can clone instead.
     """
     bucket = os.environ.get("SOURCE_SNAPSHOT_BUCKET")
     match = _GITHUB_REPO.fullmatch(repo_url)
-    if not bucket or not match:
+    # Only into an empty directory, so a failure can remove all of it.
+    if not bucket or not match or (source_repo.exists() and any(source_repo.iterdir())):
         return False
     name = f"github/{match[1]}.tar"
     log.info("restoring %s from gs://%s/%s", source_repo, bucket, name)
@@ -56,10 +58,22 @@ def _restore_snapshot(source_repo: Path, repo_url: str) -> bool:
             returncode = tar.wait()
         if returncode:
             raise RuntimeError(f"tar exited with {returncode}")
+        for args in (
+            ["remote", "set-url", "origin", repo_url],
+            ["fetch", "origin", fetch_target],
+            ["checkout", "-q", "-f", "FETCH_HEAD"],
+        ):
+            subprocess.run(
+                ["git", "-C", str(source_repo), *args],
+                check=True,
+                stdout=sys.stderr,
+                stderr=sys.stderr,
+            )
     except Exception:
         log.warning("snapshot restore failed; cloning instead", exc_info=True)
-        shutil.rmtree(source_repo / ".git", ignore_errors=True)
+        shutil.rmtree(source_repo, ignore_errors=True)
         return False
+    log.info("snapshot checkout complete")
     return True
 
 
@@ -141,19 +155,7 @@ def ensure_source_repo(
             stderr=sys.stderr,
         )
         return
-    if _restore_snapshot(source_repo, repo_url):
-        # The snapshot has full history, so fetching only adds newer commits.
-        for args in (
-            ["fetch", "origin", fetch_target],
-            ["checkout", "-q", "-f", "FETCH_HEAD"],
-        ):
-            subprocess.run(
-                ["git", "-C", str(source_repo), *args],
-                check=True,
-                stdout=sys.stderr,
-                stderr=sys.stderr,
-            )
-        log.info("snapshot checkout complete")
+    if _restore_snapshot(source_repo, repo_url, fetch_target):
         return
     source_repo.mkdir(parents=True, exist_ok=True)
     if ref:
