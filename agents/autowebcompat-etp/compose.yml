@@ -1,0 +1,54 @@
+services:
+  autowebcompat-etp-broker:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-etp/Dockerfile
+      target: broker
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+    expose:
+      - "8765"
+
+  autowebcompat-etp-agent:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-etp/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_DATA
+      - BUG_ID
+      - MODEL
+      - EFFORT
+      - MAX_TURNS
+      - MODE
+      - BROKER_URL=http://autowebcompat-etp-broker:8765
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # No uploader locally: summary/logs/attachments are written under
+      # /artifacts/<run_id>, bind-mounted to the host's ~/hackbot/artifacts.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+    depends_on:
+      autowebcompat-etp-broker:
+        condition: service_started
+
+  # The comparison agent: same image, different entrypoint. Takes URL instead
+  # of a bug, and needs no broker.
+  autowebcompat-etp-compare-agent:
+    build:
+      context: ../..
+      dockerfile: agents/autowebcompat-etp/Dockerfile
+      target: agent
+    command: ["python", "-m", "hackbot_agents.autowebcompat_etp_compare"]
+    environment:
+      - RUN_ID
+      - URL
+      - MODEL
+      - EFFORT
+      - MAX_TURNS
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
