@@ -16,9 +16,8 @@ from weakref import WeakKeyDictionary
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
-
-ACTION_TYPE = "agents.start_run"
 
 _allowed: WeakKeyDictionary[ActionsRecorder, frozenset[str]] = WeakKeyDictionary()
 
@@ -48,7 +47,9 @@ async def start_run(
             f"{agent!r} cannot be started from this run; allowed: "
             + (", ".join(sorted(allowed)) or "none")
         )
-    action = recorder.record(ACTION_TYPE, {"agent": agent}, reasoning=reasoning)
+    action = recorder.record(
+        ActionType.AGENTS_START_RUN, {"agent": agent}, reasoning=reasoning
+    )
     return confirmation(action)
 
 

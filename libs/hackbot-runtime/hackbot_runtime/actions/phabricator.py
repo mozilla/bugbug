@@ -17,15 +17,15 @@ from typing import Annotated
 from agent_tools.registry import ToolError, tool, tools_in
 from pydantic import Field
 
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
-
-SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
-UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
 # in ``context.publish_changes`` — has to cover both types.
-PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE, UPDATE_PATCH_ACTION_TYPE})
+PATCH_ACTION_TYPES = frozenset(
+    {ActionType.PHABRICATOR_SUBMIT_PATCH, ActionType.PHABRICATOR_UPDATE_PATCH}
+)
 
 _PHABRICATOR_TEST_PLAN_HEADER_RE = re.compile(
     r"^(?:Test Plan|Testplan|Tested|Tests):",
@@ -125,7 +125,9 @@ async def submit_patch(
     }
     if parent_revision_id is not None:
         params["parent_revision_id"] = parent_revision_id
-    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
+    action = recorder.record(
+        ActionType.PHABRICATOR_SUBMIT_PATCH, params, reasoning=reasoning
+    )
     return confirmation(action)
 
 
@@ -200,7 +202,9 @@ async def update_patch(
         params["summary"] = summary
     if test_plan:
         params["test_plan"] = test_plan
-    action = recorder.record(UPDATE_PATCH_ACTION_TYPE, params, reasoning=reasoning)
+    action = recorder.record(
+        ActionType.PHABRICATOR_UPDATE_PATCH, params, reasoning=reasoning
+    )
     return confirmation(action)
 
 
