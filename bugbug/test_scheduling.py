@@ -81,7 +81,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    1,
+    2,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
@@ -948,12 +948,8 @@ def get_touched_together_key(f1: str, f2: str) -> bytes:
 def get_touched_together(f1: str, f2: str) -> int:
     touched_together = get_touched_together_db(True)
 
-    key = get_touched_together_key(f1, f2)
-
-    try:
-        return struct.unpack("I", touched_together[key])[0]
-    except KeyError:
-        return 0
+    value = touched_together.get(get_touched_together_key(f1, f2))
+    return struct.unpack("I", value)[0] if value is not None else 0
 
 
 def set_touched_together(f1: str, f2: str) -> None:
@@ -1258,9 +1254,12 @@ def generate_data(
     likely_regressions: Iterable[str],
 ):
     if granularity != "label":
+        # Each directory counts once, however many of the push's files are in it.
         source_file_dirs = tuple(
-            os.path.dirname(source_file) for source_file in commit["files"]
+            set(os.path.dirname(source_file) for source_file in commit["files"])
         )
+        # Runnables in the same directories have the same touched together values.
+        touched_together_by_dirs: dict[tuple[str, ...], tuple[int, int, float]] = {}
 
     for runnable in runnables:
         if granularity != "label":
@@ -1268,19 +1267,26 @@ def generate_data(
                 runnable[1] if isinstance(runnable, tuple) else runnable
             )
 
-            touched_together_files = sum(
-                get_touched_together(source_file, runnable_dir)
-                for source_file in commit["files"]
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_directories = sum(
-                get_touched_together(source_file_dir, runnable_dir)
-                for source_file_dir in source_file_dirs
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_pmi = get_cochange_pmi(
-                set(source_file_dirs), runnable_dirs
-            )
+            if runnable_dirs not in touched_together_by_dirs:
+                touched_together_by_dirs[runnable_dirs] = (
+                    sum(
+                        get_touched_together(source_file, runnable_dir)
+                        for source_file in commit["files"]
+                        for runnable_dir in runnable_dirs
+                    ),
+                    sum(
+                        get_touched_together(source_file_dir, runnable_dir)
+                        for source_file_dir in source_file_dirs
+                        for runnable_dir in runnable_dirs
+                    ),
+                    get_cochange_pmi(source_file_dirs, runnable_dirs),
+                )
+
+            (
+                touched_together_files,
+                touched_together_directories,
+                touched_together_pmi,
+            ) = touched_together_by_dirs[runnable_dirs]
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions

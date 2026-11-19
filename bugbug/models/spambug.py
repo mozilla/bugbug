@@ -59,9 +59,7 @@ class SpamBugModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
-                    ),
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
             ]
         )
@@ -89,6 +87,9 @@ class SpamBugModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return "creation"
 
     def get_labels(self):
         classes = {}

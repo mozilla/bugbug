@@ -34,26 +34,6 @@ from bugbug_http.readthrough_cache import ReadthroughTTLCache
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = [
-    "defectenhancementtask",
-    "component",
-    "componentspecific",
-    "invalidcompatibilityreport",
-    "needsdiagnosis",
-    "regression",
-    "stepstoreproduce",
-    "spambug",
-    "testlabelselect",
-    "testgroupselect",
-    "testconfigselectvalue",
-    "accessibility",
-    "performancebug",
-    "worksforme",
-    "fenixcomponent",
-    "perfregressionpredictor",
-    "regressor",
-]
-
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 TREEHERDER_API_URL = "https://treeherder.mozilla.org/api"
@@ -468,16 +448,6 @@ def classify_perf_regression(branch: str, rev: str) -> str:
         risk_score,
     )
     return "OK"
-
-
-# Models that classify a push (branch + revision) rather than a bug or an
-# issue, keyed by the model name accepted by the push prediction endpoint.
-PUSH_CLASSIFIERS = {
-    PERF_REGRESSION_PREDICTOR: classify_perf_regression,
-}
-
-# Models that classify single commits (see classify_commits).
-COMMIT_MODELS = ["regressor"]
 
 
 def _get_ignored_reason(commit: repository.CommitDict) -> str | None:

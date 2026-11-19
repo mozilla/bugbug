@@ -36,7 +36,7 @@ class NeedsDiagnosisModel(IssueModel):
                 (
                     "issue_extractor",
                     issue_features.IssueExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
+                        feature_extractors, cleanup_functions
                     ),
                 ),
             ]
@@ -63,6 +63,9 @@ class NeedsDiagnosisModel(IssueModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return "creation"
 
     def get_labels(self):
         classes = {}

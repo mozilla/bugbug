@@ -6,3 +6,18 @@ checkout_path = "/workspace/firefox"
 
 # No [firefox] table: the agent resolves conflicts at the source level and
 # never builds Firefox, so the build toolchain is not prepared.
+
+# Sized like the other agents that work in a Firefox checkout. The broker fetches
+# Phabricator diffs for `phabricator` sources with the shared broker credentials.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "6"
+memory = "24Gi"
+timeout_seconds = 7200
+
+[deploy.workspace]
+size = "40Gi"
+
+[deploy.broker]
+cpu = "1"
+memory = "512Mi"

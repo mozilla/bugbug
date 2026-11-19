@@ -1,6 +1,6 @@
-"""Tests for the shared Codex SDK Reporter (hackbot_runtime.codex)."""
+"""Tests for the shared Codex SDK helpers (hackbot_runtime.codex)."""
 
-from hackbot_runtime.codex import Reporter
+from hackbot_runtime.codex import Reporter, mcp_servers_config
 from openai_codex.generated.v2_all import (
     ItemCompletedNotification,
     ItemStartedNotification,
@@ -138,3 +138,29 @@ def test_unknown_notifications_are_logged_but_streaming_updates_are_not(tmp_path
     assert '[system:test/unknownMethod] {"value": 1}' in contents
     assert "streamed text" not in contents
     assert "big diff" not in contents
+
+
+def test_mcp_servers_config():
+    config = mcp_servers_config(
+        {"one": "http://127.0.0.1:1/mcp", "two": "http://127.0.0.1:2/mcp"},
+        tool_timeout_sec=5,
+    )
+    assert config == {
+        "mcp_servers": {
+            "one": {
+                "url": "http://127.0.0.1:1/mcp",
+                "tool_timeout_sec": 5,
+                "default_tools_approval_mode": "approve",
+            },
+            "two": {
+                "url": "http://127.0.0.1:2/mcp",
+                "tool_timeout_sec": 5,
+                "default_tools_approval_mode": "approve",
+            },
+        }
+    }
+
+
+def test_mcp_servers_config_defaults_to_the_job_timeout():
+    config = mcp_servers_config({"one": "http://127.0.0.1:1/mcp"})
+    assert config["mcp_servers"]["one"]["tool_timeout_sec"] == 7200

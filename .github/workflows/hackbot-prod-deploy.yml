@@ -51,6 +51,7 @@ on:
           - agents/test-plan-generator
           - agents/test-repair
           - agents/test-repair-fix
+          - agents/uplift-resolve
           - services/hackbot-api
           - services/hackbot-ui
       action:

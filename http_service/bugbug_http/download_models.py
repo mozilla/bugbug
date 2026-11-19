@@ -7,7 +7,8 @@ import logging
 
 from bugbug import utils
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.models import MODEL_CACHE, MODELS_NAMES
+from bugbug_http.model_names import MODELS_NAMES
+from bugbug_http.models import MODEL_CACHE
 
 LOGGER = logging.getLogger()
 
