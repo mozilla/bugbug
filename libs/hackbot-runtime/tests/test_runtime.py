@@ -65,6 +65,24 @@ def test_summary_written_for_exception(tmp_path):
     assert "boom" in summary["error"]
 
 
+def test_run_fails_when_publishing_changes_raises(tmp_path, monkeypatch):
+    ctx = _ctx(tmp_path)
+
+    def _raise(self):
+        raise RuntimeError("git status failed")
+
+    monkeypatch.setattr(HackbotContext, "publish_changes", _raise)
+
+    code = _finish(ctx, HackbotAgentResult(num_turns=1))
+
+    assert code == 1
+    summary = json.loads(
+        (tmp_path / "artifacts" / "local-test" / "summary.json").read_text()
+    )
+    assert summary["status"] == "error"
+    assert "git status failed" in summary["error"]
+
+
 def test_removed_action_is_absent_from_summary(tmp_path):
     ctx = _ctx(tmp_path)
     inaccurate = ctx.actions.record(
