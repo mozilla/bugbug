@@ -38,11 +38,8 @@ def _write(path: str, content: str) -> None:
     os.replace(tmp_path, path)
 
 
-@tenacity.retry(
-    stop=tenacity.stop_after_attempt(7),
-    wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
-)
-def retrieve_schedulable_tasks() -> None:
+def get_recent_revs() -> list[str]:
+    """The latest AUTOLAND_PUSHES autoland pushes, from the oldest."""
     # The pushes of the last week (many more than AUTOLAND_PUSHES, also during holidays).
     r = requests.get(
         "https://hg.mozilla.org/integration/autoland/json-pushes",
@@ -50,7 +47,15 @@ def retrieve_schedulable_tasks() -> None:
     )
     r.raise_for_status()
     pushes = sorted(r.json()["pushes"].items(), key=lambda push: int(push[0]))
-    revs = [push_obj["changesets"][0] for _, push_obj in pushes[-AUTOLAND_PUSHES:]]
+    return [push_obj["changesets"][0] for _, push_obj in pushes[-AUTOLAND_PUSHES:]]
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(7),
+    wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
+)
+def retrieve_schedulable_tasks() -> None:
+    revs = get_recent_revs()
 
     logger.info("Retrieving known tasks from %s...", revs)
 
