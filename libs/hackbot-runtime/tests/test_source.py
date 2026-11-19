@@ -251,3 +251,30 @@ def test_snapshot_is_skipped_without_bucket_or_for_other_hosts(monkeypatch, tmp_
     assert not source._restore_snapshot(
         tmp_path / "b", "https://hg.mozilla.org/x", "HEAD"
     )
+
+
+def test_snapshot_without_git_dir_leaves_an_enclosing_repo_alone(tmp_path, monkeypatch):
+    outer = tmp_path / "outer"
+    _make_remote(outer)
+    subprocess.run(
+        ["git", "-C", str(outer), "remote", "add", "origin", "/elsewhere"], check=True
+    )
+    (tmp_path / "junk").mkdir()
+    (tmp_path / "junk" / "file").write_text("x")
+    no_git = subprocess.run(
+        ["tar", "-c", "-C", str(tmp_path / "junk"), "file"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(source, "_download", lambda bucket, name: iter([no_git]))
+
+    assert not source._restore_snapshot(outer / "dest", GITHUB_URL, "HEAD")
+    origin = subprocess.run(
+        ["git", "-C", str(outer), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert origin.stdout.strip() == "/elsewhere"
+    assert (outer / "README.md").read_text() == "hello"

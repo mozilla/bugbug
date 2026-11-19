@@ -48,7 +48,7 @@ def _restore_snapshot(source_repo: Path, repo_url: str, fetch_target: str) -> bo
     try:
         source_repo.mkdir(parents=True, exist_ok=True)
         tar = subprocess.Popen(
-            ["tar", "-x", "-C", str(source_repo)], stdin=subprocess.PIPE
+            ["tar", "-x", "-f", "-", "-C", str(source_repo)], stdin=subprocess.PIPE
         )
         try:
             for chunk in _download(bucket, name):
@@ -63,8 +63,15 @@ def _restore_snapshot(source_repo: Path, repo_url: str, fetch_target: str) -> bo
             ["fetch", "origin", fetch_target],
             ["checkout", "-q", "-f", "FETCH_HEAD"],
         ):
+            # Name the unpacked repository, so a tar without .git fails here
+            # instead of git finding an enclosing repository.
             subprocess.run(
-                ["git", "-C", str(source_repo), *args],
+                [
+                    "git",
+                    f"--git-dir={source_repo / '.git'}",
+                    f"--work-tree={source_repo}",
+                    *args,
+                ],
                 check=True,
                 stdout=sys.stderr,
                 stderr=sys.stderr,
