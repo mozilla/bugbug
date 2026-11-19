@@ -35,6 +35,14 @@ def make_result(**overrides):
     return EtpInvestigationResult.model_validate(fields | overrides)
 
 
+def test_summary_limit_ignores_link_urls():
+    url = "https://github.com/mozilla-services/shavar-prod-lists/pull/1" + "0" * 600
+    make_result(summary="x" * 490 + f" [c8bbfa8]({url})")
+    make_result(summary="x" * 490 + f" {url}")
+    with pytest.raises(ValidationError, match="limit is 500"):
+        make_result(summary="x" * 501)
+
+
 @pytest.mark.parametrize(
     "pattern",
     ["*://*.licdn.com/*", "https://cdn.example.com/widget/*", "*://a.b:8443/*"],

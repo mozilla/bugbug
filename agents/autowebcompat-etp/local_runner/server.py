@@ -355,6 +355,31 @@ def time_out(run: Run, minutes: int) -> None:
     stop_process(run)
 
 
+# Output lines that name a setup problem, and what to tell the user about it.
+FAILURE_HINTS: list[tuple[tuple[str, ...], str]] = [
+    (
+        ("failed to connect to the docker API", "Cannot connect to the Docker daemon"),
+        "the Docker engine is not running. Start Docker Desktop (or "
+        "`colima start`) and run again.",
+    ),
+    (
+        ("error reading from server: EOF",),
+        "the Docker VM went away during the image build, usually because it ran "
+        "out of memory or was still starting. Run `colima restart` (or `colima "
+        "start --memory 8`) and run again.",
+    ),
+    (
+        ("failed to solve",),
+        "the agent's Docker image failed to build; the build output above says "
+        "why. Fix it, then tick Rebuild image first.",
+    ),
+    (
+        ("Process unexpectedly closed",),
+        "Firefox exited at startup; the output above may say why.",
+    ),
+]
+
+
 def execute(run: Run) -> None:
     params = run.params
     env_args: list[str] = ["-e", f"RUN_ID={run.run_id}"]
@@ -378,7 +403,7 @@ def execute(run: Run) -> None:
     shown = [arg if not arg.startswith("BUG_DATA=") else "BUG_DATA=…" for arg in cmd]
     run.add_line(f"$ {' '.join(shown)}")
 
-    docker_down = False
+    hints: list[str] = []
     minutes = params.get("timeout_minutes") or RUN_TIMEOUT_MINUTES
     timer = threading.Timer(minutes * 60, time_out, (run, minutes)) if minutes else None
     try:
@@ -401,13 +426,12 @@ def execute(run: Run) -> None:
         for raw in run.process.stdout:
             line = raw.decode("utf-8", "replace").rstrip("\n")
             run.add_line(line)
-            if "failed to connect to the docker API" in line or (
-                "Cannot connect to the Docker daemon" in line
-            ):
-                docker_down = True
+            for needles, hint in FAILURE_HINTS:
+                if hint not in hints and any(n in line for n in needles):
+                    hints.append(hint)
         code = run.process.wait()
     except Exception as exc:
-        run.add_line(f"[runner] failed to run docker compose: {exc}")
+        run.add_line(f"[runner] ERROR: could not start {cmd[0]}: {exc}")
         code = -1
     finally:
         if timer is not None:
@@ -421,9 +445,16 @@ def execute(run: Run) -> None:
             (summary or {}).get("status")
             or (RunStatus.OK if code == 0 else RunStatus.ERROR)
         )
-    if docker_down:
-        run.add_line("[runner] ERROR: the Docker daemon is not running.")
-        run.add_line("[runner] Start Docker Desktop (or `colima start`) and run again.")
+    for hint in hints:
+        run.add_line(f"[runner] ERROR: {hint}")
+    exited_early = code not in (0, -1) and summary is None
+    if exited_early and not (
+        hints or run.timed_out or run.status == RunStatus.CANCELLED
+    ):
+        run.add_line(
+            f"[runner] ERROR: the agent exited with code {code} before writing "
+            "a result; the cause is in the output above."
+        )
     run.add_line(f"[runner] exited with code {code}, status {run.status}")
     with run.changed:
         run.finished = time.time()
@@ -444,7 +475,7 @@ def worker() -> None:
             execute(run)
         except Exception as exc:
             run.status = RunStatus.ERROR
-            run.add_line(f"[runner] {exc}")
+            run.add_line(f"[runner] ERROR: {exc}")
             with run.changed:
                 run.finished = time.time()
                 run.changed.notify_all()
@@ -800,6 +831,7 @@ def config() -> dict[str, Any]:
         "max_parallel": MAX_PARALLEL,
         "default_max_turns": DEFAULT_MAX_TURNS or None,
         "run_timeout_minutes": RUN_TIMEOUT_MINUTES or None,
+        "setup_problems": setup_problems(),
         "query_urls": {
             name: f"{BUGZILLA_ROOT}/buglist.cgi?query_format=advanced&"
             + requests.compat.urlencode(query, doseq=True)
@@ -1129,6 +1161,16 @@ else:
         )
 
 
+def docker_running() -> bool:
+    try:
+        docker = subprocess.run(
+            ["docker", "info"], capture_output=True, timeout=15, check=False
+        )
+    except OSError, subprocess.TimeoutExpired:
+        return False
+    return docker.returncode == 0
+
+
 def setup_problems() -> list[str]:
     """Setup steps (see README.md) that look skipped. The server starts regardless."""
     problems = []
@@ -1144,14 +1186,7 @@ def setup_problems() -> list[str]:
     for key in ("ANTHROPIC_API_KEY", "BUGZILLA_API_KEY"):
         if not os.environ.get(key):
             problems.append(f"{key} is not set.")
-    try:
-        docker = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=15, check=False
-        )
-        running = docker.returncode == 0
-    except OSError, subprocess.TimeoutExpired:
-        running = False
-    if not running:
+    if not docker_running():
         problems.append(
             "The Docker engine isn't running, so runs will fail. "
             "Start Docker Desktop or run `colima start`."
@@ -1160,8 +1195,11 @@ def setup_problems() -> list[str]:
 
 
 if __name__ == "__main__":
-    for problem in setup_problems():
+    problems = setup_problems()
+    for problem in problems:
         print(f"WARNING: {problem}", file=sys.stderr)
+    if not problems:
+        print("Setup check passed.", file=sys.stderr)
     uvicorn.run(
         app,
         host=os.environ.get("HOST", "127.0.0.1"),

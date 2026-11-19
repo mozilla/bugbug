@@ -25,6 +25,12 @@ ClassifierFeature = Literal[
 # `*://*.example.com/*` or `https://cdn.example.com/*`.
 MATCH_PATTERN_RE = re.compile(r"^(\*|https?)://(\*\.)?[^/*:]+(:\d+)?/.*$")
 
+# The summary's limit, not counting the URLs of its links: the `(url)` of a
+# Markdown link, or a bare URL.
+SUMMARY_MAX_LENGTH = 500
+LINK_URL_RE = re.compile(r"(?<=\])\([^)\s]+\)")
+BARE_URL_RE = re.compile(r"https?://\S+")
+
 
 def validate_match_pattern(pattern: str) -> str:
     if not MATCH_PATTERN_RE.match(pattern):
@@ -600,6 +606,17 @@ class EtpFindings(BaseModel):
 class EtpInvestigationResult(EtpFindings):
     # What the agent submits: the findings, checked against the screenshots it
     # saved.
+
+    @field_validator("summary", mode="after")
+    @classmethod
+    def validate_summary_length(cls, summary: str) -> str:
+        length = len(BARE_URL_RE.sub("", LINK_URL_RE.sub("", summary)))
+        if length > SUMMARY_MAX_LENGTH:
+            raise ValueError(
+                f"summary is {length} characters without link URLs; the limit is "
+                f"{SUMMARY_MAX_LENGTH}: state the conclusions only"
+            )
+        return summary
 
     @model_validator(mode="after")
     def validate_blocked_trackers_have_screenshots(self) -> EtpInvestigationResult:

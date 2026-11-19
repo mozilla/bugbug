@@ -73,6 +73,8 @@ export interface Config {
   /** Limits for a run that sets none; null: no limit. */
   default_max_turns: number | null;
   run_timeout_minutes: number | null;
+  /** Setup steps that look skipped or broken; empty when setup is complete. */
+  setup_problems: string[];
   query_urls: Record<BugQuery, string>;
 }
 

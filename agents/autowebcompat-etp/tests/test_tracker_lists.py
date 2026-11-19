@@ -86,6 +86,12 @@ def test_history_finds_addition_and_removal(repo):
     ]
 
 
+def test_history_matches_whole_host_names(repo):
+    assert tracker_lists.history(repo, "editmysite.com")
+    assert tracker_lists.history(repo, "mysite.com") == []
+    assert tracker_lists.history(repo, "cdn3.editmysite") == []
+
+
 def test_added_by_finds_latest_addition(repo):
     # Added, removed and added again: the re-addition is the current entry's.
     commit(repo, ["cdn3.editmysite.com", "ec.editmysite.com"], "Re-add cdn3 (#12)")

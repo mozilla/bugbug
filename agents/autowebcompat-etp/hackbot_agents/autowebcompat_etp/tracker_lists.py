@@ -217,10 +217,15 @@ def list_changes(repo: Path, days: int = HISTORY_DAYS) -> list[dict[str, Any]]:
 
 
 def history(repo: Path, host: str, days: int = HISTORY_DAYS) -> list[dict[str, Any]]:
-    """Commits in the last `days` that added or removed list lines naming `host`."""
+    """Commits in the last `days` that added or removed list lines naming `host`.
+
+    A line names `host` if it contains it or one of its subdomains, so
+    `ads.com` matches `cdn.ads.com` but not `roads.com` or `ads.com.example`.
+    """
+    names_host = re.compile(rf"(?<![A-Za-z0-9-]){re.escape(host)}(?![A-Za-z0-9.-])")
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for change in list_changes(repo, days):
-        if host not in change["value"]:
+        if not names_host.search(change["value"]):
             continue
         key = (change["commit"], change["file"])
         if key not in grouped:

@@ -38,6 +38,7 @@ def isolated(tmp_path, monkeypatch):
     # The worker threads wait on the original queue, so nothing queued here runs.
     monkeypatch.setattr(server, "RUN_QUEUE", queue.Queue())
     monkeypatch.setattr(server, "MODELS_CACHE", None)
+    monkeypatch.setattr(server, "docker_running", lambda: True)
     return artifacts
 
 
@@ -363,3 +364,41 @@ def test_config_reports_the_run_limits(client, monkeypatch):
     config = client.get("/api/config").json()
     assert config["default_max_turns"] == 70
     assert config["run_timeout_minutes"] is None
+
+
+# --- setup problems and failure hints --------------------------------------------
+
+
+def test_config_reports_setup_problems(client, monkeypatch):
+    monkeypatch.setattr(server, "docker_running", lambda: False)
+    problems = client.get("/api/config").json()["setup_problems"]
+    assert any("Docker engine isn't running" in p for p in problems)
+
+
+class FailingPopen(FakePopen):
+    def __init__(self, cmd, **kwargs):
+        super().__init__(cmd, **kwargs)
+        self.stdout = [b"target agent: failed to solve: process did not complete\n"]
+
+    def wait(self):
+        return 17
+
+
+def test_failed_image_build_is_explained(monkeypatch):
+    FakePopen.calls = []
+    monkeypatch.setattr(server.subprocess, "Popen", FailingPopen)
+    run, _, _ = execute({"bug_id": 1})
+    errors = [line for line in run.lines if "[runner] ERROR" in line]
+    assert len(errors) == 1
+    assert "image failed to build" in errors[0]
+
+
+def test_early_exit_without_a_hint_is_flagged(monkeypatch):
+    class ExitPopen(FakePopen):
+        def wait(self):
+            return 3
+
+    FakePopen.calls = []
+    monkeypatch.setattr(server.subprocess, "Popen", ExitPopen)
+    run, _, _ = execute({"bug_id": 1})
+    assert any("exited with code 3 before writing a result" in x for x in run.lines)

@@ -245,7 +245,8 @@ ones Strict mode changes, each with its Standard value.
      "Shims"), propose a shim in `proposed_shim` and leave
      `proposed_exceptions` empty. Note the script(s) that start the widget in
      the network panel for `matches`; use the verified skip-URL set for
-     `unblocksOnOptIn`. If an existing shim covers the provider, set
+     `unblocksOnOptIn`. Call `find_shims` with the hosts of the provider's
+     scripts and resources; if an existing shim covers the provider, set
      `existing_shim_id` and describe what to add.
    - Otherwise, turn the verified skip-URL entries into `proposed_exceptions`:
      one per resource pattern, listing every feature it needed in

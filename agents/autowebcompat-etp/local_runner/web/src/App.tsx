@@ -13,10 +13,6 @@ export function App() {
   useEffect(init, []);
 
   const config = snap.config;
-  const missingKeys = config && [
-    ...(config.has_anthropic_key ? [] : ["ANTHROPIC_API_KEY"]),
-    ...(config.has_bugzilla_key ? [] : ["BUGZILLA_API_KEY"]),
-  ];
 
   return (
     <div className="layout">
@@ -29,12 +25,11 @@ export function App() {
           <div className="meta">
             <div>Artifacts:</div>
             <div className="mono path">{config.artifacts_root}</div>
-            {!!missingKeys?.length && (
-              <div className="note err">
-                {missingKeys.join(", ")} missing (
-                {config.env_file ?? ".env not found"})
+            {config.setup_problems.map((problem) => (
+              <div key={problem} className="note err">
+                {problem}
               </div>
-            )}
+            ))}
           </div>
         )}
         <StartForm />
