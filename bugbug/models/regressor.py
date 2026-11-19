@@ -159,6 +159,7 @@ class RegressorModel(CommitModel):
             commit_features.FunctionsTouchedNum(),
             commit_features.FunctionsTouchedSize(),
             commit_features.SourceCodeFileMetrics(),
+            commit_features.SourceCodeMetricsDiff(),
         ]
 
         cleanup_functions = [
