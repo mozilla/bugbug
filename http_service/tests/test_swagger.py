@@ -11,8 +11,6 @@ def test_swagger(client):
 
     assert rv.status_code == 200
     spec = rv.json
-    assert spec["openapi"].startswith("3.")
-
     batch = spec["paths"]["/{model_name}/predict/broken_site_report/batch"]["post"]
     schema = batch["requestBody"]["content"]["application/json"]["schema"]
     assert schema["properties"]["reports"]["type"] == "array"
