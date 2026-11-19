@@ -348,11 +348,6 @@ MOCK_CONFIG_SELECTION_TASKS = {
 def mock_config_select_model() -> bugbug.models.testconfigselect.TestConfigSelectModel:
     """A config selection model predicting 0.5 for a group's first config, 0 for the following ones."""
     model = bugbug.models.testconfigselect.TestConfigSelectModel()
-    model.known_configs = {
-        "test-linux1804-64/opt-*",
-        "test-windows10/debug-*",
-        "test-windows10/opt-*",
-    }
     model._predict = lambda test_jobs: np.array(  # type: ignore[method-assign]
         [0.0 if test_job["selected"] else 0.5 for test_job in test_jobs]
     )

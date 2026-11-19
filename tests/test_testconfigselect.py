@@ -203,7 +203,7 @@ def trained_model(
     monkeypatch.setattr(
         testconfigselect.test_scheduling,
         "get_config_select_regressions",
-        lambda push_data_factory: (regressions, {LINUX, LINUX_DEBUG, WINDOWS, MAC}),
+        lambda push_data_factory: regressions,
     )
     monkeypatch.setattr(
         testconfigselect.repository,

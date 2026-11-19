@@ -386,11 +386,9 @@ def _plainest_cheapest(configs: Iterable[str]) -> str:
 
 def load_regressions(
     with_patches: bool = True,
-) -> tuple[
-    list[test_scheduling.ConfigSelectRegression], set[str], dict[int, PatchInfo]
-]:
-    """The regressions of the push data, the configs seen recently, and the patch of each regression's push."""
-    regressions, known_configs = test_scheduling.get_config_select_regressions(
+) -> tuple[list[test_scheduling.ConfigSelectRegression], dict[int, PatchInfo]]:
+    """The regressions of the push data, and the patch of each regression's push."""
+    regressions = test_scheduling.get_config_select_regressions(
         lambda: db.read(test_scheduling.PUSH_DATA_CONFIG_GROUP_DB)
     )
     logger.info(
@@ -400,7 +398,7 @@ def load_regressions(
     )
 
     if not with_patches:
-        return regressions, known_configs, {}
+        return regressions, {}
 
     revs = {rev: r.push_index for r in regressions for rev in r.revs}
     files: dict[int, list[str]] = collections.defaultdict(list)
@@ -414,7 +412,7 @@ def load_regressions(
         for push_index, push_files in files.items()
     }
     logger.info("Patches found for %d pushes", len(patches))
-    return regressions, known_configs, patches
+    return regressions, patches
 
 
 def split_push_index(
@@ -677,10 +675,8 @@ class TestConfigSelectModel(ConfigSelector, Model):
         self.calculate_importance = False
         self.entire_dataset_training = True
 
-        # Inference state: the failure history up to the end of the training data, and the configs
-        # seen recently (to name the tasks of the current task graph, see live_candidates).
+        # Inference state: the failure history up to the end of the training data.
         self.history = ConfigHistory()
-        self.known_configs: set[str] = set()
 
         self._regressions: list[test_scheduling.ConfigSelectRegression] | None = None
         self._patches: dict[int, PatchInfo] = {}
@@ -741,7 +737,7 @@ class TestConfigSelectModel(ConfigSelector, Model):
 
     def _load_regressions(self) -> list[test_scheduling.ConfigSelectRegression]:
         if self._regressions is None:
-            self._regressions, self.known_configs, self._patches = load_regressions()
+            self._regressions, self._patches = load_regressions()
         return self._regressions
 
     def _split_push_index(self) -> int:

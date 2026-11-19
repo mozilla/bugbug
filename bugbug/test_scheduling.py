@@ -402,8 +402,7 @@ def _configs_by_group(config_groups: Iterable[Runnable]) -> dict[Group, set[str]
 
 def get_config_select_regressions(
     push_data_factory: Callable[[], Iterable[PushResult]],
-    recent_pushes: int = 1000,
-) -> tuple[list[ConfigSelectRegression], set[str]]:
+) -> list[ConfigSelectRegression]:
     """The regressions of config/group push data, with the configs they failed on and passed on.
 
     A config the regressed group ran on without failing passed, both on the culprit push and on the
@@ -412,9 +411,6 @@ def get_config_select_regressions(
     run after the culprit failed and the failure was attributed to a later push (e.g. because the config
     didn't run on the culprit): with no run in between, the attribution can't tell the pushes apart, so
     the config didn't verifiably pass. A failure after a pass doesn't matter (as in get_non_run_negatives).
-
-    Also returns the configs that ran in the last `recent_pushes` pushes, used to name the configs of
-    the tasks in the current task graph (see testconfigselect.live_candidates).
     """
     rev_index: dict[Revision, int] = {}
     culprits: list[
@@ -427,7 +423,6 @@ def get_config_select_regressions(
         ]
     ] = []
     failures_at: dict[int, dict[Group, set[str]]] = {}
-    num_pushes = 0
     for index, push in enumerate(push_data_factory()):
         (
             revisions,
@@ -436,7 +431,6 @@ def get_config_select_regressions(
             possible_regressions,
             likely_regressions,
         ) = push
-        num_pushes += 1
         for revision in revisions:
             rev_index[revision] = index
         if possible_regressions or likely_regressions:
@@ -470,16 +464,13 @@ def get_config_select_regressions(
 
     # The first push of the window each config ran the group on.
     later_runs: dict[tuple[int, Group], dict[str, int]] = collections.defaultdict(dict)
-    recent: set[str] = set()
     for index, push in enumerate(push_data_factory()):
         groups_needed = needed.get(index)
-        if groups_needed is None and index < num_pushes - recent_pushes:
+        if groups_needed is None:
             continue
 
         for group, configs in _configs_by_group(push[2]).items():
-            if index >= num_pushes - recent_pushes:
-                recent |= configs
-            for culprit in groups_needed.get(group, ()) if groups_needed else ():
+            for culprit in groups_needed.get(group, ()):
                 for config in configs:
                     later_runs[(culprit, group)].setdefault(config, index)
 
@@ -505,7 +496,7 @@ def get_config_select_regressions(
                 )
             )
 
-    return regressions, recent
+    return regressions
 
 
 def get_push_data(
