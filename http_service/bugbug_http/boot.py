@@ -52,8 +52,12 @@ def _without_chunk(label: str) -> str:
 def _eligible_tasks(
     task_graph: dict[str, dict],
 ) -> Iterator[tuple[str, str, list[str]]]:
-    """The test tasks of a task graph: (label without chunk number, config as mozci names it,
-    manifests)."""
+    """The test tasks of a task graph that test selection optimizes: (label without chunk number,
+    config as mozci names it, manifests).
+
+    The tasks that test selection doesn't optimize (e.g. the standalone ones, which only run on
+    backstop pushes) are left out.
+    """
     # mozci.data needs to be imported before mozci.task to avoid a circular import.
     import mozci.data  # noqa: F401
     from mozci.task import get_configuration
@@ -63,7 +67,11 @@ def _eligible_tasks(
     configurations: dict[str, str | None] = {}
     for task in task_graph.values():
         manifests = task["attributes"].get("test_manifests")
-        if not task["label"].startswith("test-") or not manifests:
+        if (
+            not task["label"].startswith("test-")
+            or not manifests
+            or "test" not in (task.get("optimization") or {})
+        ):
             continue
 
         label = _without_chunk(task["label"])

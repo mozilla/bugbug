@@ -129,6 +129,13 @@ TASK_GRAPH = {
         ["dom/a.toml"],
         runtime={"xorigin": True},
     ),
+    # Not optimized by test selection.
+    "e": _task(
+        "test-linux2404-64/opt-mochitest-plain-standalone-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        {"skip-unless-backstop": None},
+    ),
     # Not a target task of the recent pushes.
     "f": _task(
         "test-linux2404-64/debug-mochitest-plain-1",
@@ -149,6 +156,7 @@ KNOWN_TASKS = {
     "test-linux2404-64/opt-mochitest-plain-2",
     "test-windows11-64-25h2-asan/opt-mochitest-plain-1",
     "test-linux2404-64/opt-mochitest-plain-xorig-1",
+    "test-linux2404-64/opt-mochitest-plain-standalone-1",
     "build-linux64/opt",
 }
 
