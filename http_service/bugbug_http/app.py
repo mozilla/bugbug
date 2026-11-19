@@ -1313,17 +1313,17 @@ def batch_prediction_broken_site_report(model_name):
             schema:
               type: object
               properties:
-              reports:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    uuid:
-                      type: string
-                    title:
-                      type: string
-                    body:
-                      type: string
+                reports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uuid:
+                        type: string
+                      title:
+                        type: string
+                      body:
+                        type: string
             examples:
               cat:
                 summary: An example of payload
