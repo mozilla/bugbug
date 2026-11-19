@@ -133,7 +133,8 @@ def update_config_selection_tasks(revs: list[str]) -> None:
 
     The tasks come from the task graph of the latest backstop push, which runs all of them with all
     their manifests (the manifests of the test tasks of other pushes are restricted to the ones
-    selected by bugbug).
+    selected by bugbug). Older backstop pushes are used if the graph of a newer one isn't
+    available or has none of the tasks.
 
     `revs` are the recent autoland pushes, from the oldest.
     """
@@ -144,7 +145,7 @@ def update_config_selection_tasks(revs: list[str]) -> None:
         r = _get(rev, "task-graph.json")
         targets = _get(rev, "target-tasks.json")
         if not r.ok or not targets.ok:
-            break
+            continue
         tasks = get_config_selection_tasks(orjson.loads(r.content), targets.json())
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
@@ -155,7 +156,6 @@ def update_config_selection_tasks(revs: list[str]) -> None:
                 orjson.dumps({"backstop": rev, "tasks": tasks}).decode(),
             )
             return
-        break
 
     logger.warning("No backstop push with test tasks to retrieve")
 

@@ -228,9 +228,15 @@ def test_retrieve_schedulable_tasks(
     responses.add(
         responses.GET,
         "https://hg.mozilla.org/integration/autoland/json-pushes",
-        json={"pushes": {"1": {"changesets": ["rev1"]}, "2": {"changesets": ["rev2"]}}},
+        json={
+            "pushes": {
+                "1": {"changesets": ["rev1"]},
+                "2": {"changesets": ["rev2"]},
+                "3": {"changesets": ["rev3"]},
+            }
+        },
     )
-    for rev, backstop in (("rev1", True), ("rev2", False)):
+    for rev, backstop in (("rev1", True), ("rev2", True), ("rev3", False)):
         responses.add(
             responses.GET,
             boot._decision_artifact_url(rev, "target-tasks.json"),
@@ -241,7 +247,12 @@ def test_retrieve_schedulable_tasks(
             boot._decision_artifact_url(rev, "parameters.yml"),
             body=f"backstop: {'true' if backstop else 'false'}\n",
         )
-    # The tasks come from the latest backstop push.
+    # The tasks come from the latest backstop push with some: the graph of rev2 has none.
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("rev2", "task-graph.json"),
+        json={"g": TASK_GRAPH["g"]},
+    )
     responses.add(
         responses.GET,
         boot._decision_artifact_url("rev1", "task-graph.json"),
