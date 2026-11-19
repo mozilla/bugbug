@@ -102,7 +102,7 @@ def test_render_bug_block_is_present_only_when_there_is_a_bug():
 
     block = render_bug_block(1500000)
     assert "1500000" in block, "The bug block should name the bug id."
-    assert "get_bugzilla_bug" in block, "The bug block should point at the MCP tool."
+    assert "get_bugs" in block, "The bug block should point at the Bugzilla tool."
 
 
 def test_the_workflow_holds_no_per_run_detail():
@@ -120,7 +120,7 @@ def test_the_workflow_holds_no_per_run_detail():
     assert "How to apply each patch" in prompt, (
         "How to apply a source is guidance, not a detail of one run."
     )
-    assert "get_phabricator_revision" in prompt, (
+    assert "get_revision" in prompt, (
         "A raw diff carries no commit message, so the agent is told where to "
         "read the revision's own rather than inventing one."
     )

@@ -161,7 +161,14 @@ async def test_a_run_uplift_resolution_reapplies(
 
     monkeypatch.setattr(agent, "run_session", session)
     result = await agent.run_uplift(
-        bugbug_mcp_server={"type": "http", "url": "http://localhost:8080/mcp"},
+        bugzilla_mcp_server={
+            "type": "http",
+            "url": "http://localhost:8765/bugzilla/mcp",
+        },
+        phabricator_mcp_server={
+            "type": "http",
+            "url": "http://localhost:8765/phabricator/mcp",
+        },
         broker_url="http://localhost:8765",
         source_repo=checkout,
         target_branch="stable",

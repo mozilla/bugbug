@@ -1,30 +1,15 @@
 services:
-  # The bugbug MCP server, run as a sidecar so the agent reaches the originating
-  # bug and Phabricator revision over HTTP. It holds the Bugzilla/Phabricator
-  # credentials; the agent container binds none. In production the agent points
-  # at the deployed bugbug MCP instead via BUGBUG_MCP_URL.
-  uplift-resolve-bugbug-mcp:
-    build:
-      context: ../..
-      dockerfile: services/mcp/Dockerfile
-      target: base
-    environment:
-      PORT: "8080"
-      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:-}
-      BUGZILLA_URL: ${BUGZILLA_URL:-https://bugzilla.mozilla.org}
-      PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY:-}
-      PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
-    expose:
-      - "8080"
-
-  # Holds the Phabricator key so the agent can fetch each source's raw diff
-  # over the read-only Conduit proxy without binding a credential itself.
+  # Holds the Bugzilla and Phabricator keys, serving their read-only MCP tools
+  # and the Conduit proxy the agent fetches each source's raw diff through, so
+  # the agent binds no credential itself.
   uplift-resolve-broker:
     build:
       context: ../..
       dockerfile: agents/uplift-resolve/Dockerfile
       target: broker
     environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL:-https://bugzilla.mozilla.org/rest}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:-}
       PHABRICATOR_URL: ${PHABRICATOR_URL:-https://phabricator.services.mozilla.com}
       PHABRICATOR_API_KEY: ${PHABRICATOR_API_KEY:-}
     expose:
@@ -41,7 +26,6 @@ services:
       - TARGET_COMMIT=${TARGET_COMMIT:-}
       - SOURCES=${SOURCES:-}
       - BUG_ID=${BUG_ID:-}
-      - BUGBUG_MCP_URL=http://uplift-resolve-bugbug-mcp:8080/mcp
       - BROKER_URL=http://uplift-resolve-broker:8765
       - SOURCE_REPO=/workspace/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
@@ -52,8 +36,6 @@ services:
       - workspace:/workspace
       - ${HOME}/hackbot/artifacts:/artifacts
     depends_on:
-      uplift-resolve-bugbug-mcp:
-        condition: service_started
       uplift-resolve-broker:
         condition: service_started
 
