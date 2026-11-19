@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     hackbot_client = HackbotClient(
         base_url=settings.hackbot_api_url,
         api_key=settings.external_api_key,
+        audience=settings.service_account_audience,
     )
     try:
         yield {"hackbot_client": hackbot_client}

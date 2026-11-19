@@ -20,7 +20,7 @@ def test_google_token_errors_return_401(monkeypatch, error):
         raise error
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", fail)
-    monkeypatch.setattr(auth.settings, "hackbot_api_url", "https://hackbot.example")
+    monkeypatch.setattr(auth.settings, "service_account_audience", "hackbot-audience")
     monkeypatch.setattr(
         auth.settings,
         "allowed_service_accounts",

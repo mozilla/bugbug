@@ -30,24 +30,27 @@ class HackbotClient:
         base_url: str = "https://hackbot-api.moz.tools",
         api_key: str = "",
         key_file: str = "",
+        audience: str = "",
         timeout_seconds: float = 30.0,
     ) -> None:
         """Initialize the client.
 
         Auth is picked in this order: API key, service account key file, then
-        the GCP metadata server. Service account tokens use `base_url` as
-        their audience.
+        the GCP metadata server.
 
         Args:
             base_url: Base URL of the Hackbot API
             api_key: API key for legacy authentication (optional)
             key_file: Path to a service account key file, for running outside
                 GCP without a metadata server (optional)
+            audience: Audience of service account tokens; must match the one
+                the Hackbot API accepts (required unless `api_key` is set)
             timeout_seconds: HTTP request timeout
         """
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._key_file = key_file
+        self._audience = audience
         self._http = httpx.AsyncClient(timeout=timeout_seconds)
         self._credentials: credentials.Credentials | None = None
 
@@ -55,18 +58,20 @@ class HackbotClient:
         await self._http.aclose()
 
     def _refresh_credentials(self) -> None:
+        if not self._audience:
+            raise ValueError("audience is required for service account auth")
         request = google_requests.Request()
         if self._credentials is None:
             if self._key_file:
                 self._credentials = (
                     service_account.IDTokenCredentials.from_service_account_file(
-                        self._key_file, target_audience=self._base_url
+                        self._key_file, target_audience=self._audience
                     )
                 )
             else:
                 self._credentials = compute_engine.IDTokenCredentials(
                     request,
-                    target_audience=self._base_url,
+                    target_audience=self._audience,
                     use_metadata_identity_endpoint=True,
                 )
         self._credentials.refresh(request)
