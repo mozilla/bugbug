@@ -14,9 +14,9 @@ all -- the same shape as :mod:`hackbot_runtime.anthropic_wif`.
 The deploy provisions the audience (which must match the W&B org's federation
 trust config); this module owns the token file. It fetches the identity token,
 writes it to a private file, points ``WANDB_IDENTITY_TOKEN_FILE`` at it, and keeps
-it fresh in a background thread — Google identity tokens live ~1h and the SDK
-re-reads the file when it re-exchanges, so a periodically-rewritten file keeps
-auth alive for runs longer than a token's lifetime.
+it fresh in a background thread — Google identity tokens live ~1h. After each
+rewrite it drops the SDK's cached W&B access token, so the next request exchanges
+the fresh identity token and runs outlive any single token.
 
 When ``WANDB_FEDERATION_AUDIENCE`` is absent the runtime is in API-key mode and
 this module is inert, so local/compose runs keep using ``WANDB_API_KEY``.
@@ -108,6 +108,28 @@ def _refresh_interval() -> float:
     return value
 
 
+def _drop_cached_access_token() -> None:
+    """Make weave exchange the freshly written identity token on its next request.
+
+    weave keeps the W&B access token it exchanged, in memory and in its
+    credentials file, until its stated expiry, but W&B stops accepting it sooner.
+    """
+    try:
+        from weave.wandb_interface.auth import (
+            IdentityTokenCredentials,
+            get_wandb_credentials,
+        )
+
+        credentials = get_wandb_credentials()
+        if not isinstance(credentials, IdentityTokenCredentials):
+            return
+        with credentials._lock:
+            credentials._cached_access_token = None
+            credentials.credentials_file.unlink(missing_ok=True)
+    except Exception:
+        log.exception("Failed to drop weave's cached W&B access token")
+
+
 def _default_token_path() -> Path:
     """A private, process-owned path for the identity token file.
 
@@ -157,6 +179,8 @@ class _TokenFileRefresher:
                     "serving the previously written token: %s",
                     exc,
                 )
+                continue
+            _drop_cached_access_token()
 
     def start(self) -> None:
         self._write_token()
