@@ -60,8 +60,8 @@ RUN cd /app && npm ci --omit=dev
 COPY agents/autowebcompat-intervention/hackbot.toml /app/hackbot.toml
 
 RUN useradd --create-home --shell /bin/bash agent \
-    && mkdir -p /workspace /home/agent/.mozbuild /app/autowebcompat-intervention \
-    && chown agent:agent /workspace /home/agent/.mozbuild /app/autowebcompat-intervention
+    && mkdir -p /workspace /app/autowebcompat-intervention \
+    && chown agent:agent /workspace /app/autowebcompat-intervention
 
 ENV SCREEN_WIDTH=1280
 ENV SCREEN_HEIGHT=1024
