@@ -75,6 +75,12 @@ async def run(monkeypatch, session, repo, **overrides):
     )
     kwargs.update(overrides)
     monkeypatch.setattr(agent, "run_session", session)
+
+    async def fetch_source_commits(source_repo, sources, fetched):
+        pass
+
+    # These checkouts have no `origin`; fetching is tested in `test_uplift_fetch.py`.
+    monkeypatch.setattr(agent, "fetch_source_commits", fetch_source_commits)
     return await agent.run_uplift(**kwargs)
 
 

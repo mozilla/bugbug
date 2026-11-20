@@ -7,6 +7,7 @@ checks the tree out and the runtime collects the resolved commits into
 happened for human review.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -34,6 +35,7 @@ from .models import (
     MODEL,
     ConflictReport,
     FetchedDiff,
+    GitSource,
     Report,
     RequestedSource,
     UpliftSource,
@@ -43,6 +45,11 @@ from .verify import head_commit, verify_uplift
 logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
+
+# How long fetching one commit may take. Fetching through GitHub's fork network
+# can take minutes, well past the Bash tool's own two-minute limit, which is why
+# the commits are fetched here rather than by the agent.
+FETCH_TIMEOUT_SECONDS = 20 * 60
 
 # Where the broker mounts its read-only Conduit proxy.
 PROXY_MOUNT = "/phabricator"
@@ -144,6 +151,7 @@ async def run_uplift(
     fetched = await fetch_source_diffs(
         build_phabricator_client(broker_url), sources, scratch_out
     )
+    await fetch_source_commits(source_repo, sources, fetched)
     user_prompt = build_user_prompt(
         target_branch=target_branch,
         sources=sources,
@@ -358,6 +366,60 @@ async def fetch_source_diffs(
             logger.info("fetched %s", diff.path.name)
         fetched.append(diff)
     return fetched
+
+
+async def fetch_source_commits(
+    source_repo: Path,
+    sources: list[UpliftSource],
+    fetched: list[FetchedDiff | None],
+) -> None:
+    """Fetch the commits each source is applied from, before the session starts.
+
+    A git source needs its commit and that commit's parent, so cherry-pick can
+    three-way merge. A Phabricator source needs the base commit its diff was
+    built on, which is only a hint: if it can't be fetched, the prompt covers
+    going without. Raises :class:`AgentError` if a git source can't be fetched.
+    """
+    for source, diff in zip(sources, fetched, strict=True):
+        if isinstance(source, GitSource):
+            await fetch_commit(source_repo, source.commit, depth=2)
+        elif diff is not None and diff.base_commit:
+            try:
+                await fetch_commit(source_repo, diff.base_commit, depth=1)
+            except AgentError:
+                logger.warning(
+                    "could not fetch base commit %s; the agent goes without it",
+                    diff.base_commit,
+                )
+
+
+async def fetch_commit(source_repo: Path, commit: str, depth: int) -> None:
+    """Fetch ``commit`` and ``depth - 1`` of its ancestors from ``origin``."""
+    logger.info("fetching %s (depth %d)", commit, depth)
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "fetch",
+        "-q",
+        f"--depth={depth}",
+        "origin",
+        commit,
+        cwd=str(source_repo),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=FETCH_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        raise AgentError(
+            f"fetching {commit} took over {FETCH_TIMEOUT_SECONDS} seconds"
+        ) from None
+
+    if process.returncode != 0:
+        raise AgentError(f"could not fetch {commit}: {stderr.decode().strip()}")
 
 
 async def run_session(
