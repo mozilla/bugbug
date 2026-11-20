@@ -533,7 +533,7 @@ export function TriggerForm() {
                 value={judgeEffort}
                 onChange={(e) => setJudgeEffort(e.target.value)}
               >
-                <option value="">medium (default)</option>
+                <option value="">high (default)</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>

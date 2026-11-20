@@ -17,12 +17,12 @@ class AgentInputs(BaseSettings):
     agent: str = "prompt-executor"
     harness: str = "claude_code"
     model: str = "claude-sonnet-5-5"
-    effort: str | None = None
+    effort: str = "high"
     reps: int = 1
     tasks: list[str] = []
     example_timeout_min: int = 120
     judge_model: str = "claude-sonnet-5-5"
-    judge_effort: str | None = "medium"
+    judge_effort: str = "high"
     # Weave prompt ref with the judge's rubric.
     judge_rubric: str
     # Appended to the experiment's name, for what its configuration doesn't show.
