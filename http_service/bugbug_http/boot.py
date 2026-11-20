@@ -56,7 +56,9 @@ def _eligible_tasks(
     config as mozci names it, manifests).
 
     The tasks that test selection doesn't optimize (e.g. the standalone ones, which only run on
-    backstop pushes) are left out.
+    backstop pushes) are left out. So are shippable tasks, as they are too costly to select: the
+    config selection models are trained with the configs of their non-shippable equivalents (see
+    test_scheduling.rename_task), which are selected instead.
     """
     # mozci.data needs to be imported before mozci.task to avoid a circular import.
     import mozci.data  # noqa: F401
@@ -85,6 +87,11 @@ def _eligible_tasks(
                     task["label"],
                     exc_info=True,
                 )
+                configuration = None
+            if (
+                configuration is not None
+                and test_scheduling.rename_task(configuration) != configuration
+            ):
                 configuration = None
             configurations[label] = configuration
 

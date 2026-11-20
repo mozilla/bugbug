@@ -117,6 +117,12 @@ TASK_GRAPH = {
     "b": _task(
         "test-linux2404-64/opt-mochitest-plain-2", "linux2404-64/opt", ["dom/b.toml"]
     ),
+    # Shippable tasks are too costly: their non-shippable equivalents are selected instead.
+    "c": _task(
+        "test-linux2404-64-shippable/opt-mochitest-plain-1",
+        "linux2404-64-shippable/opt",
+        ["dom/a.toml"],
+    ),
     "d": _task(
         "test-windows11-64-25h2-asan/opt-mochitest-plain-1",
         "windows11-64-25h2/asan",
@@ -154,6 +160,7 @@ TASK_GRAPH = {
 KNOWN_TASKS = {
     "test-linux2404-64/opt-mochitest-plain-1",
     "test-linux2404-64/opt-mochitest-plain-2",
+    "test-linux2404-64-shippable/opt-mochitest-plain-3",
     "test-windows11-64-25h2-asan/opt-mochitest-plain-1",
     "test-linux2404-64/opt-mochitest-plain-xorig-1",
     "test-linux2404-64/opt-mochitest-plain-standalone-1",
