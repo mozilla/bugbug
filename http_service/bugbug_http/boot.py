@@ -31,6 +31,10 @@ AUTOLAND_PUSHES = 50
 # seconds, see bugbug_http.refresh).
 REFRESH_INTERVAL = 24 * 60 * 60
 CONFIG_SELECTION_TASKS_PATH = "config_selection_tasks.json"
+# The timeouts of the requests for the current tasks (to connect, and between bytes received, in
+# seconds), so that a stalled request fails (and is retried) instead of blocking the boot or the
+# refresh forever.
+REQUEST_TIMEOUT = (30, 120)
 
 
 def _write(path: str, content: str) -> None:
@@ -121,7 +125,7 @@ def get_config_selection_tasks(
 
 
 def _get(rev: str, path: str) -> requests.Response:
-    return requests.get(_decision_artifact_url(rev, path))
+    return requests.get(_decision_artifact_url(rev, path), timeout=REQUEST_TIMEOUT)
 
 
 def update_config_selection_tasks(revs: list[str]) -> None:
@@ -162,6 +166,7 @@ def get_recent_revs() -> list[str]:
     r = requests.get(
         "https://hg.mozilla.org/integration/autoland/json-pushes",
         params={"version": "2", "tipsonly": "1", "startdate": "1 week ago"},
+        timeout=REQUEST_TIMEOUT,
     )
     r.raise_for_status()
     pushes = sorted(r.json()["pushes"].items(), key=lambda push: int(push[0]))

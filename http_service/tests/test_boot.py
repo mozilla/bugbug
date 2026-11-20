@@ -184,6 +184,20 @@ CONFIG_SELECTION_TASKS = {
 }
 
 
+def assert_requests_have_timeouts() -> None:
+    """Stalled requests can't block the boot or the refresh (mozci's own requests aside)."""
+    calls = [
+        call
+        for call in responses.calls
+        if not call.request.url.startswith("https://hg.mozilla.org/mozilla-central/")
+    ]
+    assert calls
+    for call in calls:
+        assert call.request.req_kwargs["timeout"] == boot.REQUEST_TIMEOUT, (
+            call.request.url
+        )
+
+
 @pytest.fixture(autouse=True)
 def mock_test_variants() -> None:
     # mozci retrieves the suffixes of the test variants.
@@ -234,6 +248,7 @@ def test_retrieve_schedulable_tasks(
         json=TASK_GRAPH,
     )
     boot.retrieve_schedulable_tasks.retry_with(wait=tenacity.wait_none())()
+    assert_requests_have_timeouts()
 
     with open("known_tasks") as f:
         assert set(f.read().split("\n")) == KNOWN_TASKS
