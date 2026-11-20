@@ -235,14 +235,22 @@ def test_weave_cost_is_what_weave_priced_the_usage_at(monkeypatch):
             "prompt_token_cost": 1e-7,
         }
     }
-    call = SimpleNamespace(summary={"weave": {"costs": costs}})
-    client = SimpleNamespace(flush=lambda: None, get_call=lambda *a, **k: call)
-    monkeypatch.setattr(weave, "get_client", lambda: client)
+    # The call is not in Weave yet on the first read.
+    reads = iter([None, {"weave": {"costs": costs}}])
+
+    def get_call(*args, **kwargs):
+        summary = next(reads, {"weave": {"costs": costs}})
+        if summary is None:
+            raise LookupError
+        return SimpleNamespace(summary=summary)
+
+    monkeypatch.setattr(weave, "get_client", lambda: SimpleNamespace(get_call=get_call))
+    monkeypatch.setattr(weave_log.time, "sleep", lambda s: None)
     usage_call = SimpleNamespace(id="c1")
 
     assert weave_log._weave_cost([usage_call]) == pytest.approx(0.0026)
     costs.clear()
-    assert weave_log._weave_cost([usage_call]) is None
+    assert weave_log._weave_cost([usage_call], wait_s=0) is None
 
 
 def test_weave_log_is_a_no_op_without_a_client():

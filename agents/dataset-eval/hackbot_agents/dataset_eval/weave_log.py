@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -43,32 +44,39 @@ def _agent_usage():
     return agent_usage
 
 
-def _weave_cost(calls) -> float | None:
+def _call_costs(client, call_id: str) -> dict | None:
+    try:
+        summary = client.get_call(call_id, include_costs=True).summary or {}
+    except Exception:
+        return None
+    return (summary.get("weave") or {}).get("costs") or None
+
+
+def _weave_cost(calls, wait_s: float = 60) -> float | None:
     """What Weave prices the calls' usage at, from its own price list.
 
     A workaround for Codex, which reports no cost when it runs with an API key.
+    The calls reach Weave in the background, so this waits for them; flushing
+    would also wait on the prediction still open around them.
     """
     import weave
 
-    try:
-        client = weave.get_client()
-        client.flush()
-        total = 0.0
-        for call in calls:
-            summary = client.get_call(call.id, include_costs=True).summary or {}
-            costs = (summary.get("weave") or {}).get("costs")
-            if not costs:
+    client = weave.get_client()
+    deadline = time.monotonic() + wait_s
+    total = 0.0
+    for call in calls:
+        while (costs := _call_costs(client, call.id)) is None:
+            if time.monotonic() > deadline:
+                log.warning("Weave did not price the agent's usage")
                 return None
-            total += sum(
-                value or 0.0
-                for model in costs.values()
-                for key, value in model.items()
-                if key.endswith("_tokens_total_cost")
-            )
-        return round(total, 4)
-    except Exception:
-        log.exception("Weave did not price the agent's usage")
-        return None
+            time.sleep(1)
+        total += sum(
+            value or 0.0
+            for model in costs.values()
+            for key, value in model.items()
+            if key.endswith("_tokens_total_cost")
+        )
+    return round(total, 4)
 
 
 class WeaveLog:
