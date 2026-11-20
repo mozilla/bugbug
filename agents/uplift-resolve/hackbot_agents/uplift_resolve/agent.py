@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import re
+import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -387,31 +388,43 @@ async def fetch_source_commits(
     A git source needs its commit and that commit's parent, so cherry-pick can
     three-way merge. A Phabricator source needs the base commit its diff was
     built on, which is only a hint: if it can't be fetched, the prompt covers
-    going without. Raises :class:`AgentError` if a git source can't be fetched.
+    going without. Raises :class:`AgentError` if a git source can't be fetched,
+    or ends up without its parent.
     """
-    for source, diff in zip(sources, fetched, strict=True):
-        if isinstance(source, GitSource):
-            await fetch_commit(source_repo, source.commit, depth=2)
-        elif diff is not None and diff.base_commit:
-            try:
-                await fetch_commit(source_repo, diff.base_commit, depth=1)
-            except AgentError:
-                logger.warning(
-                    "could not fetch base commit %s; the agent goes without it",
-                    diff.base_commit,
-                )
+    for diff in fetched:
+        if diff is None or not diff.base_commit:
+            continue
+        try:
+            await fetch_commits(source_repo, [diff.base_commit], depth=1)
+        except AgentError:
+            logger.warning(
+                "could not fetch base commit %s; the agent goes without it",
+                diff.base_commit,
+            )
+
+    # In one fetch, and after the bases: a shallow fetch cuts history just below
+    # the commits it fetches, so fetching a stack one commit at a time would cut
+    # each source off from its parent, the source before it.
+    commits = [source.commit for source in sources if isinstance(source, GitSource)]
+    if not commits:
+        return
+    await fetch_commits(source_repo, commits, depth=2)
+
+    shallow_roots = read_shallow_roots(source_repo)
+    if cut_off := [commit for commit in commits if commit in shallow_roots]:
+        raise AgentError(f"fetched without their parents: {', '.join(cut_off)}")
 
 
-async def fetch_commit(source_repo: Path, commit: str, depth: int) -> None:
-    """Fetch ``commit`` and ``depth - 1`` of its ancestors from ``origin``."""
-    logger.info("fetching %s (depth %d)", commit, depth)
+async def fetch_commits(source_repo: Path, commits: list[str], depth: int) -> None:
+    """Fetch ``commits`` and ``depth - 1`` of their ancestors from ``origin``."""
+    logger.info("fetching %s (depth %d)", " ".join(commits), depth)
     process = await asyncio.create_subprocess_exec(
         "git",
         "fetch",
         "-q",
         f"--depth={depth}",
         "origin",
-        commit,
+        *commits,
         cwd=str(source_repo),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -424,11 +437,29 @@ async def fetch_commit(source_repo: Path, commit: str, depth: int) -> None:
         process.kill()
         await process.wait()
         raise AgentError(
-            f"fetching {commit} took over {FETCH_TIMEOUT_SECONDS} seconds"
+            f"fetching {' '.join(commits)} took over {FETCH_TIMEOUT_SECONDS} seconds"
         ) from None
 
     if process.returncode != 0:
-        raise AgentError(f"could not fetch {commit}: {stderr.decode().strip()}")
+        raise AgentError(
+            f"could not fetch {' '.join(commits)}: {stderr.decode().strip()}"
+        )
+
+
+def read_shallow_roots(source_repo: Path) -> set[str]:
+    """Return the commits whose parents a shallow checkout doesn't have."""
+    shallow_path = Path(
+        subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-path", "shallow"],
+            cwd=source_repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    if not shallow_path.exists():
+        return set()
+    return set(shallow_path.read_text().split())
 
 
 async def run_session(

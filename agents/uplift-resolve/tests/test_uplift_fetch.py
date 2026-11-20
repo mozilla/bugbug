@@ -101,3 +101,42 @@ async def test_a_phabricator_base_that_cannot_be_fetched_is_skipped(tmp_path, gi
     assert has_commit(git_in, checkout, to_uplift), (
         "A Phabricator source's base commit should be fetched for `git apply --3way`."
     )
+
+
+def build_stack_upstream(git_in, path: Path) -> list[str]:
+    """A remote with a three-commit stack on trunk. Returns the stack's commits."""
+    path.mkdir()
+    git_in(path, "init", "-q", "-b", "main")
+    git_in(path, "config", "user.email", "trunk@example.com")
+    git_in(path, "config", "user.name", "Trunk Dev")
+    (path / "f.txt").write_text("base\n")
+    git_in(path, "add", "-A")
+    git_in(path, "commit", "-qm", "base")
+    git_in(path, "branch", "stable")
+    stack = []
+    for name in ("parent", "first", "second", "third"):
+        (path / "f.txt").write_text(f"{name}\n")
+        git_in(path, "commit", "-qam", name)
+        stack.append(git_in(path, "rev-parse", "HEAD"))
+    return stack[1:]
+
+
+async def test_a_stack_keeps_every_source_attached_to_its_parent(tmp_path, git_in):
+    stack = build_stack_upstream(git_in, tmp_path / "upstream")
+    checkout = shallow_stable_checkout(
+        git_in, tmp_path / "upstream", tmp_path / "checkout"
+    )
+
+    await agent.fetch_source_commits(
+        checkout, [GitSource(commit=commit) for commit in stack], [None] * len(stack)
+    )
+
+    shallow_roots = agent.read_shallow_roots(checkout)
+    assert not shallow_roots & set(stack), (
+        "No source in a stack should be left without its parent, or cherry-picking "
+        "it would add the whole tree."
+    )
+    for commit in stack:
+        assert has_commit(git_in, checkout, f"{commit}^"), (
+            "Each source's parent should be local, for a three-way cherry-pick."
+        )
