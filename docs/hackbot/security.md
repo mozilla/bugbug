@@ -48,17 +48,16 @@ short-lived access token, so none needs a static key in the container.
 The runtime fetches that token from the GCP metadata server, writes it to a private file the
 SDK reads, and keeps refreshing it in the background — Google tokens outlive neither a long
 run nor a single exchange, so the file has to stay fresh for the whole run
-([hackbot_runtime/anthropic_wif.py](../../libs/hackbot-runtime/hackbot_runtime/anthropic_wif.py)).
+([hackbot_runtime/wif.py](../../libs/hackbot-runtime/hackbot_runtime/wif.py)).
 
 Federation is enabled by the presence of `ANTHROPIC_FEDERATION_RULE_ID`. An
 `ANTHROPIC_API_KEY` set _alongside_ it is refused with an error, because the key would take
 precedence and silently shadow federation.
 
-OpenAI federation is enabled by the presence of `OPENAI_FEDERATION_RULE_ID`
-([hackbot_runtime/openai_wif.py](../../libs/hackbot-runtime/hackbot_runtime/openai_wif.py)),
-which exposes the token through `OPENAI_IDENTITY_TOKEN_FILE`. The token's audience defaults
-to `https://api.openai.com/v1` and can be overridden with `OPENAI_WIF_AUDIENCE`. Here
-WIF has precedence over an `OPENAI_API_KEY`, so a leftover key only logs a warning.
+OpenAI federation is enabled by the presence of `OPENAI_FEDERATION_RULE_ID`, which exposes
+the token through `OPENAI_IDENTITY_TOKEN_FILE`. The token's audience defaults to
+`https://api.openai.com/v1` and can be overridden with `OPENAI_WIF_AUDIENCE`. Here WIF has
+precedence over an `OPENAI_API_KEY`, so a leftover key only logs a warning.
 
 ## The signed upload policy
 
