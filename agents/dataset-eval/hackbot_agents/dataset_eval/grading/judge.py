@@ -33,7 +33,8 @@ PROMPT = """\
 {summary}
 </summary>
 
-Judge the patch on each criterion below, then give an overall score from 1 to 5.
+Judge the patch on each criterion below, named as the rubric names it, then give
+an overall score from 1 to 5.
 
 {rubric}"""
 

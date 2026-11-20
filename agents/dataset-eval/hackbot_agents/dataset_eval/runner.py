@@ -313,6 +313,7 @@ class Runner:
                             self.rubric,
                             exp.judge_effort,
                         )
+                        scores.update({c.name: float(c.met) for c in judgment.criteria})
                         scores["quality"] = float(judgment.quality)
                         record.update(
                             judge=judgment.model_dump(),
