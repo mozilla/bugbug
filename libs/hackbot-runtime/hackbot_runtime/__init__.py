@@ -2,6 +2,7 @@ from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.config import HackbotConfig
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.errors import AgentError
+from hackbot_runtime.input_attachments import input_attachments_prompt
 from hackbot_runtime.pull_request import checkout_pull_request
 from hackbot_runtime.results import HackbotAgentResult
 from hackbot_runtime.revision import checkout_revision
@@ -19,6 +20,7 @@ __all__ = [
     "checkout_pull_request",
     "checkout_revision",
     "ensure_source_repo",
+    "input_attachments_prompt",
     "run",
     "run_async",
 ]

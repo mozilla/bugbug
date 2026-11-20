@@ -5,6 +5,7 @@ import json
 import pytest
 from app.agents import AGENT_REGISTRY, model_to_env
 from app.schemas import (
+    AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
     TestRepairFixInputs,
@@ -30,6 +31,24 @@ def test_model_to_env_skips_none_fields():
     # Optional fields left unset must not leak as empty/"None" env vars.
     assert "MODEL" not in env
     assert "EFFORT" not in env
+
+
+def test_model_to_env_skips_attachments():
+    inputs = AutowebcompatReproInputs(
+        bug_data="Page is blank",
+        attachments=[{"name": "shot.png", "key": "uploads/" + "a" * 64}],
+    )
+    env = model_to_env(inputs)
+    assert env == {"BUG_DATA": "Page is blank"}
+
+
+def test_attachments_never_dump_their_content():
+    inputs = AutowebcompatReproInputs(
+        bug_data="Page is blank",
+        attachments=[{"name": "shot.png", "data_base64": "YWJj"}],
+    )
+    assert inputs.attachments[0].data() == b"abc"
+    assert "data_base64" not in inputs.model_dump()["attachments"][0]
 
 
 def test_bugzilla_needinfo_flag_id_selects_follow_up_mode():

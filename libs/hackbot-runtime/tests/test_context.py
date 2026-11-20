@@ -440,3 +440,44 @@ def test_a_parent_with_no_artifacts_is_not_mistaken_for_a_local_run(
     )
     hb.fetch_parent_artifacts()
     assert hb.parent_artifacts_dir != tmp_path / "artifacts" / "parent"
+
+
+def test_a_run_without_attachments_has_no_attachment_files(tmp_path):
+    hb = _hb(tmp_path, HackbotConfig())
+    hb.fetch_input_attachments()
+    assert hb.input_attachments_dir is None
+    assert hb.input_attachment_files == []
+
+
+def test_input_attachments_are_downloaded_by_name(tmp_path, monkeypatch):
+    fetched = {}
+
+    def fake_download(urls, dest):
+        fetched.update(urls)
+        (dest / "shot.png").write_bytes(b"png")
+
+    monkeypatch.setattr("hackbot_runtime.context.artifacts.download_all", fake_download)
+    monkeypatch.setenv("INPUT_ATTACHMENTS", json.dumps({"shot.png": "https://u"}))
+    hb = HackbotContext(run_id="r", artifacts_dir=tmp_path / "artifacts")
+
+    hb.fetch_input_attachments()
+
+    assert fetched == {"shot.png": "https://u"}
+    assert [p.name for p in hb.input_attachment_files] == ["shot.png"]
+    assert hb.input_attachment_files[0].read_bytes() == b"png"
+
+
+def test_local_input_attachments_are_read_in_place(tmp_path):
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / "b.log").write_text("b")
+    (tmp_path / "inputs" / "a.png").write_text("a")
+    hb = HackbotContext(
+        run_id="r",
+        local_input_attachments_dir=tmp_path / "inputs",
+        artifacts_dir=tmp_path / "artifacts",
+    )
+
+    hb.fetch_input_attachments()
+
+    assert hb.input_attachments_dir == tmp_path / "inputs"
+    assert [p.name for p in hb.input_attachment_files] == ["a.png", "b.log"]
