@@ -7,9 +7,11 @@ checks the tree out and the runtime collects the resolved commits into
 happened for human review.
 """
 
+import asyncio
 import json
 import logging
 import re
+import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -34,6 +36,7 @@ from .models import (
     MODEL,
     ConflictReport,
     FetchedDiff,
+    GitSource,
     Report,
     RequestedSource,
     UpliftSource,
@@ -43,6 +46,11 @@ from .verify import head_commit, verify_uplift
 logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
+
+# How long fetching one commit may take. Fetching through GitHub's fork network
+# can take minutes, well past the Bash tool's own two-minute limit, which is why
+# the commits are fetched here rather than by the agent.
+FETCH_TIMEOUT_SECONDS = 20 * 60
 
 # Where the broker mounts its read-only Conduit proxy.
 PROXY_MOUNT = "/phabricator"
@@ -59,6 +67,15 @@ GIT_IDENTITY_ENV = {
     "GIT_AUTHOR_EMAIL": "hackbot@mozilla.tld",
     "GIT_COMMITTER_NAME": "Hackbot",
     "GIT_COMMITTER_EMAIL": "hackbot@mozilla.tld",
+}
+
+# Claude Code moves a Bash command past its timeout to the background, and an
+# agent that then ends its turn to wait ends a headless session. Ten minutes by
+# default, and up to thirty when asked, leaves slow git commands in the
+# foreground.
+BASH_TIMEOUT_ENV = {
+    "BASH_DEFAULT_TIMEOUT_MS": str(10 * 60 * 1000),
+    "BASH_MAX_TIMEOUT_MS": str(30 * 60 * 1000),
 }
 
 # Not a secret: the proxy discards it and substitutes the real Conduit key.
@@ -144,6 +161,7 @@ async def run_uplift(
     fetched = await fetch_source_diffs(
         build_phabricator_client(broker_url), sources, scratch_out
     )
+    await fetch_source_commits(source_repo, sources, fetched)
     user_prompt = build_user_prompt(
         target_branch=target_branch,
         sources=sources,
@@ -265,7 +283,7 @@ def build_options(
         max_turns=max_turns,
         setting_sources=["project"],
         effort=effort or EFFORT,
-        env=GIT_IDENTITY_ENV,
+        env=GIT_IDENTITY_ENV | BASH_TIMEOUT_ENV,
     )
 
 
@@ -358,6 +376,90 @@ async def fetch_source_diffs(
             logger.info("fetched %s", diff.path.name)
         fetched.append(diff)
     return fetched
+
+
+async def fetch_source_commits(
+    source_repo: Path,
+    sources: list[UpliftSource],
+    fetched: list[FetchedDiff | None],
+) -> None:
+    """Fetch the commits each source is applied from, before the session starts.
+
+    A git source needs its commit and that commit's parent, so cherry-pick can
+    three-way merge. A Phabricator source needs the base commit its diff was
+    built on, which is only a hint: if it can't be fetched, the prompt covers
+    going without. Raises :class:`AgentError` if a git source can't be fetched,
+    or ends up without its parent.
+    """
+    for diff in fetched:
+        if diff is None or not diff.base_commit:
+            continue
+        try:
+            await fetch_commits(source_repo, [diff.base_commit], depth=1)
+        except AgentError:
+            logger.warning(
+                "could not fetch base commit %s; the agent goes without it",
+                diff.base_commit,
+            )
+
+    # In one fetch, and after the bases: a shallow fetch cuts history just below
+    # the commits it fetches, so fetching a stack one commit at a time would cut
+    # each source off from its parent, the source before it.
+    commits = [source.commit for source in sources if isinstance(source, GitSource)]
+    if not commits:
+        return
+    await fetch_commits(source_repo, commits, depth=2)
+
+    shallow_roots = read_shallow_roots(source_repo)
+    if cut_off := [commit for commit in commits if commit in shallow_roots]:
+        raise AgentError(f"fetched without their parents: {', '.join(cut_off)}")
+
+
+async def fetch_commits(source_repo: Path, commits: list[str], depth: int) -> None:
+    """Fetch ``commits`` and ``depth - 1`` of their ancestors from ``origin``."""
+    logger.info("fetching %s (depth %d)", " ".join(commits), depth)
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "fetch",
+        "-q",
+        f"--depth={depth}",
+        "origin",
+        *commits,
+        cwd=str(source_repo),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=FETCH_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        raise AgentError(
+            f"fetching {' '.join(commits)} took over {FETCH_TIMEOUT_SECONDS} seconds"
+        ) from None
+
+    if process.returncode != 0:
+        raise AgentError(
+            f"could not fetch {' '.join(commits)}: {stderr.decode().strip()}"
+        )
+
+
+def read_shallow_roots(source_repo: Path) -> set[str]:
+    """Return the commits whose parents a shallow checkout doesn't have."""
+    shallow_path = Path(
+        subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-path", "shallow"],
+            cwd=source_repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    if not shallow_path.exists():
+        return set()
+    return set(shallow_path.read_text().split())
 
 
 async def run_session(
