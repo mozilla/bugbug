@@ -42,6 +42,7 @@ in your final message. Complete the work that you asked to do in full, not a par
 VENDOR_PREFIXES = {
     "anthropic": ("ANTHROPIC_",),
     "openai": ("CODEX_", "OPENAI_"),
+    "otari": ("OTARI_",),
 }
 
 

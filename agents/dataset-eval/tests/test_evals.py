@@ -12,6 +12,7 @@ from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
 from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
     Run,
     harness_env,
+    otari,
     record,
     record_usage,
     trace,
@@ -380,3 +381,121 @@ def test_a_response_is_one_chat_span_with_its_usage():
     assert chat.attributes["gen_ai.usage.cache_read.input_tokens"] == 90
 
 
+def test_otari_prices_are_registered_once_and_again_when_they_change(monkeypatch):
+    import weave
+
+    added = []
+
+    class Client:
+        def query_costs(self, llm_ids):
+            return [SimpleNamespace(**cost) for cost in added]
+
+        def add_cost(self, llm_id, provider_id, effective_date, **costs):
+            # Weave stores the rates as 32-bit floats.
+            rounded = {k: float(f"{v:.8g}") for k, v in costs.items()}
+            added.append({"effective_date": effective_date, **rounded})
+
+    monkeypatch.setattr(weave, "get_client", lambda: Client())
+    pricing = {
+        "input_price_per_million": 0.15,
+        "output_price_per_million": 0.6,
+        "cache_read_price_per_million": 0.003,
+        "unit": "token",
+    }
+    model = otari.Model("m", None, None, False, pricing)
+
+    asyncio.run(otari.register_price(model))
+    asyncio.run(otari.register_price(model))
+    assert len(added) == 1 and added[0]["effective_date"].year == 2000
+    model.pricing = {**pricing, "output_price_per_million": 0.9}
+    asyncio.run(otari.register_price(model))
+    assert len(added) == 2 and added[1]["effective_date"].year > 2000
+
+
+def test_otari_usage_of():
+    totals = {
+        "request_count": 3,
+        "billed_input_tokens": 100,
+        "billed_output_tokens": 7,
+        "cache_read_tokens": 80,
+        "cache_write_tokens": 5,
+        "cost": 0.25,
+    }
+    assert otari.usage_of({"totals": totals}, "m") == (
+        {
+            "m": {
+                "input_tokens": 15,
+                "output_tokens": 7,
+                "cache_read_input_tokens": 80,
+                "cache_creation_input_tokens": 5,
+            }
+        },
+        0.25,
+    )
+    unpriced = {**totals, "unpriced_requests": 1}
+    assert otari.usage_of({"totals": unpriced}, "m")[1] is None
+    assert otari.usage_of({"totals": {"request_count": 0}}, "m") == ({}, None)
+
+
+def test_otari_settle_adds_what_the_stream_left_out(monkeypatch):
+    from weave.conversation import start_conversation
+
+    stored = {"m": {"input_tokens": 15, "output_tokens": 4}}
+
+    async def usage(tag, model):
+        return stored, 2.0
+
+    monkeypatch.setattr(otari, "usage", usage)
+    run = Run(usage={"m": {"input_tokens": 10, "output_tokens": 9}})
+    model = otari.Model("m", None, None, False)
+    conversation = start_conversation(agent_name="prompt-executor", model="m")
+    with conversation, conversation.start_turn(user_message="Do it.") as turn:
+        asyncio.run(otari.settle(run, "t", model, turn))
+
+    assert run.usage == {"m": {"input_tokens": 15, "output_tokens": 9}}
+    assert run.cost_usd == 2.0
+
+
+def test_otari_settle_prices_the_stream_without_usage_access(monkeypatch):
+    import httpx
+
+    async def forbidden(tag, model):
+        raise httpx.HTTPStatusError(
+            "403", request=httpx.Request("GET", "x"), response=httpx.Response(403)
+        )
+
+    monkeypatch.setattr(otari, "usage", forbidden)
+    pricing = {
+        "input_price_per_million": 1.0,
+        "output_price_per_million": 2.0,
+        "cache_read_price_per_million": 0.1,
+        "unit": "token",
+    }
+    model = otari.Model("m", None, None, False, pricing)
+    run = Run(
+        usage={
+            "m": {
+                "input_tokens": 1_000_000,
+                "output_tokens": 1_000_000,
+                "cache_read_input_tokens": 1_000_000,
+            }
+        }
+    )
+    asyncio.run(otari.settle(run, "t", model, None))
+
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)
+
+    # otari has written only part of the run yet: its cost is too low.
+    async def partial(tag, name):
+        return {}, 0.5
+
+    monkeypatch.setattr(otari, "usage", partial)
+    asyncio.run(otari.settle(run, "t", model, None))
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)
+
+    async def not_json(tag, name):
+        raise ValueError("not JSON")
+
+    monkeypatch.setattr(otari, "usage", not_json)
+    asyncio.run(otari.settle(run, "t", model, None))
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)
