@@ -162,6 +162,17 @@ class BugzillaClient:
         return _parse(response)
 
 
+def _join_fields(fields: Collection[str]) -> str:
+    """Join field names for Bugzilla's comma-separated ``include_fields``.
+
+    A plain string is sent as is: joining it would split it into characters
+    (``"id"`` would become ``"i,d"``).
+    """
+    if isinstance(fields, str):
+        return fields
+    return ",".join(fields)
+
+
 class _Resource:
     def __init__(self, client: BugzillaClient) -> None:
         self._client = client
@@ -182,7 +193,7 @@ class _Bugs(_Resource):
             raise ValueError("ids must not be empty")
         params: dict[str, Any] = {"id": ",".join(str(i) for i in ids)}
         if include_fields:
-            params["include_fields"] = ",".join(include_fields)
+            params["include_fields"] = _join_fields(include_fields)
         result = await self._client.request("GET", "bug", params=params)
         return BugzillaResponse(result)
 
@@ -201,7 +212,7 @@ class _Bugs(_Resource):
         ``include_fields`` overrides the same key in ``params``.
         """
         if include_fields:
-            params = {**params, "include_fields": ",".join(include_fields)}
+            params = {**params, "include_fields": _join_fields(include_fields)}
         result = await self._client.request("GET", "bug", params=params)
         return BugzillaResponse(result)
 
@@ -259,7 +270,7 @@ class _Comments(_Resource):
         if new_since:
             params["new_since"] = new_since.isoformat()
         if include_fields:
-            params["include_fields"] = ",".join(include_fields)
+            params["include_fields"] = _join_fields(include_fields)
         if skip_private:
             params["skip_private"] = 1
         result = await self._client.request("GET", path, params=params)
