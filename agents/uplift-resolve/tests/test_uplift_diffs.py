@@ -188,7 +188,7 @@ async def test_requested_sources_record_what_each_input_resolved_to(tmp_path):
     )
 
     assert [entry.source for entry in requested] == [
-        {"kind": "git", "commit": "a" * 40},
+        {"kind": "git", "commit": "a" * 40, "revision_id": None},
         {"kind": "phabricator", "revision_id": 9, "diff_id": None},
     ], "Each source should be recorded as the caller gave it."
     assert requested[1].diff_id == 400, (

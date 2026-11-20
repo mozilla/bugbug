@@ -107,6 +107,12 @@ this shape:
 }
 ```
 
+In `summary`, `conflicts`, `unresolved` and `summary.md`, refer to each source by
+the name its work item leads with: its revision's D-number (e.g. "D4342"), or
+its short commit hash when it has no revision. Never call sources "patch 1",
+"patch 2" and so on: reviewers read the report on the revisions themselves, where
+those numbers mean nothing.
+
 Set `resolved` to `false` if any source could not be applied or any conflict was
 left unresolved, and list those in `unresolved`. Before you finish, check that
 the checkout agrees with what you are about to claim: no conflicted paths left
