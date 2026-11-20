@@ -293,6 +293,7 @@ def test_retrieve_schedulable_tasks(
                 "test-linux2404-64/debug-mochitest-plain",
                 "test-linux2404-64/opt-mochitest-plain-standalone",
             ],
+            "processed": ["rev2", "rev3"],
         }
 
 
@@ -331,7 +332,13 @@ def test_update_config_selection_tasks(
         "linux2404-64-shippable/opt",
         ["dom/a.toml"],
     )
-    for rev, backstop in (("b1", True), ("p1", False), ("p2", False), ("b2", True)):
+    for rev, backstop in (
+        ("b1", True),
+        ("p1", False),
+        ("p2", False),
+        ("p3", False),
+        ("b2", True),
+    ):
         responses.add(
             responses.GET,
             boot._decision_artifact_url(rev, "parameters.yml"),
@@ -373,11 +380,24 @@ def test_update_config_selection_tasks(
             }
         ),
     )
-    # The target tasks of the next one aren't there: it doesn't block the others.
+    # The target tasks of the next one aren't there yet, then they are (without unknown tasks, so
+    # its full task graph isn't needed).
     responses.add(
         responses.GET,
         boot._decision_artifact_url("p2", "target-tasks.json"),
         status=404,
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p2", "target-tasks.json"),
+        json=sorted(KNOWN_TASKS) + [renamed["label"], renamed_shippable["label"]],
+    )
+
+    # The push after it is processed meanwhile.
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p3", "target-tasks.json"),
+        json=sorted(KNOWN_TASKS),
     )
 
     def read() -> dict:
@@ -390,7 +410,7 @@ def test_update_config_selection_tasks(
         "test-linux2404-64/opt-jittest-1proc",
         "test-linux2404-64/opt-mochitest-plain-standalone",
     ]
-    boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
+    boot.update_config_selection_tasks(["b1", "p1", "p2", "p3"], KNOWN_TASKS)
     assert read() == {
         "backstop": "b1",
         "tasks": CONFIG_SELECTION_TASKS,
@@ -400,7 +420,12 @@ def test_update_config_selection_tasks(
         "ignored": sorted(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
+        "processed": ["p1", "p3"],
     }
+
+    # p2 is processed once its target tasks are there.
+    boot.update_config_selection_tasks(["b1", "p1", "p2", "p3"], KNOWN_TASKS)
+    assert read()["processed"] == ["p1", "p2", "p3"]
     # The full task graph was only needed for p1's renamed tasks: the jittest task was already
     # known not to be eligible.
     full_graphs = [
@@ -420,7 +445,7 @@ def test_update_config_selection_tasks(
         json={**TASK_GRAPH, "r": renamed},
     )
     boot.update_config_selection_tasks(
-        ["b1", "p1", "p2", "b2"], KNOWN_TASKS | {renamed_shippable["label"]}
+        ["b1", "p1", "p2", "p3", "b2"], KNOWN_TASKS | {renamed_shippable["label"]}
     )
     assert read() == {
         "backstop": "b2",
@@ -435,5 +460,6 @@ def test_update_config_selection_tasks(
         "ignored": sorted(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
+        "processed": [],
     }
     assert_requests_have_timeouts()

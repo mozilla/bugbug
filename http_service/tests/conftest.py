@@ -376,6 +376,7 @@ def mock_config_selection_data(monkeypatch: MonkeyPatch, mock_data: None) -> Non
                 "tasks": MOCK_CONFIG_SELECTION_TASKS,
                 "new_tasks": {},
                 "ignored": [],
+                "processed": [],
             },
             f,
         )

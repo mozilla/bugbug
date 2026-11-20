@@ -203,13 +203,15 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
     """
     try:
         with open(CONFIG_SELECTION_TASKS_PATH, "rb") as f:
-            previous_state = orjson.loads(f.read())
+            state = orjson.loads(f.read())
     except FileNotFoundError:
-        previous_state = None
+        state = None
 
     # The latest backstop push with tasks.
-    state: dict | None = None
+    known_backstop = state["backstop"] if state is not None else None
     for rev in reversed(revs):
+        if rev == known_backstop:
+            break
         r = _get(rev, "parameters.yml")
         if not r.ok or not yaml.safe_load(r.text).get("backstop"):
             continue
@@ -231,9 +233,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             # kept, as long as they are among the target tasks of the recent pushes, as some are
             # only targeted by some pushes (e.g. test-verify when tests are modified).
             recent_targets = {_without_chunk(label) for label in known_tasks}
-            previously_ignored = (
-                set(previous_state["ignored"]) if previous_state is not None else set()
-            )
+            previously_ignored = set(state["ignored"]) if state is not None else set()
             ignored = (
                 {
                     _without_chunk(label)
@@ -250,6 +250,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
                 "tasks": tasks,
                 "new_tasks": {},
                 "ignored": sorted(ignored),
+                "processed": [],
             }
             break
 
@@ -257,11 +258,18 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
         logger.warning("No backstop push with test tasks to retrieve")
         return
 
-    # The tasks of the later pushes. The ones without their target tasks or full task graph (yet,
-    # e.g. if the decision task is still running, or ever, e.g. for DONTBUILD pushes or failed
-    # decision tasks) are left for the next update, without blocking the others.
     ignored = set(state["ignored"])
-    for rev in revs[revs.index(state["backstop"]) + 1 :]:
+
+    # The tasks of the later pushes. The ones without their target tasks or full task graph
+    # (yet, e.g. if the decision task is still running, or ever, e.g. for DONTBUILD pushes or failed
+    # decision tasks) are left for the next refresh, without blocking the others.
+    later = (
+        revs[revs.index(state["backstop"]) + 1 :] if state["backstop"] in revs else revs
+    )
+    processed = set(state["processed"])
+    for rev in later:
+        if rev in processed:
+            continue
         r = _get(rev, "target-tasks.json")
         if not r.ok:
             continue
@@ -282,6 +290,8 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             _classify_new_tasks(
                 state, ignored, rev, {_without_chunk(label) for label in unknown}, graph
             )
+        processed.add(rev)
+    state["processed"] = sorted(processed & set(revs))
     state["ignored"] = sorted(ignored)
 
     _write(CONFIG_SELECTION_TASKS_PATH, orjson.dumps(state).decode())
