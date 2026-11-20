@@ -15,6 +15,7 @@ from uuid import UUID
 import pytest
 from app.slack.listeners.actions.start_agent_run import (
     StartAgentRunValue,
+    apply_run_actions_callback,
     start_agent_run_callback,
 )
 from hackbot_client import ApplyActionsResponse, RunAction, RunStatus, TriggeredRun
@@ -403,6 +404,19 @@ class TestStartAgentRun:
         assert "<@U0CLICKER>" not in update["text"]
         assert RUN_ID in update["text"]
 
+    async def test_applying_a_run_also_removes_its_post_only_button(self):
+        # Left in place, it would sit next to the note offering to post an
+        # analysis this click already posted.
+        clicked = _action(apply_run_id=TRIAGE_RUN_ID)
+        post_only = _post_action()
+        unrelated = _post_action(run_id="99999999-2222-3333-4444-555555555555")
+        self.body["message"] = _message(clicked, post_only, unrelated)
+
+        await self._call(clicked)
+
+        row = self._updated_blocks()[1]
+        assert row["elements"] == [unrelated]
+
     async def test_a_failed_apply_keeps_the_button(self):
         # Nothing started, so the offer stands and the clicker can try again.
         self.fake_client.apply_actions.return_value = _actions(
@@ -461,6 +475,64 @@ class TestStartAgentRun:
 
         assert self._edits() == []
         self.fake_ack.assert_awaited_once()
+
+
+def _post_action(run_id: str = TRIAGE_RUN_ID) -> dict:
+    """A clicked post-only button, as Bolt hands it over."""
+    return {
+        "type": "button",
+        "block_id": BLOCK_ID,
+        "action_id": f"apply_run_actions:{run_id}",
+        "value": json.dumps({"run_id": run_id}),
+    }
+
+
+class TestApplyRunActions:
+    def setup_method(self):
+        self.fake_ack = AsyncMock(spec=AsyncAck)
+        self.fake_client = AsyncMock()
+        self.fake_client.apply_actions.return_value = _actions(
+            _applied("bugzilla.add_comment")
+        )
+        self.fake_respond = AsyncMock(
+            spec=AsyncRespond, return_value=SimpleNamespace(status_code=200, body="ok")
+        )
+        self.context = AsyncBoltContext({"hackbot_client": self.fake_client})
+        self.body = {
+            "user": {"id": "U0CLICKER"},
+            "channel": {"id": "C0TRIAGE"},
+            "message": _message(_action(apply_run_id=TRIAGE_RUN_ID), _post_action()),
+        }
+
+    async def _call(self):
+        await apply_run_actions_callback(
+            ack=self.fake_ack,
+            action=_post_action(),
+            body=self.body,
+            context=self.context,
+            respond=self.fake_respond,
+            logger=test_logger,
+        )
+
+    async def test_applies_the_run_and_starts_nothing(self):
+        await self._call()
+
+        self.fake_client.apply_actions.assert_awaited_once_with(UUID(TRIAGE_RUN_ID))
+        self.fake_client.trigger_run.assert_not_awaited()
+        self.fake_ack.assert_awaited_once()
+
+    async def test_only_the_clicked_button_is_replaced(self):
+        # The bug-fix offer still stands: applying again is a no-op.
+        await self._call()
+
+        (update,) = [
+            c.kwargs
+            for c in self.fake_respond.await_args_list
+            if c.kwargs.get("replace_original")
+        ]
+        row, note = update["blocks"][1:]
+        assert row["elements"] == [_action(apply_run_id=TRIAGE_RUN_ID)]
+        assert "<@U0CLICKER> posted the" in note["elements"][0]["text"]
 
 
 class TestStartAgentRunValue:
