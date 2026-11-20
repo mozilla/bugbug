@@ -3,7 +3,8 @@
 Triages one Gecko bug per run and keeps no memory of its own. Each team can add
 its own rules. With no team, the run uses the shared rules for the bug's component. It inventories what the report contains. It reads the diagnostics reporters attach:
 Firefox Profiler captures, logs, crash reports and specs. It records one comment plus
-the field changes it is allowed. These are severity and priority when they are unset,
+the field changes it is allowed. These are severity and priority when they are unset
+(never in a component that `left_to_owner` in `shared/bugzilla.toml` lists for the field),
 needinfo flags, a meta bug in `blocks`, keywords, `regressed_by`, `see_also`, fix tags in
 the whiteboard, a component move, a resolution and the product's security group. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
 runs again when someone changes it. Each run reads the whole bug, with all comments, and
@@ -408,7 +409,7 @@ a change on a `dupe_of` bug that is closed, a meta bug or out of scope. Then `re
 When an expert leads the analysis, the run posts only confirmed facts or a field change, as
 `rules/workflow.md` says under "An expert leads the analysis".
 `needs_info` means the bug still waits for data. The run sets severity and priority in
-both cases. `asked` lists the data the run asked for, never a developer hand-off. A run
+both cases, except where `left_to_owner` in `shared/bugzilla.toml` leaves them to the owners. `asked` lists the data the run asked for, never a developer hand-off. A run
 that ends with `analyzed` and an item in the plan's `asked` fails, and BugBot runs it
 again. A run that ends with `analyzed` and a needinfo on a reporter who is not a
 developer also fails, because that needinfo asks for data. The capture check does not
