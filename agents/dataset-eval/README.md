@@ -80,8 +80,11 @@ for the models it serves.
 
 `DATASET` and `JUDGE_RUBRIC` (Weave prompt ref) are required; `AGENT`, `HARNESS`,
 `MODEL`, `EFFORT`, `REPS`, `TASKS` (JSON list of row ids), `EXAMPLE_TIMEOUT_MIN`,
-`JUDGE_MODEL`, `LABEL` (appended to the experiment's name) and
-`WEAVE_PROJECT`.
+`JUDGE_MODEL`, `JUDGE_EFFORT`, `LABEL` (appended to the experiment's name) and
+`WEAVE_PROJECT`. Their defaults are in
+[`__main__.py`](hackbot_agents/dataset_eval/__main__.py), and `WEAVE_PROJECT`'s
+(`moz-bugbug/hackbot-evals-dev`) in [`hackbot.toml`](hackbot.toml); the API and UI
+pass on only what a run sets.
 
 ## Running locally
 
@@ -92,8 +95,8 @@ FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>
 
 `.env` needs `ANTHROPIC_API_KEY` and `WANDB_API_KEY` (and `CODEX_API_KEY` for the
 `codex` harness, and `OTARI_API_KEY`, with the `usage:read` scope, and
-`OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses);
-`WEAVE_PROJECT` defaults to `moz-bugbug/hackbot-evals`. The local
+`OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses).
+The local
 Firefox clone is mounted read-only and lends its objects to the tree, so nothing
 is cloned; the run uses its checked-out HEAD, or `SOURCE_REF`.
 

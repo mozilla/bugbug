@@ -20,6 +20,7 @@ services:
       - TASKS=${TASKS:-}
       - EXAMPLE_TIMEOUT_MIN=${EXAMPLE_TIMEOUT_MIN:-}
       - JUDGE_MODEL=${JUDGE_MODEL:-}
+      - JUDGE_EFFORT=${JUDGE_EFFORT:-}
       - JUDGE_RUBRIC=${JUDGE_RUBRIC:-}
       - LABEL=${LABEL:-}
       - SOURCE_REPO=/workspace/firefox
@@ -30,7 +31,7 @@ services:
       - OTARI_BASE_URL=${OTARI_BASE_URL:-}
       - OTARI_API_KEY=${OTARI_API_KEY:-}
       - WANDB_API_KEY=${WANDB_API_KEY:-}
-      - WEAVE_PROJECT=${WEAVE_PROJECT:-moz-bugbug/hackbot-evals}
+      - WEAVE_PROJECT
       - ARTIFACTS_DIR=/artifacts
     shm_size: 2gb
     volumes:

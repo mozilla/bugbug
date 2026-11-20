@@ -69,6 +69,12 @@ export function TriggerForm() {
   const [judgeRubric, setJudgeRubric] = useState(
     () => params.get("judge_rubric") ?? ""
   );
+  const [judgeModel, setJudgeModel] = useState(
+    () => params.get("judge_model") ?? ""
+  );
+  const [judgeEffort, setJudgeEffort] = useState(
+    () => params.get("judge_effort") ?? ""
+  );
   const [model, setModel] = useState(() => params.get("model") ?? "");
   const [maxTurns, setMaxTurns] = useState(() => params.get("max_turns") ?? "");
   const [effort, setEffort] = useState(() => params.get("effort") ?? "");
@@ -184,6 +190,8 @@ export function TriggerForm() {
       }
       if (weaveProject.trim()) inputs.weave_project = weaveProject.trim();
       inputs.judge_rubric = judgeRubric.trim();
+      if (judgeModel.trim()) inputs.judge_model = judgeModel.trim();
+      if (judgeEffort) inputs.judge_effort = judgeEffort;
       if (evalLabel.trim()) inputs.label = evalLabel.trim();
     } else if (!isWebcompatAgent) {
       if (!hasBugId) {
@@ -468,7 +476,7 @@ export function TriggerForm() {
               <input
                 id="exampleTimeout"
                 inputMode="numeric"
-                placeholder="30"
+                placeholder="120"
                 value={exampleTimeout}
                 onChange={(e) => setExampleTimeout(e.target.value)}
               />
@@ -508,11 +516,38 @@ export function TriggerForm() {
             />
           </div>
 
+          <div className="row">
+            <div className="field">
+              <label htmlFor="judgeModel">Judge model (optional)</label>
+              <input
+                id="judgeModel"
+                placeholder="claude-sonnet-5-5"
+                value={judgeModel}
+                onChange={(e) => setJudgeModel(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="judgeEffort">Judge effort (optional)</label>
+              <select
+                id="judgeEffort"
+                value={judgeEffort}
+                onChange={(e) => setJudgeEffort(e.target.value)}
+              >
+                <option value="">medium (default)</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="xhigh">xhigh</option>
+                <option value="max">max</option>
+              </select>
+            </div>
+          </div>
+
           <div className="field">
             <label htmlFor="weaveProject">Weave project (optional)</label>
             <input
               id="weaveProject"
-              placeholder="moz-bugbug/hackbot-evals"
+              placeholder="moz-bugbug/hackbot-evals-dev"
               value={weaveProject}
               onChange={(e) => setWeaveProject(e.target.value)}
             />

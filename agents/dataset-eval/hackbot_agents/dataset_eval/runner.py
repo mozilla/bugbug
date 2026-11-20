@@ -53,6 +53,7 @@ class Experiment:
     judge_rubric: str
     # What else sets this run apart, e.g. a prompt change; appended to the name.
     label: str | None = None
+    judge_effort: str | None = None
 
     @property
     def name(self) -> str:
@@ -308,6 +309,7 @@ class Runner:
                             out.get("message", ""),
                             exp.judge_model,
                             self.rubric,
+                            exp.judge_effort,
                         )
                         scores["quality"] = float(judgment.quality)
                         record.update(

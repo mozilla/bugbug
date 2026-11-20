@@ -6,6 +6,10 @@ checkout_path = "/workspace/firefox"
 enabled = true
 objdir = "objdir-dataset-eval"
 
+# A run's weave_project overrides it.
+[tracing]
+weave_project = "moz-bugbug/hackbot-evals-dev"
+
 # One run evaluates one experiment: every example in sequence, in one container.
 [deploy]
 runtime = "cloud_run_job"

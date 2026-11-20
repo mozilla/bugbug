@@ -267,7 +267,10 @@ UpliftSource = Annotated[
 
 
 class DatasetEvalInputs(AgentInputs):
-    """Inputs for dataset-eval: one experiment over an eval dataset."""
+    """Inputs for dataset-eval: one experiment over an eval dataset.
+
+    An input left unset takes the agent's default.
+    """
 
     # Weave dataset ref, pinned by version (`name:digest`).
     dataset: str
@@ -280,14 +283,15 @@ class DatasetEvalInputs(AgentInputs):
     reps: Annotated[int, Field(ge=1)] = 1
     # Row ids to run; all when empty.
     tasks: list[str] = []
-    example_timeout_min: Annotated[int, Field(ge=1)] = 30
+    example_timeout_min: Annotated[int | None, Field(ge=1)] = None
     judge_model: str | None = None
+    judge_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
     # Weave prompt ref with the judge's rubric.
     judge_rubric: str
     # Appended to the experiment's name, for what its configuration doesn't show.
     label: Annotated[str | None, Field(max_length=64)] = None
     # Where the evaluation and traces are logged.
-    weave_project: str = "moz-bugbug/hackbot-evals"
+    weave_project: str | None = None
 
 
 class UpliftInputs(AgentInputs):

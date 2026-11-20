@@ -22,6 +22,7 @@ class AgentInputs(BaseSettings):
     tasks: list[str] = []
     example_timeout_min: int = 120
     judge_model: str = "claude-sonnet-5-5"
+    judge_effort: str | None = "medium"
     # Weave prompt ref with the judge's rubric.
     judge_rubric: str
     # Appended to the experiment's name, for what its configuration doesn't show.
