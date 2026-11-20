@@ -11,11 +11,14 @@ export const dynamic = "force-dynamic";
 // straight to GCS, so artifact bytes never stream through this server and the
 // X-API-Key stays server-side.
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ runId: string; path: string[] }> }
 ) {
   if (!(await getAuthedEmail())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { pathname, search } = new URL(req.url);
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("callbackURL", `${pathname}${search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
   const { runId, path } = await params;
