@@ -614,12 +614,11 @@ def test_update_config_selection_tasks_retries_unresolved(
             boot._decision_artifact_url(rev, "target-tasks.json"),
             json=targets + [renamed["label"]],
         )
-    for rev in ("p1", "p2"):
-        responses.add(
-            responses.GET,
-            boot._decision_artifact_url(rev, "full-task-graph.json"),
-            body=orjson.dumps({**graph, renamed["label"]: renamed}),
-        )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p1", "full-task-graph.json"),
+        body=orjson.dumps({**graph, renamed["label"]: renamed}),
+    )
     # The variants of the pushes don't have the latest one yet (e.g. a transient failure).
     responses.replace(
         responses.GET,
@@ -639,12 +638,18 @@ def test_update_config_selection_tasks_retries_unresolved(
         "manifests": ["dom/a.toml"],
     }
     # The tasks whose config can't be computed aren't candidates or new tasks, nor ignored: they are
-    # pending.
+    # pending, and other pushes targeting them don't need their full task graph again.
     later = "test-linux2404-64/opt-mochitest-plain-later"
     assert later not in state["tasks"] and later not in state["ignored"]
     assert "test-linux2404-64/opt-mochitest-plain-renamed" not in state["new_tasks"]
-    assert sorted(state["unresolved"]) == ["b1", "p1", "p2"]
+    assert sorted(state["unresolved"]) == ["b1", "p1"]
     assert state["processed"] == ["p1", "p2"]
+    full_graphs = [
+        call.request.url
+        for call in responses.calls
+        if call.request.url.endswith("full-task-graph.json")
+    ]
+    assert full_graphs == [boot._decision_artifact_url("p1", "full-task-graph.json")]
 
     # Once the variants are known, they are resolved on the next update.
     responses.replace(

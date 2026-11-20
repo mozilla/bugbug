@@ -373,6 +373,11 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
 
     ignored = set(state["ignored"])
     _resolve_unresolved(state, ignored, set(revs))
+    pending = {
+        _without_chunk(task["label"])
+        for entry in state["unresolved"].values()
+        for task in entry["tasks"]
+    }
 
     # The tasks of the later pushes. The ones without their target tasks or full task graph
     # (yet, e.g. if the decision task is still running, or ever, e.g. for DONTBUILD pushes or failed
@@ -394,6 +399,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             and _without_chunk(label) not in state["tasks"]
             and _without_chunk(label) not in state["new_tasks"]
             and _without_chunk(label) not in ignored
+            and _without_chunk(label) not in pending
         }
         if unknown:
             r = _get(rev, "full-task-graph.json")
@@ -406,6 +412,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             )
             if failed:
                 state["unresolved"].update(_unresolved(rev, False, failed))
+                pending |= failed.keys()
         processed.add(rev)
     state["processed"] = sorted(processed & set(revs))
     state["ignored"] = sorted(ignored)
