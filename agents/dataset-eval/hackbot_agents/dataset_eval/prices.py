@@ -6,7 +6,8 @@
 """Cost from recorded tokens, one table for every vendor.
 
 Rates are USD per million tokens; add other vendors' models here. A model without
-a rate gets no cost rather than a wrong one.
+a rate gets no cost rather than a wrong one. Models served through otari are
+priced by otari.
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ PRICES = {
 
 
 def cost(usage: dict[str, dict[str, int]]) -> float | None:
+    if not usage:
+        return None
     total = 0.0
     for model, counts in usage.items():
         rate = PRICES.get(model)
@@ -44,3 +47,9 @@ def cost(usage: dict[str, dict[str, int]]) -> float | None:
             + counts.get("cache_creation_input_tokens", 0) * cache_write
         ) / 1_000_000
     return round(total, 4)
+
+
+def run_cost(usage: dict[str, dict[str, int]], reported: float | None) -> float | None:
+    """The table's cost, so every harness is priced alike; else the harness's own."""
+    table = cost(usage)
+    return table if table is not None else reported

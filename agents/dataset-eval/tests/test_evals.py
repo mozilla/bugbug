@@ -113,6 +113,9 @@ def test_cost():
     }
     assert prices.cost(usage) == pytest.approx(4.0 + 0.4)
     assert prices.cost({"unknown": {"input_tokens": 1}}) is None
+    assert prices.cost({}) is None
+    assert prices.run_cost(usage, 9.0) == pytest.approx(4.4)
+    assert prices.run_cost({"unknown": {"input_tokens": 1}}, 9.0) == 9.0
     codex = {
         "gpt-6.1-sol": {
             "input_tokens": 1_000_000,
@@ -621,6 +624,31 @@ def test_a_response_is_one_chat_span_with_its_usage():
     (chat,) = [s for s in exporter.get_finished_spans() if s.name == "chat m"]
     assert chat.attributes["gen_ai.usage.input_tokens"] == 100
     assert chat.attributes["gen_ai.usage.cache_read.input_tokens"] == 90
+
+
+def test_every_span_is_tagged_with_the_harness():
+    from hackbot_agents.dataset_eval.prompt_executor.__main__ import (
+        HARNESS_SPAN_ATTRIBUTE,
+        tag_traces,
+    )
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    # The global provider can be set once per process; other tests may have.
+    if not isinstance(otel_trace.get_tracer_provider(), TracerProvider):
+        otel_trace.set_tracer_provider(TracerProvider())
+    exporter = InMemorySpanExporter()
+    otel_trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(exporter))
+    tag_traces("opencode")
+    with otel_trace.get_tracer("t").start_as_current_span("chat"):
+        pass
+
+    (span,) = exporter.get_finished_spans()
+    assert span.attributes[HARNESS_SPAN_ATTRIBUTE] == "opencode"
 
 
 def test_otari_prices_are_registered_once_and_again_when_they_change(monkeypatch):

@@ -74,7 +74,7 @@ def summarize(records: list[dict], errors: int) -> dict:
             out[metric] = round(sum(values) / len(values), 4)
     costs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
     if costs:
-        out["cost_usd_total"] = round(sum(costs), 2)
+        out["cost_usd_total"] = round(sum(costs), 4)
     return out
 
 
@@ -311,9 +311,9 @@ class Runner:
                         log.warning("%s rep %d: judge failed: %s", row["id"], rep, exc)
                     record.update(
                         scores=scores,
-                        cost_usd=out.get("cost_usd")
-                        if out.get("cost_usd") is not None
-                        else prices.cost(out.get("usage") or {}),
+                        cost_usd=prices.run_cost(
+                            out.get("usage") or {}, out.get("cost_usd")
+                        ),
                         usage=out.get("usage"),
                         lines_changed=checks.lines_changed(patch),
                         **{
@@ -330,10 +330,15 @@ class Runner:
                 details = {
                     k: v for k, v in record.items() if k not in ("id", "rep", "scores")
                 }
+                cost = record.get("cost_usd")
                 weave_log.finish(
                     pred,
                     {"message": out.get("message", ""), "patch": patch, **details},
-                    record.get("scores", {}),
+                    {
+                        **record.get("scores", {}),
+                        **({"cost_usd": cost} if cost is not None else {}),
+                    },
+                    out.get("usage"),
                 )
                 self.publish(
                     f"{row['id']}_rep{rep}", record, patch, out.get("transcript", [])

@@ -15,9 +15,29 @@ import time
 from pathlib import Path
 
 from hackbot_runtime import HackbotAgentResult, HackbotContext, run_async
+from opentelemetry import trace as otel_trace
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .harnesses import Run, get_harness
+
+# Weave surfaces it as ``attributes.hackbot.harness`` on every call of the run.
+HARNESS_SPAN_ATTRIBUTE = "wandb.attributes.hackbot.harness"
+
+
+class _HarnessTag(SpanProcessor):
+    def __init__(self, harness: str) -> None:
+        self._harness = harness
+
+    def on_start(self, span, parent_context=None) -> None:
+        span.set_attribute(HARNESS_SPAN_ATTRIBUTE, self._harness)
+
+
+def tag_traces(harness: str) -> None:
+    """Tag every span this process traces with the harness, when tracing is on."""
+    provider = otel_trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.add_span_processor(_HarnessTag(harness))
 
 
 class AgentInputs(BaseSettings):
@@ -49,6 +69,7 @@ async def main(ctx: HackbotContext) -> PromptExecutorResult:
     # The agent sees the tree and its task, nothing that says it is being measured.
     for name in ("prompt", "harness", "model", "effort", "timeout_s"):
         os.environ.pop(name.upper(), None)
+    tag_traces(inputs.harness)
     started = time.monotonic()
     run = Run(transcript=[{"role": "user", "content": inputs.prompt}])
     timed_out = False
