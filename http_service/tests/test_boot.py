@@ -305,6 +305,7 @@ def test_retrieve_schedulable_tasks(
                 "test-linux2404-64/debug-mochitest-plain",
                 "test-linux2404-64/opt-mochitest-plain-standalone",
             ],
+            "unresolved": {},
             "processed": ["rev2", "rev3"],
             "not_backstops": ["rev3"],
         }
@@ -433,6 +434,7 @@ def test_update_config_selection_tasks(
         "ignored": sorted(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
+        "unresolved": {},
         "processed": ["p1", "p3"],
         "not_backstops": ["p1", "p2", "p3"],
     }
@@ -474,6 +476,7 @@ def test_update_config_selection_tasks(
         "ignored": sorted(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
+        "unresolved": {},
         "processed": [],
         "not_backstops": ["p1", "p2", "p3"],
     }
@@ -551,3 +554,111 @@ def test_update_config_selection_tasks_new_variant(
     assert state["new_tasks"] == {
         "test-linux2404-64/opt-mochitest-plain-renamed-newv": "test-linux2404-64/opt-*-newv"
     }
+
+
+def test_update_config_selection_tasks_retries_unresolved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
+    # Test variants added on autoland, which aren't on mozilla-central yet: the latest one isn't in
+    # the variants of the pushes at first either (e.g. a transient failure).
+    new_variant = _task(
+        "test-linux2404-64/opt-mochitest-plain-newv-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        runtime={"newvariant": True},
+    )
+    later_variant = [
+        _task(
+            f"test-linux2404-64/opt-mochitest-plain-later-{chunk}",
+            "linux2404-64/opt",
+            [f"dom/later{chunk}.toml"],
+            runtime={"latervariant": True},
+        )
+        for chunk in (1, 2)
+    ]
+    # A task of a variant added after the backstop push, in a later push.
+    renamed = _task(
+        "test-linux2404-64/opt-mochitest-plain-renamed-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+        runtime={"latervariant": True},
+    )
+    graph = {
+        **TASK_GRAPH,
+        "n": new_variant,
+        **{task["label"]: task for task in later_variant},
+    }
+    for rev, backstop in (("b1", True), ("p1", False), ("p2", False)):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "parameters.yml"),
+            body=f"backstop: {'true' if backstop else 'false'}\n",
+        )
+    responses.add(
+        responses.GET, boot._decision_artifact_url("b1", "task-graph.json"), json=graph
+    )
+    targets = sorted(KNOWN_TASKS) + [
+        task["label"] for task in (new_variant, *later_variant)
+    ]
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b1", "target-tasks.json"),
+        json=targets,
+    )
+    for rev in ("p1", "p2"):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "target-tasks.json"),
+            json=targets + [renamed["label"]],
+        )
+    for rev in ("p1", "p2"):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "full-task-graph.json"),
+            body=orjson.dumps({**graph, renamed["label"]: renamed}),
+        )
+    # The variants of the pushes don't have the latest one yet (e.g. a transient failure).
+    responses.replace(
+        responses.GET,
+        AUTOLAND_VARIANTS,
+        body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\n",
+    )
+
+    def read() -> dict:
+        with open(boot.CONFIG_SELECTION_TASKS_PATH) as f:
+            return json.load(f)
+
+    boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
+    state = read()
+    # The configs are named with the push's test variants.
+    assert state["tasks"]["test-linux2404-64/opt-mochitest-plain-newv"] == {
+        "config": "test-linux2404-64/opt-*-newv",
+        "manifests": ["dom/a.toml"],
+    }
+    # The tasks whose config can't be computed aren't candidates or new tasks, nor ignored: they are
+    # pending.
+    later = "test-linux2404-64/opt-mochitest-plain-later"
+    assert later not in state["tasks"] and later not in state["ignored"]
+    assert "test-linux2404-64/opt-mochitest-plain-renamed" not in state["new_tasks"]
+    assert sorted(state["unresolved"]) == ["b1", "p1", "p2"]
+    assert state["processed"] == ["p1", "p2"]
+
+    # Once the variants are known, they are resolved on the next update.
+    responses.replace(
+        responses.GET,
+        AUTOLAND_VARIANTS,
+        body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\nlatervariant:\n  suffix: later\n",
+    )
+    boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
+    state = read()
+    assert state["tasks"][later] == {
+        "config": "test-linux2404-64/opt-*-later",
+        "manifests": ["dom/later1.toml", "dom/later2.toml"],
+    }
+    assert state["new_tasks"] == {
+        "test-linux2404-64/opt-mochitest-plain-renamed": "test-linux2404-64/opt-*-later"
+    }
+    assert state["unresolved"] == {}

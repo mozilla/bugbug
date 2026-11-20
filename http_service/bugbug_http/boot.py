@@ -84,8 +84,25 @@ def _set_test_variants(rev: str) -> None:
         logger.warning("Failed to retrieve the test variants of %s", rev, exc_info=True)
 
 
+def _minimal_task(task: dict) -> dict:
+    """The parts of a task's definition needed to compute its config and manifests."""
+    extra = task["task"]["extra"]
+    return {
+        "label": task["label"],
+        "attributes": {"test_manifests": task["attributes"]["test_manifests"]},
+        "optimization": task.get("optimization"),
+        "task": {
+            "extra": {
+                key: extra[key]
+                for key in ("treeherder-platform", "suite", "test-setting")
+                if key in extra
+            }
+        },
+    }
+
+
 def _eligible_tasks(
-    task_graph: dict[str, dict],
+    task_graph: dict[str, dict], failed: dict[str, list[dict]] | None = None
 ) -> Iterator[tuple[str, str, list[str]]]:
     """The test tasks of a task graph that test selection optimizes: (label without chunk number,
     config as mozci names it, manifests).
@@ -93,7 +110,10 @@ def _eligible_tasks(
     The tasks that test selection doesn't optimize (e.g. the standalone ones, which only run on
     backstop pushes) are left out. So are shippable tasks, as they are too costly to select: the
     config selection models are trained with the configs of their non-shippable equivalents (see
-    test_scheduling.rename_task), which are selected instead.
+    test_scheduling.rename_task), which are selected instead. The tasks whose config can't be
+    computed (e.g. with a test variant mozci doesn't know) are added to `failed`, by label without
+    chunk number, with the parts of their definitions needed to try again (see _minimal_task): they
+    may be eligible.
     """
     # mozci.data needs to be imported before mozci.task to avoid a circular import.
     import mozci.data  # noqa: F401
@@ -116,13 +136,14 @@ def _eligible_tasks(
             try:
                 configuration = get_configuration(task)
             except Exception:
-                # E.g. a test variant that mozci doesn't know yet.
                 logger.warning(
                     "Failed to get the configuration of %s",
                     task["label"],
                     exc_info=True,
                 )
                 configuration = None
+                if failed is not None:
+                    failed[label] = []
             if (
                 configuration is not None
                 and test_scheduling.rename_task(configuration) != configuration
@@ -133,21 +154,26 @@ def _eligible_tasks(
         config = configurations[label]
         if config is not None:
             yield label, config, manifests
+        elif failed is not None and label in failed:
+            failed[label].append(_minimal_task(task))
 
 
 def get_config_selection_tasks(
-    task_graph: dict[str, dict], target_tasks: Iterable[str]
+    task_graph: dict[str, dict],
+    target_tasks: Iterable[str],
+    failed: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict]:
     """The test tasks among which configs are selected, by label without chunk number.
 
     They are the eligible test tasks (see _eligible_tasks) of `task_graph` (a backstop push's
     task-graph.json, which has all of them with all their manifests) which are among the push's
     target tasks (`target_tasks`, its target-tasks.json: the task graph also has the tasks they
-    depend on), with their config and manifests (see testconfigselect.LiveTask).
+    depend on), with their config and manifests (see testconfigselect.LiveTask). The labels of the
+    tasks whose config can't be computed are added to `failed` (see _eligible_tasks).
     """
     targets = {_without_chunk(label) for label in target_tasks}
     tasks: dict[str, dict] = {}
-    for label, config, manifests in _eligible_tasks(task_graph):
+    for label, config, manifests in _eligible_tasks(task_graph, failed):
         if label not in targets:
             continue
         task = tasks.setdefault(label, {"config": config, "manifests": []})
@@ -190,23 +216,65 @@ def _get(rev: str, path: str) -> requests.Response:
     return requests.get(_decision_artifact_url(rev, path), timeout=REQUEST_TIMEOUT)
 
 
+def _unresolved(rev: str, backstop: bool, failed: dict[str, list[dict]]) -> dict:
+    """The tasks of a push whose config couldn't be computed, to try again (see _resolve_unresolved)."""
+    return {
+        rev: {
+            "backstop": backstop,
+            "tasks": [task for tasks in failed.values() for task in tasks],
+        }
+    }
+
+
 def _classify_new_tasks(
     state: dict, ignored: set[str], rev: str, labels: set[str], graph: dict[str, dict]
-) -> None:
+) -> dict[str, list[dict]]:
     """Classify test tasks of a push after the backstop push.
 
     `labels` are the tasks to classify (without chunk number), `graph` the definitions available
     for them (some can be missing, e.g. from the push's full task graph). The eligible ones become
-    new tasks (unless they are candidates already), and the others are ignored.
+    new tasks (unless they are candidates already), and the others are ignored, except the ones
+    whose config can't be computed, which are returned (see _eligible_tasks).
     """
     _set_test_variants(rev)
-    eligible = {label: config for label, config, _ in _eligible_tasks(graph)}
-    for label in labels:
+    failed: dict[str, list[dict]] = {}
+    eligible = {label: config for label, config, _ in _eligible_tasks(graph, failed)}
+    for label in labels - failed.keys():
         if label not in eligible:
             ignored.add(label)
         elif label not in state["tasks"]:
             logger.info("New test task %s (%s) in push %s", label, eligible[label], rev)
             state["new_tasks"][label] = eligible[label]
+    return failed
+
+
+def _resolve_unresolved(state: dict, ignored: set[str], revs: set[str]) -> None:
+    """Try again to compute the configs of the tasks whose config couldn't be computed before.
+
+    The ones of the backstop push become candidates (with their manifests), the ones of the later
+    pushes new tasks, and the ones which aren't eligible are ignored. Those whose push isn't recent
+    anymore (other than the backstop push) are forgotten.
+    """
+    for rev, entry in list(state["unresolved"].items()):
+        if not entry["backstop"] and rev not in revs:
+            del state["unresolved"][rev]
+            continue
+
+        graph = {task["label"]: task for task in entry["tasks"]}
+        labels = {_without_chunk(label) for label in graph}
+        if entry["backstop"]:
+            _set_test_variants(rev)
+            failed: dict[str, list[dict]] = {}
+            tasks = get_config_selection_tasks(graph, graph, failed)
+            state["tasks"].update(tasks)
+            ignored |= labels - tasks.keys() - failed.keys()
+        else:
+            failed = _classify_new_tasks(state, ignored, rev, labels, graph)
+
+        if failed:
+            entry["tasks"] = [task for tasks in failed.values() for task in tasks]
+        else:
+            del state["unresolved"][rev]
 
 
 def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> None:
@@ -258,7 +326,8 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
         task_graph = orjson.loads(r.content)
         target_tasks = targets.json()
         _set_test_variants(rev)
-        tasks = get_config_selection_tasks(task_graph, target_tasks)
+        failed: dict[str, list[dict]] = {}
+        tasks = get_config_selection_tasks(task_graph, target_tasks, failed)
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
         )
@@ -268,25 +337,31 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             # test selection optimizes run on backstop pushes, so the others are optimized
             # otherwise, e.g. jittest when no JS engine file changed). The ones found before are
             # kept, as long as they are among the target tasks of the recent pushes, as some are
-            # only targeted by some pushes (e.g. test-verify when tests are modified).
+            # only targeted by some pushes (e.g. test-verify when tests are modified). The ones
+            # whose config couldn't be computed may be eligible: they are looked for again later.
             recent_targets = {_without_chunk(label) for label in known_tasks}
             previously_ignored = set(state["ignored"]) if state is not None else set()
             ignored = (
-                {
-                    _without_chunk(label)
-                    for label in (
-                        *(task["label"] for task in task_graph.values()),
-                        *target_tasks,
-                    )
-                    if label.startswith("test-")
-                }
-                | (previously_ignored & recent_targets)
-            ) - tasks.keys()
+                (
+                    {
+                        _without_chunk(label)
+                        for label in (
+                            *(task["label"] for task in task_graph.values()),
+                            *target_tasks,
+                        )
+                        if label.startswith("test-")
+                    }
+                    | (previously_ignored & recent_targets)
+                )
+                - tasks.keys()
+                - failed.keys()
+            )
             state = {
                 "backstop": rev,
                 "tasks": tasks,
                 "new_tasks": {},
                 "ignored": sorted(ignored),
+                "unresolved": _unresolved(rev, True, failed) if failed else {},
                 "processed": [],
             }
             break
@@ -297,6 +372,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
     state["not_backstops"] = sorted(not_backstops & set(revs))
 
     ignored = set(state["ignored"])
+    _resolve_unresolved(state, ignored, set(revs))
 
     # The tasks of the later pushes. The ones without their target tasks or full task graph
     # (yet, e.g. if the decision task is still running, or ever, e.g. for DONTBUILD pushes or failed
@@ -325,9 +401,11 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
                 continue
             graph = get_full_graph_tasks(r.content, unknown)
             del r
-            _classify_new_tasks(
+            failed = _classify_new_tasks(
                 state, ignored, rev, {_without_chunk(label) for label in unknown}, graph
             )
+            if failed:
+                state["unresolved"].update(_unresolved(rev, False, failed))
         processed.add(rev)
     state["processed"] = sorted(processed & set(revs))
     state["ignored"] = sorted(ignored)
