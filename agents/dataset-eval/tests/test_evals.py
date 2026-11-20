@@ -24,6 +24,7 @@ from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
     usage_of,
 )
 from hackbot_agents.dataset_eval.prompt_executor.harnesses.oh_my_pi import OhMyPi
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.opencode import OpenCode
 from hackbot_agents.dataset_eval.weave_log import WeaveLog
 
 
@@ -455,6 +456,85 @@ def test_oh_my_pi_events(tmp_path, monkeypatch):
     env = _env(tmp_path)
     assert "ANTHROPIC_API_KEY" not in env and env["OTARI_API_KEY"] == "k"
     assert env["PWD"] == str(tmp_path)
+
+
+def test_opencode_events(tmp_path, monkeypatch):
+    tool = {
+        "callID": "t1",
+        "tool": "bash",
+        "state": {"status": "error", "input": {"command": "ls"}, "error": "x"},
+    }
+    step = {
+        "cost": 0,
+        "tokens": {
+            "input": 10,
+            "output": 5,
+            "reasoning": 2,
+            "cache": {"read": 90, "write": 0},
+        },
+    }
+    events = [
+        {"type": "step_start", "part": {}},
+        {"type": "reasoning", "part": {"text": "look"}},
+        {"type": "tool_use", "part": tool},
+        {"type": "step_finish", "part": step},
+        {"type": "text", "part": {"text": "done"}},
+        {"type": "step_finish", "part": step},
+    ]
+    _fake_cli(tmp_path, monkeypatch, "opencode", events)
+
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(OpenCode().run("Do it.", tmp_path, "deepinfra:qwen", "high", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "assistant", "tool_call", "tool_result", "assistant"]
+    assert run.transcript[1]["thinking"] == "look" and run.tool_errors == 1
+    assert run.usage["deepinfra:qwen"]["output_tokens"] == 14
+    # otari had no priced usage, and OpenCode cannot price otari's models.
+    assert run.cost_usd is None
+    args = (tmp_path / "args").read_text()
+    assert "--model otari/deepinfra:qwen" in args and "--variant high" in args
+    env = _env(tmp_path)
+    config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    provider = config["provider"]["otari"]
+    assert provider["options"]["baseURL"] == "https://otari.test/api/v1"
+    assert provider["options"]["apiKey"] == "{env:OTARI_API_KEY}"
+    assert provider["models"]["deepinfra:qwen"]["limit"] == {
+        "context": 1000,
+        "output": 100,
+    }
+    assert "instructions.md" in config["instructions"][0]
+    assert "ANTHROPIC_API_KEY" not in env
+
+
+def test_timed_out_cli_run_keeps_what_it_did(tmp_path, monkeypatch):
+    step = {"tokens": {"input": 1, "output": 2}}
+    events = [
+        {"type": "text", "part": {"text": "half"}},
+        {"type": "step_finish", "part": step},
+    ]
+    _fake_cli(
+        tmp_path,
+        monkeypatch,
+        "opencode",
+        events,
+        then="exec sleep 60\n",
+        stored=({"deepinfra:qwen": {"input_tokens": 1}}, 0.1),
+    )
+    run = Run()
+
+    async def stopped():
+        async with asyncio.timeout(2):
+            await OpenCode().run("Do it.", tmp_path, "deepinfra:qwen", None, run)
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        asyncio.run(stopped())
+
+    assert time.monotonic() - started < 10
+    assert run.message == "half" and run.cost_usd == 0.1
+    assert run.usage["deepinfra:qwen"]["output_tokens"] == 2
 
 
 def test_a_response_is_one_chat_span_with_its_usage():
