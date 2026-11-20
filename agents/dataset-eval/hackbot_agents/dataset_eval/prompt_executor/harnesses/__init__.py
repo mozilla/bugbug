@@ -10,8 +10,11 @@ expressed as claude-agent-sdk messages, so one recorder builds the transcript
 and the runtime's ``Reporter`` logs it, the same for every harness.
 """
 
+import asyncio
 import json
 import os
+import sys
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -24,6 +27,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
     UserMessage,
 )
+from weave.conversation import Usage
 
 # Added to every harness's system prompt: the run is headless, so the session
 # ends as soon as the agent stops.
@@ -35,7 +39,10 @@ rather than leaving it in the background, before you stop, and state the outcome
 in your final message. Complete the work that you asked to do in full, not a part of it with a follow-up."""
 
 # Credential variables per vendor; each harness sees only its own vendor's.
-VENDOR_PREFIXES = {"anthropic": ("ANTHROPIC_",), "openai": ("CODEX_", "OPENAI_")}
+VENDOR_PREFIXES = {
+    "anthropic": ("ANTHROPIC_",),
+    "openai": ("CODEX_", "OPENAI_"),
+}
 
 
 @dataclass
@@ -95,13 +102,120 @@ def record(run: Run, msg) -> None:
                 run.transcript.append({"role": "tool_result", "content": content or ""})
 
 
+def trace(
+    turn,
+    messages: list,
+    provider: str,
+    usage: dict[str, int] | None = None,
+    model: str = "",
+) -> None:
+    """Record messages on a Weave conversation turn, for harnesses Weave does not trace.
+
+    Each tool call gets a span. The text and thinking are one model response's,
+    recorded on one chat span with its ``usage``, when the harness reports it.
+    ``model`` names the response when no message does.
+    """
+    results = {
+        block.tool_use_id: block
+        for msg in messages
+        if isinstance(msg, UserMessage)
+        for block in msg.content
+        if isinstance(block, ToolResultBlock)
+    }
+    texts, thoughts = [], []
+    for msg in messages:
+        if not isinstance(msg, AssistantMessage):
+            continue
+        model = msg.model or model
+        for block in msg.content:
+            if isinstance(block, ToolUseBlock):
+                with turn.start_tool(
+                    name=block.name,
+                    arguments=json.dumps(block.input, default=str),
+                    tool_call_id=block.id,
+                ) as tool:
+                    if result := results.get(block.id):
+                        tool.result = result.content or ""
+                        if result.is_error:
+                            tool.record_error(RuntimeError(str(result.content)[-500:]))
+            elif isinstance(block, ThinkingBlock):
+                thoughts.append(block.thinking)
+            elif isinstance(block, TextBlock):
+                texts.append(block.text)
+    if texts or thoughts or usage:
+        with turn.start_llm(model=model, provider_name=provider) as llm:
+            if thoughts:
+                llm.think("\n".join(thoughts))
+            if texts:
+                llm.output("\n".join(texts))
+            if usage:
+                llm.record(usage=_weave_usage(usage))
+
+
+def _weave_usage(usage: dict[str, int]) -> Usage:
+    cache_read = usage.get("cache_read_input_tokens", 0)
+    cache_write = usage.get("cache_creation_input_tokens", 0)
+    return Usage(
+        input_tokens=usage.get("input_tokens", 0) + cache_read + cache_write,
+        output_tokens=usage.get("output_tokens", 0),
+        cache_read_input_tokens=cache_read,
+        cache_creation_input_tokens=cache_write,
+    )
+
+
+def record_usage(turn, usage: dict[str, int], model: str, provider: str) -> None:
+    """Record token usage on a Weave conversation turn as one chat span."""
+    with turn.start_llm(model=model, provider_name=provider) as llm:
+        llm.record(usage=_weave_usage(usage))
+
+
 class Harness(Protocol):
     name: str
     vendor: str
 
     async def run(
-        self, prompt: str, tree: Path, model: str, effort: str | None
-    ) -> Run: ...
+        self, prompt: str, tree: Path, model: str, effort: str | None, run: Run
+    ) -> None:
+        """Fill ``run`` as the harness goes, so a cancelled run keeps what it did."""
+
+
+def add_usage(run: Run, model: str, usage: dict[str, int]) -> None:
+    totals = run.usage.setdefault(model, {})
+    for key, count in usage.items():
+        totals[key] = totals.get(key, 0) + count
+
+
+class JsonCli:
+    """A CLI that takes the prompt on stdin and prints JSON events, one per line."""
+
+    def __init__(self, args: list[str], cwd: Path, env: dict[str, str], stdin: str):
+        self.args, self.cwd, self.env, self.stdin = args, cwd, env, stdin
+        self.returncode: int | None = None
+
+    async def events(self) -> AsyncIterator[dict]:
+        """Its events; other lines go to stderr, and stopping early kills it."""
+        proc = await asyncio.create_subprocess_exec(
+            *self.args,
+            cwd=self.cwd,
+            # Some CLIs take their project root from PWD, which is the caller's.
+            env={**self.env, "PWD": str(self.cwd)},
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            limit=1 << 28,
+        )
+        try:
+            proc.stdin.write(self.stdin.encode())
+            proc.stdin.close()
+            async for line in proc.stdout:
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    sys.stderr.write(line.decode(errors="replace"))
+            self.returncode = await proc.wait()
+        finally:
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
 
 
 def harness_env(vendor: str) -> dict[str, str]:

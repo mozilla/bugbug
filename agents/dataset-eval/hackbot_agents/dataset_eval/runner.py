@@ -28,6 +28,8 @@ from .weave_log import WeaveLog
 log = logging.getLogger(__name__)
 
 AGENTS = {"prompt-executor": "hackbot_agents.dataset_eval.prompt_executor"}
+# Past its own time limit, for the agent to stop and report what it did.
+STOP_GRACE_S = 120
 METRICS = (
     "test_progress",
     "quality",
@@ -130,6 +132,7 @@ class Runner:
                 "HARNESS": exp.harness,
                 "MODEL": exp.model,
                 "EFFORT": exp.effort or "",
+                "TIMEOUT_S": str(exp.example_timeout_min * 60),
                 "SOURCE_REPO": str(src),
                 "RUN_ID": self.ctx.run_id,
                 "ARTIFACTS_DIR": str(ex_dir / "artifacts"),
@@ -139,7 +142,7 @@ class Runner:
             [sys.executable, "-m", AGENTS[exp.agent]],
             env,
             Path.cwd(),
-            exp.example_timeout_min * 60,
+            exp.example_timeout_min * 60 + STOP_GRACE_S,
             ex_dir / "agent.log",
             f"[{row['id']}] ",
         )

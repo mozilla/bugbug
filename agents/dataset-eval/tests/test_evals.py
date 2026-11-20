@@ -9,13 +9,17 @@ import pytest
 from hackbot_agents.dataset_eval import dataset, prices, runner, tree
 from hackbot_agents.dataset_eval.grading import checks, tests
 from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
-from hackbot_agents.dataset_eval.prompt_executor.harnesses import harness_env
+from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
+    Run,
+    harness_env,
+    record,
+    record_usage,
+    trace,
+)
 from hackbot_agents.dataset_eval.prompt_executor.harnesses.claude_code import _usage
 from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
-    _record_usage,
-    normalize,
     to_messages,
-    trace,
+    usage_of,
 )
 from hackbot_agents.dataset_eval.weave_log import WeaveLog
 
@@ -56,15 +60,20 @@ def test_codex_items_and_usage():
         },
         {"type": "agentMessage", "id": "3", "text": "done"},
     ]
-    usage = {
-        "total": {"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 7}
-    }
-    run = normalize(items, usage, "gpt-x")
+    run = Run()
+    for item in items:
+        for msg in to_messages(item, "gpt-x"):
+            record(run, msg)
     roles = [t["role"] for t in run.transcript]
     assert roles == ["assistant", "tool_call", "tool_result", "assistant"]
     assert run.transcript[0]["thinking"] == "look" and run.tool_errors == 1
-    assert run.usage == {
-        "gpt-x": {"input_tokens": 20, "cache_read_input_tokens": 80, "output_tokens": 7}
+    usage = {
+        "total": {"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 7}
+    }
+    assert usage_of(usage) == {
+        "input_tokens": 20,
+        "cache_read_input_tokens": 80,
+        "output_tokens": 7,
     }
 
 
@@ -333,11 +342,41 @@ def test_codex_items_are_traced_as_a_weave_conversation():
     conversation = start_conversation(agent_name="prompt-executor", model="gpt-x")
     with conversation, conversation.start_turn(user_message="Do it.") as turn:
         for item in items:
-            trace(turn, to_messages(item, "gpt-x"))
+            trace(turn, to_messages(item, "gpt-x"), "openai")
         usage = {"input_tokens": 20, "cache_read_input_tokens": 80}
-        _record_usage(turn, usage, "gpt-x")
+        record_usage(turn, usage, "gpt-x", "openai")
 
     spans = {s.name: s for s in exporter.get_finished_spans()}
     assert "execute_tool shell" in spans and "chat gpt-x" in spans
     assert spans["execute_tool shell"].status.status_code.name == "ERROR"
     assert any(n.startswith("invoke_agent") for n in spans)
+
+
+def test_a_response_is_one_chat_span_with_its_usage():
+    from claude_agent_sdk import AssistantMessage, TextBlock, ThinkingBlock
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+    from weave.conversation import start_conversation
+
+    if not isinstance(otel_trace.get_tracer_provider(), TracerProvider):
+        otel_trace.set_tracer_provider(TracerProvider())
+    exporter = InMemorySpanExporter()
+    otel_trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(exporter))
+    messages = [
+        AssistantMessage([ThinkingBlock("look", "")], "m"),
+        AssistantMessage([TextBlock("done")], "m"),
+    ]
+    usage = {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 90}
+    conversation = start_conversation(agent_name="prompt-executor", model="m")
+    with conversation, conversation.start_turn(user_message="Do it.") as turn:
+        trace(turn, messages, "otari", usage)
+
+    (chat,) = [s for s in exporter.get_finished_spans() if s.name == "chat m"]
+    assert chat.attributes["gen_ai.usage.input_tokens"] == 100
+    assert chat.attributes["gen_ai.usage.cache_read.input_tokens"] == 90
+
+

@@ -9,6 +9,7 @@ The agent under evaluation, run like any hackbot agent: inputs from env, the
 result in ``summary.json``, traced by the runtime.
 """
 
+import asyncio
 import os
 import time
 from pathlib import Path
@@ -16,7 +17,7 @@ from pathlib import Path
 from hackbot_runtime import HackbotAgentResult, HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .harnesses import get_harness
+from .harnesses import Run, get_harness
 
 
 class AgentInputs(BaseSettings):
@@ -24,6 +25,7 @@ class AgentInputs(BaseSettings):
     harness: str
     model: str
     effort: str | None = None
+    timeout_s: float | None = None
     source_repo: Path
 
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
@@ -39,18 +41,26 @@ class PromptExecutorResult(HackbotAgentResult):
     tool_errors: int = 0
     cost_usd: float | None = None
     latency_s: float = 0.0
+    timed_out: bool = False
 
 
 async def main(ctx: HackbotContext) -> PromptExecutorResult:
     inputs = AgentInputs()
     # The agent sees the tree and its task, nothing that says it is being measured.
-    for name in ("prompt", "harness", "model", "effort"):
+    for name in ("prompt", "harness", "model", "effort", "timeout_s"):
         os.environ.pop(name.upper(), None)
     started = time.monotonic()
-    run = await get_harness(inputs.harness).run(
-        inputs.prompt, inputs.source_repo, inputs.model, inputs.effort
-    )
+    run = Run(transcript=[{"role": "user", "content": inputs.prompt}])
+    timed_out = False
+    try:
+        async with asyncio.timeout(inputs.timeout_s):
+            await get_harness(inputs.harness).run(
+                inputs.prompt, inputs.source_repo, inputs.model, inputs.effort, run
+            )
+    except TimeoutError:
+        timed_out = True
     return PromptExecutorResult(
+        timed_out=timed_out,
         num_turns=sum(t["role"] == "assistant" for t in run.transcript),
         message=run.message,
         transcript=run.transcript,

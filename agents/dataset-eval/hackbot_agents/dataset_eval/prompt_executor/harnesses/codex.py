@@ -12,7 +12,6 @@ conversation is traced here, as the Claude Agent SDK integration does for Claude
 Code.
 """
 
-import json
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -26,10 +25,11 @@ from claude_agent_sdk import (
 from hackbot_runtime.claude import Reporter
 from openai_codex import ApprovalMode, AsyncCodex, CodexConfig, Sandbox
 from openai_codex._run import _collect_async_turn_result
-from weave.conversation import Usage, start_conversation
+from openai_codex.types import ThreadTokenUsageUpdatedNotification
+from weave.conversation import start_conversation
 from weave.conversation.agent_context import resolve_agent_name
 
-from . import UNATTENDED, Run, harness_env, record
+from . import UNATTENDED, Run, harness_env, record, record_usage, trace
 
 
 def to_messages(item: dict, model: str) -> list:
@@ -59,86 +59,41 @@ def to_messages(item: dict, model: str) -> list:
     ]
 
 
-def normalize(items: list[dict], usage: dict | None, model: str) -> Run:
-    """A turn's items and total token usage, in dataset-eval's shapes."""
-    run = Run(models=[model])
-    for item in items:
-        for msg in to_messages(item, model):
-            record(run, msg)
-    total = (usage or {}).get("total") or {}
+def usage_of(usage: dict) -> dict[str, int]:
+    """A thread's token usage so far, in dataset-eval's shape."""
+    total = usage.get("total") or {}
     cached = total.get("cached_input_tokens", 0)
-    run.usage = {
-        model: {
-            "input_tokens": total.get("input_tokens", 0) - cached,
-            "cache_read_input_tokens": cached,
-            "output_tokens": total.get("output_tokens", 0),
-        }
+    return {
+        "input_tokens": total.get("input_tokens", 0) - cached,
+        "cache_read_input_tokens": cached,
+        "output_tokens": total.get("output_tokens", 0),
     }
-    return run
 
 
-def trace(turn, messages: list) -> None:
-    """Record one item's messages on a Weave conversation turn."""
-    results = {
-        block.tool_use_id: block
-        for msg in messages
-        if isinstance(msg, UserMessage)
-        for block in msg.content
-        if isinstance(block, ToolResultBlock)
-    }
-    for msg in messages:
-        if not isinstance(msg, AssistantMessage):
-            continue
-        for block in msg.content:
-            if isinstance(block, ToolUseBlock):
-                with turn.start_tool(
-                    name=block.name,
-                    arguments=json.dumps(block.input, default=str),
-                    tool_call_id=block.id,
-                ) as tool:
-                    if result := results.get(block.id):
-                        tool.result = result.content or ""
-                        if result.is_error:
-                            tool.record_error(RuntimeError(str(result.content)[-500:]))
-            else:
-                with turn.start_llm(model=msg.model, provider_name="openai") as llm:
-                    if isinstance(block, ThinkingBlock):
-                        llm.think(block.thinking)
-                    else:
-                        llm.output(block.text)
-
-
-async def _reported(stream, reporter: Reporter, turn, model: str):
-    """The turn's notifications, reporting and tracing each item as it completes."""
+async def _reported(stream, reporter: Reporter, turn, model: str, run: Run):
+    """The turn's notifications, recording, reporting and tracing each as it arrives."""
     async for event in stream:
         if event.method == "item/completed":
             item = getattr(event.payload.item, "root", event.payload.item).model_dump()
             messages = to_messages(item, model)
             for msg in messages:
                 reporter.message(msg)
-            trace(turn, messages)
+                record(run, msg)
+            trace(turn, messages, "openai")
+        elif isinstance(event.payload, ThreadTokenUsageUpdatedNotification):
+            run.usage = {model: usage_of(event.payload.token_usage.model_dump())}
         yield event
-
-
-def _record_usage(turn, usage: dict[str, int], model: str) -> None:
-    """Codex reports only the turn's total, recorded as one chat span."""
-    cached = usage.get("cache_read_input_tokens", 0)
-    with turn.start_llm(model=model, provider_name="openai") as llm:
-        llm.record(
-            usage=Usage(
-                input_tokens=usage.get("input_tokens", 0) + cached,
-                output_tokens=usage.get("output_tokens", 0),
-                cache_read_input_tokens=cached,
-            )
-        )
 
 
 class Codex:
     name = "codex"
     vendor = "openai"
 
-    async def run(self, prompt: str, tree: Path, model: str, effort: str | None) -> Run:
+    async def run(
+        self, prompt: str, tree: Path, model: str, effort: str | None, run: Run
+    ) -> None:
         env = harness_env(self.vendor)
+        run.models = [model]
         conversation = start_conversation(
             agent_name=resolve_agent_name(self.name), model=model
         )
@@ -148,9 +103,13 @@ class Codex:
                 user_message=prompt, system_instructions=[UNATTENDED]
             ) as traced,
         ):
-            return await self._run(prompt, tree, model, effort, env, traced)
+            try:
+                await self._run(prompt, tree, model, effort, env, traced, run)
+            finally:
+                if run.usage:
+                    record_usage(traced, run.usage[model], model, "openai")
 
-    async def _run(self, prompt, tree, model, effort, env, traced) -> Run:
+    async def _run(self, prompt, tree, model, effort, env, traced, run) -> None:
         with Reporter(verbose=True, log_path=None) as reporter:
             reporter.header(f"{self.name} {model}")
             async with AsyncCodex(CodexConfig(cwd=str(tree), env=env)) as codex:
@@ -168,15 +127,9 @@ class Codex:
                 # reported stream instead of consuming the turn twice.
                 turn = await thread.turn(prompt, effort=effort)
                 result = await _collect_async_turn_result(
-                    _reported(turn.stream(), reporter, traced, model),
+                    _reported(turn.stream(), reporter, traced, model, run),
                     turn_id=turn.id,
                 )
-        items = [getattr(i, "root", i).model_dump() for i in result.items]
-        usage = result.usage.model_dump() if result.usage else None
-        run = normalize(items, usage, model)
-        _record_usage(traced, run.usage[model], model)
-        run.transcript.insert(0, {"role": "user", "content": prompt})
         run.message = result.final_response or ""
         if result.error:
             run.error = getattr(result.error, "message", None) or str(result.error)
-        return run
