@@ -54,6 +54,7 @@ on:
           - agents/test-repair-fix
           - agents/uplift-resolve
           - services/hackbot-api
+          - services/hackbot-mcp
           - services/hackbot-ui
       action:
         description: "promote: what stage runs; rollback: prod's previous deployment"

@@ -37,6 +37,42 @@ class TriggeredRun(RunRef):
     is_new: bool
 
 
+class AgentDescriptor(BaseModel):
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+class ArtifactRef(BaseModel):
+    name: str
+    size: int
+    content_type: str | None = None
+
+
+class RunSummary(BaseModel):
+    status: str
+    error: str | None = None
+    findings: dict[str, Any] = {}
+    actions: list[dict[str, Any]] = []
+
+
+class RunDoc(BaseModel):
+    run_id: UUID
+    agent: str
+    status: RunStatus
+    inputs: dict[str, Any]
+    requested_by: str | None = None
+    requested_via: str | None = None
+    dedupe_key: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    execution_name: str | None = None
+    results_prefix: str
+    summary: RunSummary | None = None
+    artifacts: list[ArtifactRef] = []
+    error: str | None = None
+
+
 class RunAction(BaseModel):
     """One recorded action of a run, and whether it has landed.
 
