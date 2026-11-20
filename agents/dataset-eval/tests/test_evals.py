@@ -290,6 +290,8 @@ def test_grade(monkeypatch, tmp_path):
     (tmp_path / runner.tree.OBJDIR).mkdir()
     grader = object.__new__(runner.Runner)
     grader.work = tmp_path
+    published = []
+    grader.ctx = SimpleNamespace(publish_file=lambda key, *a: published.append(key))
     suite = {"harness": "wpt", "paths": ["dom/x"], "prefs": {"dom.x.enabled": True}}
     baseline = {"0:a.html": _entry("OK", one="FAIL", two="PASS")}
 
@@ -304,6 +306,7 @@ def test_grade(monkeypatch, tmp_path):
     assert scores["integrity"] == 1.0 and scores["test_progress"] == 1.0
     assert restored == ["testing/web-platform"]
     assert ran == [("wpt", ["dom/x"], {"dom.x.enabled": True})]
+    assert published == ["test-logs/after0-x-0.log"]
     edits_tests = "diff --git a/testing/web-platform/tests/dom/x/a.html b/x\n+x\n"
     assert grade({"tests": [suite]}, edits_tests, baseline)["integrity"] == 0.0
     # The tree was built as it is, so it is not built again.

@@ -117,6 +117,8 @@ class Runner:
             ran = await run_tests(
                 src, suite["harness"], suite["paths"], report, suite.get("prefs")
             )
+            test_log = report.with_suffix(".log")
+            self.ctx.publish_file(f"test-logs/{test_log.name}", test_log, "text/plain")
             results.update({f"{i}:{test}": entry for test, entry in ran.items()})
         return results
 
