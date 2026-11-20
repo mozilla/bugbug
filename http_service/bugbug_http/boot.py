@@ -177,7 +177,7 @@ def _classify_new_tasks(
             state["new_tasks"][label] = eligible[label]
 
 
-def update_config_selection_tasks(revs: list[str]) -> None:
+def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> None:
     """Retrieve the test tasks among which configs are selected.
 
     The tasks come from the task graph of the latest backstop push, which runs all of them with all
@@ -195,8 +195,15 @@ def update_config_selection_tasks(revs: list[str]) -> None:
     testconfigselect.task_labels). The test tasks which aren't eligible (see _eligible_tasks) are
     remembered, so that they aren't looked for again.
 
-    `revs` are the recent autoland pushes, from the oldest.
+    `revs` are the recent autoland pushes, from the oldest. `known_tasks` are their target tasks,
+    only used to forget the ignored tasks no push targets anymore.
     """
+    try:
+        with open(CONFIG_SELECTION_TASKS_PATH, "rb") as f:
+            previous_state = orjson.loads(f.read())
+    except FileNotFoundError:
+        previous_state = None
+
     # The latest backstop push with tasks.
     state: dict | None = None
     for rev in reversed(revs):
@@ -217,15 +224,24 @@ def update_config_selection_tasks(revs: list[str]) -> None:
             # The test tasks which aren't eligible: the ones of the task graph which aren't among
             # the tasks, and the target ones which aren't in the task graph (all the tasks that
             # test selection optimizes run on backstop pushes, so the others are optimized
-            # otherwise, e.g. jittest when no JS engine file changed).
-            ignored = {
-                _without_chunk(label)
-                for label in (
-                    *(task["label"] for task in task_graph.values()),
-                    *target_tasks,
-                )
-                if label.startswith("test-")
-            } - tasks.keys()
+            # otherwise, e.g. jittest when no JS engine file changed). The ones found before are
+            # kept, as long as they are among the target tasks of the recent pushes, as some are
+            # only targeted by some pushes (e.g. test-verify when tests are modified).
+            recent_targets = {_without_chunk(label) for label in known_tasks}
+            previously_ignored = (
+                set(previous_state["ignored"]) if previous_state is not None else set()
+            )
+            ignored = (
+                {
+                    _without_chunk(label)
+                    for label in (
+                        *(task["label"] for task in task_graph.values()),
+                        *target_tasks,
+                    )
+                    if label.startswith("test-")
+                }
+                | (previously_ignored & recent_targets)
+            ) - tasks.keys()
             state = {
                 "backstop": rev,
                 "tasks": tasks,
@@ -307,7 +323,7 @@ def retrieve_schedulable_tasks() -> None:
     _write("known_tasks", "\n".join(known_tasks))
 
     # The test tasks among which configs are selected for the manifests.
-    update_config_selection_tasks(revs)
+    update_config_selection_tasks(revs, known_tasks)
 
 
 def retrieve_build_platforms() -> None:

@@ -376,7 +376,7 @@ def test_update_config_selection_tasks(
         "test-linux2404-64/opt-jittest-1proc",
         "test-linux2404-64/opt-mochitest-plain-standalone",
     ]
-    boot.update_config_selection_tasks(["b1", "p1", "p2"])
+    boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
     assert read() == {
         "backstop": "b1",
         "tasks": CONFIG_SELECTION_TASKS,
@@ -397,13 +397,17 @@ def test_update_config_selection_tasks(
     assert full_graphs == [boot._decision_artifact_url("p1", "full-task-graph.json")]
 
     # A newer backstop push replaces the tasks, which include the renamed one, even if the target
-    # tasks of the recent pushes are from before the rename (they are only refreshed daily).
+    # tasks of the recent pushes are from before the rename (they are only refreshed daily). The
+    # tasks found not to be eligible before are kept as long as recent pushes target them (the
+    # shippable renamed one isn't among the tasks or the target tasks of the new backstop push).
     responses.add(
         responses.GET,
         boot._decision_artifact_url("b2", "task-graph.json"),
         json={**TASK_GRAPH, "r": renamed},
     )
-    boot.update_config_selection_tasks(["b1", "p1", "p2", "b2"])
+    boot.update_config_selection_tasks(
+        ["b1", "p1", "p2", "b2"], KNOWN_TASKS | {renamed_shippable["label"]}
+    )
     assert read() == {
         "backstop": "b2",
         "tasks": {
@@ -414,6 +418,8 @@ def test_update_config_selection_tasks(
             },
         },
         "new_tasks": {},
-        "ignored": ignored,
+        "ignored": sorted(
+            ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
+        ),
     }
     assert_requests_have_timeouts()
