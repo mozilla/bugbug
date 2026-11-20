@@ -72,23 +72,37 @@ def test_refresh_commits(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
+    now = [0.0]
 
     class Stop(Exception):
         pass
 
     def sleep(seconds: float) -> None:
-        assert seconds == boot.REFRESH_INTERVAL
-        if len(calls) == 2:
+        assert seconds == boot.CONFIG_SELECTION_TASKS_REFRESH_INTERVAL
+        if len(calls) == 7:
             raise Stop()
+        now[0] += seconds
 
+    def refresh_config_selection_tasks() -> None:
+        calls.append("tasks")
+        if len(calls) == 1:
+            raise Exception("pushlog unavailable")
+
+    monkeypatch.setattr(boot, "REFRESH_INTERVAL", 30)
+    monkeypatch.setattr(boot, "CONFIG_SELECTION_TASKS_REFRESH_INTERVAL", 10)
     monkeypatch.setattr(refresh.os, "nice", lambda increment: None)
     monkeypatch.setattr(refresh.time, "sleep", sleep)
+    monkeypatch.setattr(refresh.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(boot, "refresh_data", lambda: calls.append("refresh"))
+    monkeypatch.setattr(
+        boot, "refresh_config_selection_tasks", refresh_config_selection_tasks
+    )
 
-    # The data is refreshed again and again, after waiting.
+    # The config selection tasks are refreshed often (also after a failure), the rest of the data
+    # (including them) once per REFRESH_INTERVAL.
     with pytest.raises(Stop):
         refresh.main()
-    assert calls == ["refresh", "refresh"]
+    assert calls == ["tasks", "tasks", "refresh", "tasks", "tasks", "refresh", "tasks"]
 
 
 def _task(

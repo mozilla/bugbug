@@ -30,6 +30,9 @@ AUTOLAND_PUSHES = 50
 # How often the data about the current tasks, build platforms and commits is retrieved again (in
 # seconds, see bugbug_http.refresh).
 REFRESH_INTERVAL = 24 * 60 * 60
+# How often the test tasks among which configs are selected are updated with the latest pushes (in
+# seconds, see bugbug_http.refresh and update_config_selection_tasks).
+CONFIG_SELECTION_TASKS_REFRESH_INTERVAL = 10 * 60
 CONFIG_SELECTION_TASKS_PATH = "config_selection_tasks.json"
 # The timeouts of the requests for the current tasks (to connect, and between bytes received, in
 # seconds), so that a stalled request fails (and is retried) instead of blocking the boot or the
@@ -178,7 +181,7 @@ def _classify_new_tasks(
 
 
 def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> None:
-    """Retrieve the test tasks among which configs are selected.
+    """Update the test tasks among which configs are selected with the latest pushes.
 
     The tasks come from the task graph of the latest backstop push, which runs all of them with all
     their manifests (the manifests of the test tasks of other pushes are restricted to the ones
@@ -195,8 +198,8 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
     testconfigselect.task_labels). The test tasks which aren't eligible (see _eligible_tasks) are
     remembered, so that they aren't looked for again.
 
-    `revs` are the recent autoland pushes, from the oldest. `known_tasks` are their target tasks,
-    only used to forget the ignored tasks no push targets anymore.
+    `revs` are the recent autoland pushes, from the oldest. `known_tasks` are their target tasks
+    (possibly from an earlier refresh), only used to forget the ignored tasks no push targets anymore.
     """
     try:
         with open(CONFIG_SELECTION_TASKS_PATH, "rb") as f:
@@ -295,6 +298,13 @@ def get_recent_revs() -> list[str]:
     r.raise_for_status()
     pushes = sorted(r.json()["pushes"].items(), key=lambda push: int(push[0]))
     return [push_obj["changesets"][0] for _, push_obj in pushes[-AUTOLAND_PUSHES:]]
+
+
+def refresh_config_selection_tasks() -> None:
+    """Update the test tasks among which configs are selected (see update_config_selection_tasks)."""
+    with open("known_tasks", "r") as f:
+        known_tasks = {line.strip() for line in f}
+    update_config_selection_tasks(get_recent_revs(), known_tasks)
 
 
 @tenacity.retry(
