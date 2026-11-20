@@ -9,9 +9,11 @@ from testrail_client.models import (
     Case,
     CaseType,
     Result,
+    ResultInput,
     Run,
     Section,
     Status,
+    Step,
     Suite,
     Template,
     _CaseTypesResponse,
@@ -84,11 +86,46 @@ class TestRailClient:
         )
         return Section.model_validate(response)
 
-    async def add_case(self, section_id: int, payload: dict[str, Any]) -> Case:
+    async def add_case(
+        self,
+        section_id: int,
+        *,
+        title: str,
+        type_id: int,
+        template_id: int,
+        steps: list[Step],
+        preconditions: str | None = None,
+        labels: list[str] | None = None,
+    ) -> Case:
+        payload: dict[str, Any] = {
+            "title": title,
+            "type_id": type_id,
+            "template_id": template_id,
+            "custom_steps_separated": [step.model_dump() for step in steps],
+        }
+        if preconditions:
+            payload["custom_preconds"] = preconditions
+        if labels:
+            payload["labels"] = labels
         response = await self.request("POST", f"add_case/{section_id}", payload)
         return Case.model_validate(response)
 
-    async def add_run(self, payload: dict[str, Any]) -> Run:
+    async def add_run(
+        self,
+        *,
+        suite_id: int,
+        case_ids: list[int],
+        name: str,
+        description: str | None = None,
+    ) -> Run:
+        payload: dict[str, Any] = {
+            "name": name,
+            "suite_id": suite_id,
+            "include_all": False,
+            "case_ids": case_ids,
+        }
+        if description:
+            payload["description"] = description
         response = await self.request(
             "POST",
             f"add_run/{self.settings.project_id}",
@@ -97,11 +134,11 @@ class TestRailClient:
         return Run.model_validate(response)
 
     async def add_results_for_cases(
-        self, run_id: int, results: list[dict[str, Any]]
+        self, run_id: int, results: list[ResultInput]
     ) -> list[Result]:
         response = await self.request(
             "POST",
             f"add_results_for_cases/{run_id}",
-            {"results": results},
+            {"results": [result.model_dump() for result in results]},
         )
         return _ResultsResponse.model_validate(response).root

@@ -42,6 +42,17 @@ class Result(_Model):
     id: int
 
 
+class Step(_Model):
+    content: str
+    expected: str = ""
+
+
+class ResultInput(_Model):
+    case_id: int
+    status_id: int
+    comment: str = ""
+
+
 class _CaseTypesResponse(RootModel[list[CaseType]]):
     pass
 
