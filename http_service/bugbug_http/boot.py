@@ -209,11 +209,17 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
 
     # The latest backstop push with tasks.
     known_backstop = state["backstop"] if state is not None else None
+    not_backstops = set(state["not_backstops"]) if state is not None else set()
     for rev in reversed(revs):
         if rev == known_backstop:
             break
+        if rev in not_backstops:
+            continue
         r = _get(rev, "parameters.yml")
-        if not r.ok or not yaml.safe_load(r.text).get("backstop"):
+        if not r.ok:
+            continue
+        if not yaml.safe_load(r.text).get("backstop"):
+            not_backstops.add(rev)
             continue
         r = _get(rev, "task-graph.json")
         targets = _get(rev, "target-tasks.json")
@@ -257,6 +263,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
     if state is None:
         logger.warning("No backstop push with test tasks to retrieve")
         return
+    state["not_backstops"] = sorted(not_backstops & set(revs))
 
     ignored = set(state["ignored"])
 

@@ -294,6 +294,7 @@ def test_retrieve_schedulable_tasks(
                 "test-linux2404-64/opt-mochitest-plain-standalone",
             ],
             "processed": ["rev2", "rev3"],
+            "not_backstops": ["rev3"],
         }
 
 
@@ -421,6 +422,7 @@ def test_update_config_selection_tasks(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
         "processed": ["p1", "p3"],
+        "not_backstops": ["p1", "p2", "p3"],
     }
 
     # p2 is processed once its target tasks are there.
@@ -461,5 +463,13 @@ def test_update_config_selection_tasks(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
         "processed": [],
+        "not_backstops": ["p1", "p2", "p3"],
     }
+    # Pushes already known not to be backstop pushes aren't checked again.
+    parameters_calls = [
+        call.request.url
+        for call in responses.calls
+        if call.request.url.endswith("parameters.yml")
+    ]
+    assert len(parameters_calls) == len(set(parameters_calls))
     assert_requests_have_timeouts()

@@ -614,6 +614,7 @@ def test_schedule_config_groups_with_new_tasks(
                 },
                 "ignored": [],
                 "processed": [],
+                "not_backstops": [],
             },
             f,
         )
