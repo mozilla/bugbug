@@ -945,7 +945,7 @@ def hg_log(
     if len(revs) == 0:
         return tuple()
 
-    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{firstpushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -1691,13 +1691,7 @@ def clone(
         with hglib.open(repo_dir) as hg:
             clean(hg, repo_dir)
 
-        # Remove pushlog DB to make sure it's regenerated.
-        try:
-            os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
-        except FileNotFoundError:
-            logger.info("pushlog database doesn't exist")
-
-        # Pull, to make sure the pushlog is generated.
+        # Pull, to retrieve the new changesets and their pushes.
         with hglib.open(repo_dir) as hg:
             logger.info("Pulling %s", repo_dir)
             hg.pull(update=update)
