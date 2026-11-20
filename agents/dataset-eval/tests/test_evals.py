@@ -620,6 +620,7 @@ def test_deepseek_harness_events(tmp_path, monkeypatch):
     route = rows["llm-pi-ai"]["providers"]["otari"]
     assert route["baseURL"] == "https://otari.test/api/v1"
     assert route["apiKeyEnv"] == "OTARI_API_KEY"
+    assert route["compat"] == {"supportsDeveloperRole": False}
     levels = ("high", "low", "max", "medium")
     assert route["models"] == [
         {

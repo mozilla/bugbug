@@ -60,6 +60,8 @@ def patch(model: otari.Model, effort: str | None, tag: str) -> list[dict]:
                         "api": "openai-completions",
                         "baseURL": otari.api_url(),
                         "headers": {"Otari-Tags": tag},
+                        # otari's chat completions take no `developer` role.
+                        "compat": {"supportsDeveloperRole": False},
                         "models": [entry],
                     }
                 }
