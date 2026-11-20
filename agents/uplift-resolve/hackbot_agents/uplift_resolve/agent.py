@@ -68,6 +68,15 @@ GIT_IDENTITY_ENV = {
     "GIT_COMMITTER_EMAIL": "hackbot@mozilla.tld",
 }
 
+# Claude Code moves a Bash command past its timeout to the background, and an
+# agent that then ends its turn to wait ends a headless session. Ten minutes by
+# default, and up to thirty when asked, leaves slow git commands in the
+# foreground.
+BASH_TIMEOUT_ENV = {
+    "BASH_DEFAULT_TIMEOUT_MS": str(10 * 60 * 1000),
+    "BASH_MAX_TIMEOUT_MS": str(30 * 60 * 1000),
+}
+
 # Not a secret: the proxy discards it and substitutes the real Conduit key.
 # Sized to the 32 characters `PhabricatorSettings` requires.
 PROXY_API_TOKEN = "hackbot-broker-proxy-placeholder"
@@ -273,7 +282,7 @@ def build_options(
         max_turns=max_turns,
         setting_sources=["project"],
         effort=effort or EFFORT,
-        env=GIT_IDENTITY_ENV,
+        env=GIT_IDENTITY_ENV | BASH_TIMEOUT_ENV,
     )
 
 

@@ -8,6 +8,10 @@ the final patch as an artifact.
 
 ## How to apply each patch
 
+Run every command in the foreground and wait for it to finish. Never end your
+turn while a command you started is still running: nobody will resume you, so
+the run ends there with nothing resolved.
+
 Apply the sources one at a time, in the order given. The checkout is shallow, but
 every commit the sources need has already been fetched for you, so do not fetch
 them again.
