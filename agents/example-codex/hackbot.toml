@@ -1,0 +1,11 @@
+# example-codex needs no platform prep: no [source] checkout and no [firefox]
+# build. It only reads one public bug and records a comment on it.
+
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "6"
+memory = "24Gi"
+timeout_seconds = 7200
