@@ -123,7 +123,8 @@ async def push(
     This records the push for review rather than performing it, so you will not
     see the results.
 
-    Later actions can reference its `url`.
+    Record this before your patch action, then link the push in that patch's
+    `test_plan` as ``{{actions.<action_id>.url}}``, using the ID this returns.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:
@@ -160,7 +161,10 @@ async def push(
         params["rebuild"] = rebuild
 
     action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning)
-    return confirmation(action)
+    return (
+        f"{confirmation(action)} Link it in your patch's test_plan as "
+        f"{{{{actions.{action['action_id']}.url}}}}."
+    )
 
 
 TOOLS = tools_in(__name__)
