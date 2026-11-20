@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import mozci.errors
 import mozci.push
 from dateutil.relativedelta import relativedelta
-from mozci.task import get_configuration as mozci_get_configuration
+from mozci.task import get_configuration
 from pandas import DataFrame, DatetimeIndex, Series
 from tqdm import tqdm
 
@@ -45,21 +45,6 @@ PUSH_MEMOIZED_ATTRIBUTES = (
     "_scheduled_task_labels",
     "_get_shadow_scheduler_tasks",
 )
-
-
-def get_configuration(task: dict) -> str:
-    # mozci reads the test variants from "test-settings", but the task graph
-    # calls it "test-setting", so variants (e.g. "-swr") would be lost.
-    extra = task["task"]["extra"]
-    if "test-setting" in extra and "test-settings" not in extra:
-        task = {
-            **task,
-            "task": {
-                **task["task"],
-                "extra": {**extra, "test-settings": extra["test-setting"]},
-            },
-        }
-    return mozci_get_configuration(task)
 
 
 # Granularities at which tasks, rather than groups, are evaluated:

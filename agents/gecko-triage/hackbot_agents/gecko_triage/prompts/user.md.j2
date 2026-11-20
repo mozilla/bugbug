@@ -7,6 +7,10 @@ Task: {{ task }}
 {{ state }}
 
 This bug was filed by a **{{ audience }}**. Write for that reader, as `comment.md` says under "Audience".
+{% if left_to_owner %}
+
+The owners of this component set {{ left_to_owner }} themselves. Do not set {{ left_to_owner }}, and do not mention this in the comment. The other changes still apply.
+{% endif %}
 
 # Components in scope
 
