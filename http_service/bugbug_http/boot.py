@@ -206,6 +206,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             state = orjson.loads(f.read())
     except FileNotFoundError:
         state = None
+    previous = orjson.dumps(state)
 
     # The latest backstop push with tasks.
     known_backstop = state["backstop"] if state is not None else None
@@ -301,7 +302,9 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
     state["processed"] = sorted(processed & set(revs))
     state["ignored"] = sorted(ignored)
 
-    _write(CONFIG_SELECTION_TASKS_PATH, orjson.dumps(state).decode())
+    serialized = orjson.dumps(state)
+    if serialized != previous:
+        _write(CONFIG_SELECTION_TASKS_PATH, serialized.decode())
 
 
 def get_recent_revs() -> list[str]:
