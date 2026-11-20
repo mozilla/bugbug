@@ -23,6 +23,9 @@ from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
     to_messages,
     usage_of,
 )
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.deepseek_harness import (
+    DeepSeekHarness,
+)
 from hackbot_agents.dataset_eval.prompt_executor.harnesses.oh_my_pi import OhMyPi
 from hackbot_agents.dataset_eval.prompt_executor.harnesses.opencode import OpenCode
 from hackbot_agents.dataset_eval.weave_log import WeaveLog
@@ -535,6 +538,61 @@ def test_timed_out_cli_run_keeps_what_it_did(tmp_path, monkeypatch):
     assert time.monotonic() - started < 10
     assert run.message == "half" and run.cost_usd == 0.1
     assert run.usage["deepinfra:qwen"]["output_tokens"] == 2
+
+
+def test_deepseek_harness_events(tmp_path, monkeypatch):
+    usage = {"inputTokens": 10, "outputTokens": 5, "cacheReadTokens": 90}
+    events = [
+        {"type": "session", "sessionId": "s", "cwd": "/"},
+        {"type": "thinking", "text": "look"},
+        {"type": "tool_call", "callId": "t1", "tool": "shell", "input": {"c": "ls"}},
+        {"type": "tool_result", "callId": "t1", "status": "error", "result": "x"},
+        {"type": "status", "phase": "step_end", "turn": 1, "step": 1, "usage": usage},
+        {"type": "text", "text": "done"},
+        {"type": "status", "phase": "step_end", "turn": 1, "step": 2, "usage": usage},
+        {
+            "type": "final",
+            "sessionId": "s",
+            "reason": {"kind": "completed"},
+            "text": "done",
+        },
+    ]
+    _fake_cli(tmp_path, monkeypatch, "dsh", events, stored=({}, 0.5))
+
+    harness = DeepSeekHarness()
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(harness.run("Do it.", tmp_path, "deepseek/deepseek-v4", "max", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "assistant", "tool_call", "tool_result", "assistant"]
+    assert run.tool_errors == 1
+    assert run.usage["deepseek/deepseek-v4"]["cache_read_input_tokens"] == 180
+    assert run.cost_usd == 0.5
+    args = (tmp_path / "args").read_text().split()
+    rows = {
+        row["id"]: row["config"]
+        for row in json.loads(Path(args[args.index("--patch") + 1]).read_text())
+    }
+    route = rows["llm-pi-ai"]["providers"]["otari"]
+    assert route["baseURL"] == "https://otari.test/api/v1"
+    assert route["apiKeyEnv"] == "OTARI_API_KEY"
+    levels = ("high", "low", "max", "medium")
+    assert route["models"] == [
+        {
+            "id": "deepseek/deepseek-v4",
+            "contextWindow": 1000,
+            "maxTokens": 100,
+            "reasoningEfforts": {level: level for level in levels},
+        }
+    ]
+    assert rows["agent-default-model"] == {
+        "provider": "otari",
+        "model": "deepseek/deepseek-v4",
+        "reasoningEffort": "max",
+    }
+    env = _env(tmp_path)
+    assert "ANTHROPIC_API_KEY" not in env and env["DSH_HOME"] == f"{tmp_path}/.dsh"
 
 
 def test_a_response_is_one_chat_span_with_its_usage():
