@@ -5,7 +5,8 @@ each takes a :class:`FirefoxContext` (paths derived from the source repo) as its
 first parameter and returns plain data.
 """
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -13,6 +14,8 @@ from pydantic import Field
 
 from agent_tools.registry import tool, tools_in
 
+from .ci_build import linux_build_env as linux_build_env
+from .ci_build import prepare_ci_build
 from .tools import bootstrap_firefox as _bootstrap_firefox
 from .tools import build_firefox as _build_firefox
 from .tools import evaluate_testcase as _evaluate_testcase
@@ -35,6 +38,21 @@ class FirefoxContext:
     js_binary: Path
     # What bootstrap_firefox last set up, which build_firefox then builds for.
     application: str = "browser"
+    # Bootstrap before the first build, so triage-only runs skip it.
+    bootstrap_before_build: bool = False
+    _ci_build_env: dict[str, str] | None = field(default=None, init=False, repr=False)
+    _bootstrapped: bool = field(default=False, init=False, repr=False)
+    _build_lock: asyncio.Lock = field(
+        default_factory=asyncio.Lock, init=False, repr=False
+    )
+
+    async def configure_ci_build(self, env: dict[str, str]) -> None:
+        """Fetch a CI task's toolchains and use its mozconfig."""
+        self._ci_build_env = await prepare_ci_build(
+            self.source_dir, self.mozconfig, self.objdir, env
+        )
+        # CI's toolchains replace bootstrap; bootstrapping over them would break the build.
+        self._bootstrapped = True
 
     @property
     def android_mozconfig(self) -> Path:
@@ -163,10 +181,22 @@ async def build_firefox(
     you've changed source or the binary is missing — check if the binary exists
     first.
     """
-    firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
-    mozconfig, objdir = ctx.build_config()
-    mozconfig_p = Path(mozconfig_path) if mozconfig_path else mozconfig
-    return await _build_firefox(firefox_dir_p, mozconfig_p, objdir, target=target)
+    async with ctx._build_lock:
+        firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
+        mozconfig, objdir = ctx.build_config()
+        mozconfig_p = Path(mozconfig_path) if mozconfig_path else mozconfig
+        if ctx.bootstrap_before_build and not ctx._bootstrapped:
+            result = await _bootstrap_firefox(firefox_dir_p, ctx.application)
+            if not result["success"]:
+                return result
+            ctx._bootstrapped = True
+        return await _build_firefox(
+            firefox_dir_p,
+            mozconfig_p,
+            objdir,
+            target=target,
+            env_overrides=ctx._ci_build_env,
+        )
 
 
 @tool
@@ -246,18 +276,20 @@ async def bootstrap_firefox(
     Bootstrapping for Android also writes a mozconfig for it, which
     ``build_firefox`` then uses; bootstrapping for desktop switches back.
     """
-    firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
-    result = await _bootstrap_firefox(firefox_dir_p, application)
-    if result["success"]:
-        ctx.application = application
-        if application.startswith("mobile_android"):
-            mozconfig, objdir = ctx.build_config()
-            mozconfig.write_text(_android_mozconfig(application, objdir))
-            result["message"] += (
-                f"; build_firefox now builds Firefox for Android, with {mozconfig} "
-                f"(for mach from Bash: MOZCONFIG={mozconfig} ./mach ...)"
-            )
-    return result
+    async with ctx._build_lock:
+        firefox_dir_p = Path(firefox_dir) if firefox_dir else ctx.source_dir
+        result = await _bootstrap_firefox(firefox_dir_p, application)
+        if result["success"]:
+            ctx.application = application
+            ctx._bootstrapped = True
+            if application.startswith("mobile_android"):
+                mozconfig, objdir = ctx.build_config()
+                mozconfig.write_text(_android_mozconfig(application, objdir))
+                result["message"] += (
+                    f"; build_firefox now builds Firefox for Android, with {mozconfig} "
+                    f"(for mach from Bash: MOZCONFIG={mozconfig} ./mach ...)"
+                )
+        return result
 
 
 def _android_mozconfig(application: str, objdir: Path) -> str:

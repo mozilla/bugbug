@@ -1,5 +1,6 @@
 import logging
 
+from agent_tools.firefox import linux_build_env
 from hackbot_runtime import HackbotContext, run_async
 from hackbot_runtime.actions.email import record_email
 from hackbot_runtime.actions.phabricator import PATCH_ACTION_TYPES
@@ -8,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .agent import BuildRepairResult, run_build_repair
 from .config import CHECKOUT_DEPTH, NOTIFY_ONLY_WITH_PATCH
 from .notify import build_email, recipients, resolve_author_email
-from .resolve import PushInfo, linux_build_env, resolve_push
+from .resolve import PushInfo, resolve_push
 
 logger = logging.getLogger(__name__)
 
