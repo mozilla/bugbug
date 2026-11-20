@@ -88,4 +88,9 @@ FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>
 `OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses);
 `WEAVE_PROJECT` defaults to `moz-bugbug/hackbot-evals`. The local
 Firefox clone is mounted read-only and lends its objects to the tree, so nothing
-is cloned; the run uses its checked-out HEAD.
+is cloned; the run uses its checked-out HEAD, or `SOURCE_REF`.
+
+The tree and its build persist in the `dataset-eval-workspace` volume. A run on
+the commit the last one built skips the bootstrap, and the first build too when
+the last build was of the clean tree; rows without tests are not built for
+grading and get no `builds` score. On a fixed commit a run is mostly agent time.

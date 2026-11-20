@@ -87,8 +87,13 @@ class Runner:
 
         self.rubric = weave.ref(exp.judge_rubric).get().content
 
-    async def build(self, src: Path) -> bool:
+    async def build(self, src: Path, base: str) -> bool:
+        if tree.built(src, base):
+            log.info("the build is of this tree; not building")
+            return True
         started = time.monotonic()
+        stamp = tree.stamp(src)
+        stamp.unlink(missing_ok=True)
         result = await build_firefox(src, tree.mozconfig(src), src / tree.OBJDIR)
         if not result.get("success"):
             output = (result.get("stdout") or "") + (result.get("stderr") or "")
@@ -99,6 +104,7 @@ class Runner:
                 output[-3000:],
             )
             return False
+        stamp.write_text(tree.state(src, base))
         log.info("build done in %s", _since(started))
         return True
 
@@ -180,16 +186,19 @@ class Runner:
 
         Editing a harness's tests fails integrity; its metadata, such as the prefs
         a test directory runs with, is the agent's to change, but is restored too.
+        A row without tests is not built.
         """
         scores: dict[str, float] = {}
         harnesses = {suite["harness"] for suite in row.get("tests", [])}
-        if harnesses:
-            scores["integrity"] = float(
-                not any(checks.touches(patch, TEST_DIRS[h]) for h in harnesses)
-            )
-            for harness in harnesses:
+        if not harnesses:
+            return scores
+        scores["integrity"] = float(
+            not any(checks.touches(patch, TEST_DIRS[h]) for h in harnesses)
+        )
+        for harness in harnesses:
+            if checks.touches(patch, TEST_ROOTS[harness]):
                 tree.restore(src, base, TEST_ROOTS[harness])
-        built = await self.build(src)
+        built = await self.build(src, base)
         scores["builds"] = float(built)
         if baseline is not None:
             if built:
@@ -211,16 +220,22 @@ class Runner:
             base[:12],
         )
         started = time.monotonic()
-        log.info("bootstrapping the toolchain")
-        bootstrap = await bootstrap_firefox(src)
-        if not bootstrap.get("success"):
-            raise AgentError(f"bootstrap failed: {bootstrap.get('message')}")
-        log.info(
-            "bootstrap done in %s; building Firefox (the first build is the long one)",
-            _since(started),
-        )
-        if not await self.build(src):
-            raise AgentError(f"could not build Firefox at {base}")
+        tree.reset(src, base)
+        if tree.built(src, base):
+            log.info("reusing the build of %s", base[:12])
+        else:
+            # A build at this commit, of a patched tree, needs no new toolchain.
+            if tree.built_base(src) != base:
+                log.info("bootstrapping the toolchain")
+                bootstrap = await bootstrap_firefox(src)
+                if not bootstrap.get("success"):
+                    raise AgentError(f"bootstrap failed: {bootstrap.get('message')}")
+            log.info(
+                "building Firefox after %s (the first build is the long one)",
+                _since(started),
+            )
+            if not await self.build(src, base):
+                raise AgentError(f"could not build Firefox at {base}")
         baselines = {}
         for row in self.rows:
             if row.get("tests"):

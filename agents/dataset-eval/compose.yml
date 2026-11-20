@@ -23,6 +23,7 @@ services:
       - JUDGE_RUBRIC=${JUDGE_RUBRIC:-}
       - LABEL=${LABEL:-}
       - SOURCE_REPO=/workspace/firefox
+      - SOURCE_REF=${SOURCE_REF:-}
       - FIREFOX_MIRROR=/firefox
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CODEX_API_KEY=${CODEX_API_KEY:-}

@@ -190,6 +190,32 @@ def test_tree_reset_keeps_only_the_build(tmp_path):
     assert (repo / tree.OBJDIR / "libxul.so").read_text() == "built"
 
 
+def test_a_build_is_reused_only_for_the_tree_it_was_built_from(tmp_path):
+    repo = tmp_path / "firefox"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / ".gitignore").write_text("/obj*/\n")
+    (repo / "dom.cpp").write_text("base\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    base = tree.head(repo)
+    binaries = repo / tree.OBJDIR / "dist" / "bin"
+    binaries.mkdir(parents=True)
+    (binaries / "libxul.so").write_text("built")
+    assert not tree.built(repo, base)
+
+    assert tree.built_base(repo) is None
+    tree.stamp(repo).write_text(tree.state(repo, base))
+    assert tree.built(repo, base)
+    (repo / "dom.cpp").write_text("changed\n")
+    assert not tree.built(repo, base) and tree.built_base(repo) == base
+    tree.reset(repo, base)
+    assert tree.built(repo, base)
+    # The agent built something itself.
+    stamped = tree.stamp(repo).stat().st_mtime
+    os.utime(binaries / "libxul.so", (stamped + 10, stamped + 10))
+    assert not tree.built(repo, base)
+
+
 def test_example_env_is_fresh_and_shares_the_toolchain(tmp_path):
     env = example_env({"HOME": "/home/agent"}, tmp_path / "ex", {"PROMPT": "p"})
     assert env["HOME"] == str(tmp_path / "ex" / "home")
@@ -260,6 +286,8 @@ def test_grade(monkeypatch, tmp_path):
     monkeypatch.setattr(
         runner.tree, "restore", lambda src, base, path: restored.append(path)
     )
+    monkeypatch.setattr(runner.tree, "diff", lambda src, base: PATCH)
+    (tmp_path / runner.tree.OBJDIR).mkdir()
     grader = object.__new__(runner.Runner)
     grader.work = tmp_path
     suite = {"harness": "wpt", "paths": ["dom/x"], "prefs": {"dom.x.enabled": True}}
@@ -269,7 +297,8 @@ def test_grade(monkeypatch, tmp_path):
         row = {"id": "x", **row}
         return asyncio.run(grader.grade(tmp_path, "base", row, 0, base, patch))
 
-    assert grade({}) == {"builds": 1.0}
+    # A row without tests is not built.
+    assert grade({}) == {}
     # Editing test metadata is fine; it is restored like the tests.
     scores = grade({"tests": [suite]}, base=baseline)
     assert scores["integrity"] == 1.0 and scores["test_progress"] == 1.0
@@ -277,7 +306,18 @@ def test_grade(monkeypatch, tmp_path):
     assert ran == [("wpt", ["dom/x"], {"dom.x.enabled": True})]
     edits_tests = "diff --git a/testing/web-platform/tests/dom/x/a.html b/x\n+x\n"
     assert grade({"tests": [suite]}, edits_tests, baseline)["integrity"] == 0.0
+    # The tree was built as it is, so it is not built again.
+    calls = []
+
+    async def counted(*args):
+        calls.append(args)
+        return {"success": True}
+
+    monkeypatch.setattr(runner, "build_firefox", counted)
+    assert grade({"tests": [suite]}, base=baseline)["builds"] == 1.0 and not calls
     # A failed build scores no progress and no made-up regressions.
+    monkeypatch.setattr(runner, "build_firefox", build)
+    runner.tree.stamp(tmp_path).unlink()
     built[0] = False
     assert grade({"tests": [suite]}, base=baseline) == {
         "integrity": 1.0,
