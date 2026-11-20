@@ -54,6 +54,23 @@ def test_init_weave_enabled_by_api_key(monkeypatch):
     assert calls == {"project": "team/prod"}
 
 
+def test_init_weave_takes_the_configured_project_unless_overridden(monkeypatch):
+    import weave
+
+    calls = {}
+    monkeypatch.setattr(
+        weave, "init", lambda project, **kw: calls.update(project=project)
+    )
+    monkeypatch.setenv("WANDB_API_KEY", "dummy")
+    monkeypatch.delenv("WEAVE_PROJECT", raising=False)
+
+    assert tracing._init_weave("team/configured") is True
+    assert calls == {"project": "team/configured"}
+    monkeypatch.setenv("WEAVE_PROJECT", "team/run")
+    assert tracing._init_weave("team/configured") is True
+    assert calls == {"project": "team/run"}
+
+
 def test_init_weave_enabled_by_wif_token_file(monkeypatch):
     """Federation leaves no API key -- the identity token file enables tracing."""
     import weave
@@ -75,7 +92,7 @@ def test_trace_agent_is_noop_without_credentials():
 
 
 def test_trace_agent_labels_spans_when_enabled(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda project=None: True)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
     with tracing.trace_agent(entry, "run-1"):
@@ -84,7 +101,7 @@ def test_trace_agent_labels_spans_when_enabled(monkeypatch):
 
 
 def test_trace_agent_tags_spans_with_run_id(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda project=None: True)
     provider = TracerProvider()
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
@@ -99,7 +116,7 @@ def test_trace_agent_tags_spans_with_run_id(monkeypatch):
 
 
 def test_trace_agent_skips_tagging_without_sdk_provider(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda project=None: True)
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: object())
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
@@ -121,7 +138,7 @@ def exporter(monkeypatch):
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     monkeypatch.setattr(conversation.otel_trace, "get_tracer", provider.get_tracer)
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda project=None: True)
     return exporter
 
 
