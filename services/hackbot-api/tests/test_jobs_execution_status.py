@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 
 from app import jobs
 from app.jobs import ExecutionStatus
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import NotFound, ServiceUnavailable
+from google.cloud import run_v2
 
 
 def test_deleted_execution_maps_to_gone(monkeypatch):
@@ -42,3 +43,29 @@ def test_job_names_carry_the_environment_suffix(monkeypatch):
         jobs._job_resource_name("hackbot-agent-bug-fix")
         == "projects/p/locations/us-west1/jobs/hackbot-agent-bug-fix-dev"
     )
+
+
+def test_unavailable_run_job_reuses_execution_that_already_started(monkeypatch):
+    monkeypatch.setattr(jobs.settings, "gcp_project", "p")
+    monkeypatch.setattr(jobs.settings, "gcp_region", "r")
+    jobs_client = MagicMock()
+    jobs_client.run_job.side_effect = ServiceUnavailable("Connection reset by peer")
+    started = run_v2.Execution(
+        name="executions/started",
+        template=run_v2.TaskTemplate(
+            containers=[
+                run_v2.Container(
+                    name="agent", env=[run_v2.EnvVar(name="RUN_ID", value="run-1")]
+                )
+            ]
+        ),
+    )
+    executions_client = MagicMock()
+    executions_client.list_executions.return_value.executions = [started]
+    monkeypatch.setattr(jobs, "_jobs_client", lambda: jobs_client)
+    monkeypatch.setattr(jobs, "_executions_client", lambda: executions_client)
+
+    name = jobs._trigger_sync("job", {"RUN_ID": "run-1"}, 60)
+
+    assert name == "executions/started"
+    assert jobs_client.run_job.call_count == 1
