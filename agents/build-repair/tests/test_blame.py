@@ -44,12 +44,16 @@ def test_an_unparsable_verdict_falls_back_to_the_failure_commit(tmp_path):
 
 
 def test_a_single_commit_push_is_spelled_out():
-    context = _push_context([TIP])
+    context = _push_context([TIP], shallow=True)
     assert f"consists of commit {TIP} alone" in context
     assert "earlier pushes" in context
 
 
 def test_a_multi_commit_push_lists_every_commit():
-    context = _push_context([TIP, STACKED])
+    context = _push_context([TIP, STACKED], shallow=True)
     assert f"- {TIP}\n- {STACKED}" in context
     assert "earlier pushes" in context
+
+
+def test_a_full_history_checkout_gets_no_shallow_warning():
+    assert "shallow" not in _push_context([TIP], shallow=False)
