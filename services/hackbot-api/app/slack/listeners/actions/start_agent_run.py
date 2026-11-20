@@ -73,6 +73,39 @@ def _generate_replacement_block(
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": note}]}
 
 
+def _replace_in_actions_block(
+    block: dict, action: ButtonAction, note_block: dict
+) -> list[dict] | None:
+    """The blocks replacing an actions block once its clicked button is gone."""
+    elements = block["elements"]
+    filtered_elements = [e for e in elements if e["action_id"] != action.action_id]
+    if len(filtered_elements) == len(elements):
+        log.error(
+            "Clicked button '%s' is not in its block's elements, which is unexpected",
+            action.action_id,
+        )
+        return None
+    if not filtered_elements:
+        return [note_block]
+    return [{**block, "elements": filtered_elements}, note_block]
+
+
+def _replace_in_section_block(
+    block: dict, action: ButtonAction, note_block: dict
+) -> list[dict] | None:
+    """The blocks replacing a section once its clicked accessory button is gone."""
+    accessory = block.get("accessory")
+    if accessory is None or accessory.get("action_id") != action.action_id:
+        log.error(
+            "Clicked button '%s' is not its section's accessory, which is unexpected",
+            action.action_id,
+        )
+        return None
+    section = block.copy()
+    del section["accessory"]
+    return [section, note_block]
+
+
 def _message_with_note(
     message: dict, action: ButtonAction, note_block: dict
 ) -> dict | None:
@@ -85,26 +118,19 @@ def _message_with_note(
     for i, block in enumerate(blocks):
         if block["block_id"] != action.block_id:
             continue
-        if block["type"] != "actions":
+        if block["type"] == "actions":
+            replacement = _replace_in_actions_block(block, action, note_block)
+        elif block["type"] == "section":
+            replacement = _replace_in_section_block(block, action, note_block)
+        else:
             log.error(
-                "Clicked button '%s' is in a '%s' block, which is not supported yet",
+                "Clicked button '%s' is in a '%s' block, which is not supported",
                 action.action_id,
                 block["type"],
             )
             return None
-        elements = block["elements"]
-        filtered_elements = [e for e in elements if e["action_id"] != action.action_id]
-        if len(filtered_elements) == len(elements):
-            log.error(
-                "Clicked button '%s' is not in its block's elements, which is unexpected",
-                action.action_id,
-            )
+        if replacement is None:
             return None
-        replacement = (
-            [{**block, "elements": filtered_elements}, note_block]
-            if filtered_elements
-            else [note_block]
-        )
         return {
             "text": f"{message['text']}\n{note_block['elements'][0]['text']}".strip(),
             "blocks": blocks[:i] + replacement + blocks[i + 1 :],
