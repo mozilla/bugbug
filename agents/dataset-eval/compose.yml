@@ -31,7 +31,7 @@ services:
       - OTARI_BASE_URL=${OTARI_BASE_URL:-}
       - OTARI_API_KEY=${OTARI_API_KEY:-}
       - WANDB_API_KEY=${WANDB_API_KEY:-}
-      - WEAVE_PROJECT
+      - WEAVE_PROJECT=${WEAVE_PROJECT:-moz-bugbug/hackbot-evals}
       - ARTIFACTS_DIR=/artifacts
     shm_size: 2gb
     volumes:

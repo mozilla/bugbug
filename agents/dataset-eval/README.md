@@ -84,7 +84,8 @@ for the models it serves.
 `WEAVE_PROJECT`. Their defaults are in
 [`__main__.py`](hackbot_agents/dataset_eval/__main__.py), and `WEAVE_PROJECT`'s
 (`moz-bugbug/hackbot-evals-dev`) in [`hackbot.toml`](hackbot.toml); the API and UI
-pass on only what a run sets.
+pass on only what a run sets. Local runs through `compose.yml` default to
+`moz-bugbug/hackbot-evals`.
 
 ## Running locally
 
