@@ -272,7 +272,9 @@ class DatasetEvalInputs(AgentInputs):
     # Weave dataset ref, pinned by version (`name:digest`).
     dataset: str
     agent: Literal["prompt-executor"] = "prompt-executor"
-    harness: Literal["claude_code", "codex"] = "claude_code"
+    harness: Literal[
+        "claude_code", "codex", "oh_my_pi", "opencode", "deepseek_harness"
+    ] = "claude_code"
     model: str | None = None
     effort: str | None = None
     reps: Annotated[int, Field(ge=1)] = 1

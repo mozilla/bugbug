@@ -27,9 +27,19 @@ the test files fails `integrity`.
 `prompt-executor` ([`prompt_executor/`](hackbot_agents/dataset_eval/prompt_executor/))
 is a hackbot agent like the others -- inputs from env, result in `summary.json`,
 logged with `Reporter` and traced to Weave under this run's id -- that runs a coding
-harness unmodified on the prompt: `claude_code` (Claude Agent SDK)
-or `codex` (Codex Python SDK). Each sees only its own vendor's credentials, and
-nothing in its environment says it is being evaluated.
+harness unmodified on the prompt: `claude_code` (Claude Agent SDK),
+`codex` (Codex Python SDK), or, for open models,
+`oh_my_pi` ([omp](https://github.com/can1357/oh-my-pi) in JSON print mode),
+`opencode` ([OpenCode](https://github.com/anomalyco/opencode) `run --format json`)
+and `deepseek_harness` ([DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+headless). Each sees only its own vendor's credentials, and nothing in its
+environment says it is being evaluated.
+
+The open-model harnesses reach their models through an
+[otari](https://github.com/mozilla-ai/otari) gateway
+([`otari.py`](hackbot_agents/dataset_eval/prompt_executor/harnesses/otari.py)):
+`MODEL` is named as otari names it, e.g. `deepinfra:Qwen/Qwen3.8-27B`, and the
+model's limits, the run's usage and its cost come from otari.
 
 ## Dataset
 
@@ -56,7 +66,8 @@ directory off the repo.
 
 `test_progress` (per test file, the share of the gap to passing that the patch
 closes), `test_regressions`, `builds`, `integrity`, `quality`, and cost from
-token usage ([`prices.py`](hackbot_agents/dataset_eval/prices.py)).
+token usage ([`prices.py`](hackbot_agents/dataset_eval/prices.py)), or from otari
+for the models it serves.
 
 ## Input
 
@@ -73,6 +84,8 @@ FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>
 ```
 
 `.env` needs `ANTHROPIC_API_KEY` and `WANDB_API_KEY` (and `CODEX_API_KEY` for the
-`codex` harness); `WEAVE_PROJECT` defaults to `moz-bugbug/hackbot-evals`. The local
+`codex` harness, and `OTARI_API_KEY`, with the `usage:read` scope, and
+`OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses);
+`WEAVE_PROJECT` defaults to `moz-bugbug/hackbot-evals`. The local
 Firefox clone is mounted read-only and lends its objects to the tree, so nothing
 is cloned; the run uses its checked-out HEAD.

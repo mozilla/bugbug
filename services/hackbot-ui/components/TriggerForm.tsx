@@ -446,6 +446,9 @@ export function TriggerForm() {
               >
                 <option value="claude_code">claude_code</option>
                 <option value="codex">codex</option>
+                <option value="oh_my_pi">oh_my_pi</option>
+                <option value="opencode">opencode</option>
+                <option value="deepseek_harness">deepseek_harness</option>
               </select>
             </div>
             <div className="field">
