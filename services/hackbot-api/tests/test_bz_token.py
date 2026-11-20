@@ -11,15 +11,20 @@ import json
 
 import pytest
 from app import bz_token, jobs
+from app.agents import AgentSpec
 from app.bz_token import (
     PUBLIC_READ_SCOPE,
     PUBLIC_READ_WITH_ATTACHMENTS,
     BugzillaScope,
 )
 from app.config import settings
+from app.schemas import AgentInputs
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
+
+# A run's execution timeout, which the token's lifetime follows.
+TIMEOUT = 8 * 60 * 60
 
 
 @pytest.fixture
@@ -49,6 +54,7 @@ def decode(token: str) -> dict:
 class TestMint:
     def test_claims_identify_the_run_and_the_requester(self, signing_key):
         token = bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="frontend-triage",
             scope=PUBLIC_READ_SCOPE,
@@ -65,6 +71,7 @@ class TestMint:
     def test_the_token_outlives_the_job(self, signing_key):
         claims = decode(
             bz_token.mint(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=PUBLIC_READ_SCOPE,
@@ -73,14 +80,29 @@ class TestMint:
             )
         )
         lifetime = claims["exp"] - claims["iat"]
-        assert lifetime == (
-            settings.job_execution_timeout_seconds + settings.bz_token_grace_seconds
+        assert lifetime == TIMEOUT + settings.bz_token_grace_seconds
+
+    def test_the_lifetime_follows_the_runs_own_timeout(self, signing_key):
+        """Agents set their own timeouts; the token has to cover this run's."""
+        claims = decode(
+            bz_token.mint(
+                timeout_seconds=2 * 60 * 60,
+                run_id="abc",
+                agent="a",
+                scope=PUBLIC_READ_SCOPE,
+                inputs=Inputs(),
+                requested_by=None,
+            )
+        )
+        assert claims["exp"] - claims["iat"] == (
+            2 * 60 * 60 + settings.bz_token_grace_seconds
         )
 
     def test_every_token_gets_its_own_id(self, signing_key):
         def jti() -> str:
             return decode(
                 bz_token.mint(
+                    timeout_seconds=TIMEOUT,
                     run_id="abc",
                     agent="a",
                     scope=PUBLIC_READ_SCOPE,
@@ -94,6 +116,7 @@ class TestMint:
     def test_the_default_scope_is_read_only_and_public(self, signing_key):
         bz = decode(
             bz_token.mint(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=PUBLIC_READ_SCOPE,
@@ -114,6 +137,7 @@ class TestMint:
         from cryptography.hazmat.primitives.asymmetric import padding
 
         token = bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -143,6 +167,7 @@ class TestMint:
         from cryptography.hazmat.primitives.asymmetric import padding
 
         token = bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -175,6 +200,7 @@ class TestMint:
         monkeypatch.setattr(settings, "bz_token_service_account", "", raising=False)
         with pytest.raises(RuntimeError, match="no signing key"):
             bz_token.mint(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=PUBLIC_READ_SCOPE,
@@ -197,6 +223,7 @@ class TestScopeTemplates:
         )
         bz = decode(
             bz_token.mint(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=scope,
@@ -219,6 +246,7 @@ class TestScopeTemplates:
         )
         with pytest.raises(ValueError, match=r"\$bug_id"):
             bz_token.mint(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=scope,
@@ -239,6 +267,7 @@ class TestScopeTemplates:
         for bug_id in (1, 2):
             bz = decode(
                 bz_token.mint(
+                    timeout_seconds=TIMEOUT,
                     run_id="abc",
                     agent="a",
                     scope=scope,
@@ -254,6 +283,7 @@ class TestBrokerEnv:
     def test_an_agent_with_no_scope_gets_no_token(self, signing_key):
         assert (
             bz_token.broker_env_for(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=None,
@@ -268,6 +298,7 @@ class TestBrokerEnv:
         monkeypatch.setattr(settings, "bz_token_service_account", "", raising=False)
         assert (
             bz_token.broker_env_for(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=PUBLIC_READ_SCOPE,
@@ -293,6 +324,7 @@ class TestBrokerEnv:
         )
         with pytest.raises(RuntimeError, match="confidential"):
             bz_token.broker_env_for(
+                timeout_seconds=TIMEOUT,
                 run_id="abc",
                 agent="a",
                 scope=confidential,
@@ -302,6 +334,7 @@ class TestBrokerEnv:
 
     def test_a_configured_deployment_emits_the_token(self, signing_key):
         env = bz_token.broker_env_for(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -414,6 +447,7 @@ class TestServiceAccountSigning:
 
     def test_signing_is_delegated_to_iam(self, signing_account, fake_iam):
         token = bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -428,6 +462,7 @@ class TestServiceAccountSigning:
 
     def test_the_signed_payload_carries_the_scope(self, signing_account, fake_iam):
         bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="frontend-triage",
             scope=PUBLIC_READ_SCOPE,
@@ -442,6 +477,7 @@ class TestServiceAccountSigning:
     def test_the_issuer_is_the_signing_account(self, signing_account, fake_iam):
         """It is what tells the proxy whose published certificates to trust."""
         bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -458,26 +494,43 @@ class TestServiceAccountSigning:
 
 class TestLifetimeCeiling:
     def test_a_lifetime_past_the_iam_ceiling_is_refused(
-        self, signing_account, fake_iam, monkeypatch
+        self, signing_account, fake_iam
     ):
-        """IAM will not sign past 12 hours; say so in terms of the job timeout."""
-        monkeypatch.setattr(
-            settings, "job_execution_timeout_seconds", 13 * 60 * 60, raising=False
-        )
-        with pytest.raises(RuntimeError, match="job_execution_timeout_seconds"):
+        """IAM will not sign past 12 hours; say so in terms of the timeout."""
+        with pytest.raises(ValueError, match="execution_timeout_seconds"):
             bz_token.mint(
+                timeout_seconds=13 * 60 * 60,
                 run_id="abc",
                 agent="a",
                 scope=PUBLIC_READ_SCOPE,
                 inputs=Inputs(),
                 requested_by=None,
             )
+        assert "request" not in fake_iam
 
-    def test_the_default_job_timeout_fits(self, signing_account, fake_iam):
-        lifetime = (
-            settings.job_execution_timeout_seconds + settings.bz_token_grace_seconds
+    def test_the_default_job_timeout_fits(self):
+        assert bz_token.token_lifetime(settings.job_execution_timeout_seconds)
+
+    def test_an_agent_whose_timeout_no_token_can_cover_is_refused(self):
+        """Caught when the registry is built, not as a failed start per run."""
+        with pytest.raises(ValueError, match="execution_timeout_seconds"):
+            AgentSpec(
+                name="long",
+                description="d",
+                job_name="hackbot-agent-long",
+                input_schema=AgentInputs,
+                bugzilla_scope=PUBLIC_READ_SCOPE,
+                execution_timeout_seconds=48 * 60 * 60,
+            )
+
+    def test_a_long_timeout_without_a_scope_is_fine(self):
+        AgentSpec(
+            name="long",
+            description="d",
+            job_name="hackbot-agent-long",
+            input_schema=AgentInputs,
+            execution_timeout_seconds=48 * 60 * 60,
         )
-        assert lifetime <= bz_token.MAX_TOKEN_LIFETIME_SECONDS
 
 
 class TestNotAGoogleCredential:
@@ -492,6 +545,7 @@ class TestNotAGoogleCredential:
     ):
         """Direct JWT auth to a Google API requires sub == iss."""
         bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -505,6 +559,7 @@ class TestNotAGoogleCredential:
     def test_there_is_no_scope_claim(self, signing_account, fake_iam):
         """The OAuth JWT-bearer exchange requires one to grant anything."""
         bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,
@@ -515,6 +570,7 @@ class TestNotAGoogleCredential:
 
     def test_the_audience_is_not_a_google_endpoint(self, signing_account, fake_iam):
         bz_token.mint(
+            timeout_seconds=TIMEOUT,
             run_id="abc",
             agent="a",
             scope=PUBLIC_READ_SCOPE,

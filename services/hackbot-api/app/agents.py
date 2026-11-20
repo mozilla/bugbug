@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from app.bz_token import BugzillaScope
+from app.bz_token import BugzillaScope, token_lifetime
+from app.config import settings
 from app.schemas import (
     AgentInputs,
     AutowebcompatDiagnosisInputs,
@@ -63,6 +64,16 @@ class AgentSpec:
     expects_actions: bool = False
     # How long an execution may run; the API-wide default when unset.
     execution_timeout_seconds: int | None = None
+
+    def __post_init__(self) -> None:
+        # A run's Bugzilla token must outlive it, and IAM caps how long a token
+        # can live, so an agent with a scope and too long a timeout could never
+        # be served. Refused here, when the registry is built, rather than as a
+        # failed start on every run.
+        if self.bugzilla_scope is not None:
+            token_lifetime(
+                self.execution_timeout_seconds or settings.job_execution_timeout_seconds
+            )
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:

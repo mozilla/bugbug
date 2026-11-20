@@ -10,10 +10,12 @@ GCS/Cloud Run collaborators are monkeypatched and the DB session is the shared
 
 import json
 import uuid
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 from app import bz_token, gcs, jobs
+from app.agents import AGENT_REGISTRY
 from app.auth import require_api_key
 from app.schemas import RunStatus
 
@@ -143,6 +145,32 @@ def test_a_run_that_cannot_start_records_why_and_keeps_its_key(
     assert db.added.status == RunStatus.failed.value
     assert "no quota" in db.added.error
     assert db.added.dedupe_key == "push:autoland:abc"
+
+
+def test_the_token_covers_the_agents_own_timeout(client, db, monkeypatch):
+    # Agents may set their own execution timeout, and a token that expires
+    # before the run does fails it partway, so minting gets the same timeout
+    # the execution is started with.
+    monkeypatch.setitem(
+        AGENT_REGISTRY,
+        "bug-fix",
+        replace(AGENT_REGISTRY["bug-fix"], execution_timeout_seconds=2 * 60 * 60),
+    )
+    seen = {}
+
+    def capture(**kwargs):
+        seen["mint"] = kwargs["timeout_seconds"]
+        return {}
+
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
+        seen["execution"] = timeout_seconds
+        return "projects/p/locations/l/jobs/j/executions/e"
+
+    monkeypatch.setattr(bz_token, "broker_env_for", capture)
+    monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
+
+    _create(client)
+    assert seen == {"mint": 2 * 60 * 60, "execution": 2 * 60 * 60}
 
 
 def test_a_run_whose_token_cannot_be_minted_is_failed_not_left_pending(

@@ -216,6 +216,7 @@ async def create_run(
             scope=agent.bugzilla_scope,
             inputs=inputs,
             requested_by=on_behalf_of,
+            timeout_seconds=timeout,
         )
         execution_name = await jobs.trigger_execution(
             agent.job_name, env_overrides, timeout, broker_env=broker_env

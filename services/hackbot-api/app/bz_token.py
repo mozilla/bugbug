@@ -208,6 +208,26 @@ def is_configured() -> bool:
     return bool(settings.bz_token_service_account or settings.bz_token_private_key)
 
 
+def token_lifetime(timeout_seconds: int) -> int:
+    """How long a token must live to cover a run of ``timeout_seconds``.
+
+    Raises when IAM could not sign one that long, in terms of the timeout,
+    since IAM's own rejection would not mention it. Checked when the agent
+    registry is built, so an agent that could never get a token stops the
+    service starting instead of failing every run.
+    """
+    lifetime = timeout_seconds + settings.bz_token_grace_seconds
+    if lifetime > MAX_TOKEN_LIFETIME_SECONDS:
+        raise ValueError(
+            f"a run that may last {timeout_seconds}s needs a Bugzilla token for "
+            f"{lifetime}s (its execution timeout plus bz_token_grace_seconds), "
+            f"but IAM will not sign one past {MAX_TOKEN_LIFETIME_SECONDS}s; "
+            "shorten the agent's execution_timeout_seconds or drop its "
+            "bugzilla_scope"
+        )
+    return lifetime
+
+
 def mint(
     *,
     run_id: str,
@@ -215,19 +235,17 @@ def mint(
     scope: BugzillaScope,
     inputs: Any,
     requested_by: str | None,
+    timeout_seconds: int,
 ) -> str:
-    """Build and sign this run's token."""
+    """Build and sign this run's token.
+
+    ``timeout_seconds`` is the run's own execution timeout, which agents may
+    set individually, so the token lasts as long as this run can.
+    """
     if not is_configured():
         raise RuntimeError("no signing key configured")
 
-    lifetime = settings.job_execution_timeout_seconds + settings.bz_token_grace_seconds
-    if lifetime > MAX_TOKEN_LIFETIME_SECONDS:
-        # Caught here because IAM's rejection would not mention the job timeout.
-        raise RuntimeError(
-            f"a token would need to live {lifetime}s "
-            f"(job_execution_timeout_seconds + bz_token_grace_seconds), but IAM "
-            f"will not sign one past {MAX_TOKEN_LIFETIME_SECONDS}s"
-        )
+    lifetime = token_lifetime(timeout_seconds)
 
     now = datetime.now(timezone.utc)
     # Must outlive the job: a run that loses Bugzilla access partway through
@@ -259,6 +277,7 @@ def broker_env_for(
     scope: BugzillaScope | None,
     inputs: Any,
     requested_by: str | None,
+    timeout_seconds: int,
 ) -> dict[str, str]:
     """The broker container's per-run environment, or empty.
 
@@ -285,6 +304,7 @@ def broker_env_for(
         scope=scope,
         inputs=inputs,
         requested_by=requested_by,
+        timeout_seconds=timeout_seconds,
     )
     return {"BUGZILLA_SCOPE_TOKEN": token}
 
@@ -319,4 +339,5 @@ __all__ = [
     "broker_env_for",
     "is_configured",
     "mint",
+    "token_lifetime",
 ]

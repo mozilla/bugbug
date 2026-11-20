@@ -66,10 +66,12 @@ This also needs no new IAM. `signJwt` comes from `roles/iam.serviceAccountTokenC
 which hackbot-api already holds **on itself** for the GCS signed-policy path
 ([security.md](security.md)).
 
-The one constraint it adds: **IAM will not sign a JWT more than 12 hours out**. The default
-8 hour job timeout plus its grace window fits with room to spare, but `mint` checks the sum
-and fails at trigger time with a message naming the settings involved, rather than letting
-IAM reject it with something that reads like a permissions problem.
+The one constraint it adds: **IAM will not sign a JWT more than 12 hours out**. A token
+lives for its run's own execution timeout (an agent's `execution_timeout_seconds`, or the
+8 hour default) plus a grace window. An agent whose timeout would need a longer token
+cannot be given a `bugzilla_scope`: `AgentSpec` refuses it when the registry is built, so
+the service does not start, rather than every run failing at trigger time with an IAM
+error that reads like a permissions problem. `dataset-eval`, at 48 hours, is such an agent.
 
 The proxy verifies and holds no per-run state: the token is the entire policy.
 
@@ -79,7 +81,7 @@ The proxy verifies and holds no per-run state: the token is the entire policy.
   "aud": "hackbot-bugzilla-proxy",
   "sub": "run:<run_id>",
   "jti": "...",
-  "exp": "<job timeout + grace>",
+  "exp": "<the run's execution timeout + grace>",
   "agent": "security-dedup",
   "requested_by": "someone@mozilla.com",
   "bz": {
