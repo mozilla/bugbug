@@ -25,6 +25,7 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
+    BugRuns,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -153,6 +154,7 @@ async def create_run(
             agent=agent.name,
             status=RunStatus.pending.value,
             inputs=inputs.model_dump(mode="json"),
+            bug_id=getattr(inputs, "bug_id", None),
             requested_by=on_behalf_of,
             requested_via=requested_via,
             dedupe_key=dedupe_key,
@@ -273,6 +275,19 @@ async def list_runs(
     )
     result = await db.execute(stmt)
     return [RunDoc.model_validate(r) for r in result.scalars()]
+
+
+@router.get("/bugs/{bug_id}/runs")
+async def list_bug_runs(
+    bug_id: int, db: Annotated[AsyncSession, Depends(get_db)]
+) -> BugRuns:
+    stmt = (
+        select(Run)
+        .where(Run.bug_id == bug_id)
+        .order_by(Run.created_at.desc(), Run.run_id.desc())
+    )
+    result = await db.execute(stmt)
+    return BugRuns(runs=[RunDoc.model_validate(r) for r in result.scalars()])
 
 
 @router.get("/runs/{run_id}")

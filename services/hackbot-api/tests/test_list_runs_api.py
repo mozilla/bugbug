@@ -149,3 +149,12 @@ def test_list_runs_ignores_blank_requested_by(client, db, raw):
     # A blank param means "no filter", not "runs with an empty requester".
     assert client.get("/runs", params={"requested_by": raw}).status_code == 200
     assert "WHERE" not in _sql(db.stmt)
+
+
+async def test_list_bug_runs_filters_by_bug_id():
+    db = _CapturingDB([_fake_run()])
+    result = await runs_router.list_bug_runs(bug_id=1846789, db=db)
+    assert "runs.bug_id =" in _sql(db.stmt)
+    params = db.stmt.compile(dialect=postgresql.dialect()).params
+    assert 1846789 in params.values()
+    assert len(result.runs) == 1

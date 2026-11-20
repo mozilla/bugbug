@@ -84,6 +84,10 @@ class RunDoc(BaseModel):
     error: str | None = None
 
 
+class BugRuns(BaseModel):
+    runs: list[RunDoc]
+
+
 # --- Per-agent input schemas ---
 
 
