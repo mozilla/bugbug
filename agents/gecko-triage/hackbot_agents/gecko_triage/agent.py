@@ -718,6 +718,11 @@ def render_user_prompt(
         "user",
         **{name: _untagged(value) for name, value in parts.items()},
         bug=render_bug(state.bug, state.comments, state.bot_aliases),
+        left_to_owner=" and ".join(
+            TERMS.left_to_owner.fields(
+                state.bug.get("product"), state.bug.get("component")
+            )
+        ),
     )
 
 

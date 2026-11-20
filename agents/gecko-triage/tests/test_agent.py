@@ -1724,6 +1724,35 @@ def test_a_forged_bug_data_tag_never_reaches_the_user_prompt(new_state, forged):
     assert _comments_in(user)[-1]["text"] == forged
 
 
+def _owner_note(fields: str) -> str:
+    return f"The owners of this component set {fields} themselves."
+
+
+def test_the_user_prompt_says_nothing_of_the_owners_by_default(new_state):
+    assert "The owners of" not in agent.render_user_prompt(BUG, "t", new_state, ())
+
+
+@pytest.mark.usefixtures("left_to_owner")
+@pytest.mark.parametrize(
+    "component, note",
+    [
+        (None, _owner_note("severity")),
+        ("Widget: Cocoa", _owner_note("severity and priority")),
+        ("Graphics", None),
+    ],
+)
+def test_the_user_prompt_names_the_fields_left_to_the_owners(
+    new_state, component, note
+):
+    bug = dict(new_state.bug, component=component or new_state.bug["component"])
+    state = TriageState(bug=bug, comments=new_state.comments, now=NOW)
+    user = agent.render_user_prompt(BUG, "t", state, ())
+    if note is None:
+        assert "The owners of" not in user
+    else:
+        assert note in user
+
+
 def test_the_close_verifier_gets_the_draft_in_tags():
     verifier = agent.make_close_verifier()
     assert "<draft_comment>" in verifier.description

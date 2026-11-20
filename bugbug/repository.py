@@ -50,7 +50,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    24,
+    25,
     [COMMIT_EXPERIENCES_DB],
 )
 
@@ -674,6 +674,9 @@ def set_commit_metrics(
     before_metrics: dict,
     after_metrics: dict,
 ) -> None:
+    previous_totals = {
+        metric: commit.metrics[f"{metric}_total"] for metric in METRIC_NAMES
+    }
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
@@ -692,11 +695,12 @@ def set_commit_metrics(
             "rust-code-analysis error on commit %s, path %s", commit.node, path
         )
 
-    commit.metrics_diff = {
-        f"{metric}_total": commit.metrics[f"{metric}_total"]
-        - before_metrics_dict[f"{metric}_total"]
-        for metric in METRIC_NAMES
-    }
+    # The metrics of the commit are the sum of the metrics of its files, so the
+    # difference is accumulated over the files too.
+    for metric in METRIC_NAMES:
+        commit.metrics_diff[f"{metric}_total"] += (
+            commit.metrics[f"{metric}_total"] - previous_totals[metric]
+        ) - before_metrics_dict[f"{metric}_total"]
 
     touched_functions = get_touched_functions(
         after_metrics["spaces"],
@@ -855,7 +859,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
                             try:
                                 before = hg.cat(
                                     [os.path.join(repo_dir, path).encode("utf-8")],
-                                    rev=commit.node.encode("ascii"),
+                                    rev=f"{commit.node}^".encode("ascii"),
                                 )
 
                                 before_metrics = code_analysis_server.metrics(

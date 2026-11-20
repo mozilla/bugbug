@@ -81,7 +81,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    1,
+    2,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
@@ -637,6 +637,7 @@ class PastFailures:
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
+        self.readonly = readonly
 
         self.db = shelve.Shelf(
             LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
@@ -660,17 +661,23 @@ class PastFailures:
     def all_runnables(self, value) -> None:
         self.db["all_runnables"] = value
 
+    def _get(self, key: str) -> ExpQueue | None:
+        if not self.readonly:
+            return self.db.get(key, None)
+
+        # Read the underlying DB directly, as shelve looks keys up twice (to check
+        # they exist, and then to read them).
+        value = self.db.dict.get(key.encode("utf-8"))
+        return pickle.loads(value) if value is not None else None
+
     def get(self, key: str) -> ExpQueue | None:
-        value = self.db.get(key, None)
+        value = self._get(key)
 
         # Fallback on INI if the group is now TOML.
         if value is None and self.granularity == "group" and key.endswith(".toml"):
-            ini_key = f"{key[:-4]}ini"
-            try:
-                value = self.db[ini_key]
+            value = self._get(f"{key[:-4]}ini")
+            if value is not None and not self.readonly:
                 self.db[key] = value
-            except KeyError:
-                return None
 
         return value
 
@@ -941,12 +948,8 @@ def get_touched_together_key(f1: str, f2: str) -> bytes:
 def get_touched_together(f1: str, f2: str) -> int:
     touched_together = get_touched_together_db(True)
 
-    key = get_touched_together_key(f1, f2)
-
-    try:
-        return struct.unpack("I", touched_together[key])[0]
-    except KeyError:
-        return 0
+    value = touched_together.get(get_touched_together_key(f1, f2))
+    return struct.unpack("I", value)[0] if value is not None else 0
 
 
 def set_touched_together(f1: str, f2: str) -> None:
@@ -1251,9 +1254,12 @@ def generate_data(
     likely_regressions: Iterable[str],
 ):
     if granularity != "label":
+        # Each directory counts once, however many of the push's files are in it.
         source_file_dirs = tuple(
-            os.path.dirname(source_file) for source_file in commit["files"]
+            set(os.path.dirname(source_file) for source_file in commit["files"])
         )
+        # Runnables in the same directories have the same touched together values.
+        touched_together_by_dirs: dict[tuple[str, ...], tuple[int, int, float]] = {}
 
     for runnable in runnables:
         if granularity != "label":
@@ -1261,19 +1267,26 @@ def generate_data(
                 runnable[1] if isinstance(runnable, tuple) else runnable
             )
 
-            touched_together_files = sum(
-                get_touched_together(source_file, runnable_dir)
-                for source_file in commit["files"]
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_directories = sum(
-                get_touched_together(source_file_dir, runnable_dir)
-                for source_file_dir in source_file_dirs
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_pmi = get_cochange_pmi(
-                set(source_file_dirs), runnable_dirs
-            )
+            if runnable_dirs not in touched_together_by_dirs:
+                touched_together_by_dirs[runnable_dirs] = (
+                    sum(
+                        get_touched_together(source_file, runnable_dir)
+                        for source_file in commit["files"]
+                        for runnable_dir in runnable_dirs
+                    ),
+                    sum(
+                        get_touched_together(source_file_dir, runnable_dir)
+                        for source_file_dir in source_file_dirs
+                        for runnable_dir in runnable_dirs
+                    ),
+                    get_cochange_pmi(source_file_dirs, runnable_dirs),
+                )
+
+            (
+                touched_together_files,
+                touched_together_directories,
+                touched_together_pmi,
+            ) = touched_together_by_dirs[runnable_dirs]
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions

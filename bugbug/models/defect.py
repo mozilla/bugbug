@@ -5,25 +5,63 @@
 
 import itertools
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
-from imblearn.pipeline import Pipeline as ImblearnPipeline
+import dateutil.parser
+import numpy as np
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.svm import LinearSVC
 
-from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
+from bugbug import bug_features, bugzilla, feature_cleanup, labels
 from bugbug.model import BugModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# See DefectModel.get_rollback_point.
+TRAINING_SNAPSHOT_AGE = timedelta(days=3)
+
+# Fixed defects which were not identified as regressions within this time are
+# considered non-regressions.
+NON_REGRESSION_MIN_AGE = timedelta(days=90)
+
+
+def is_regression_label_change(change: dict) -> bool:
+    field = change["field_name"]
+    if field == "keywords":
+        added = {k.strip() for k in change["added"].split(",")}
+        return bool(added & {"regression", "talos-regression"})
+    if field == "regressed_by":
+        return change["added"] != ""
+    if field == "cf_has_regression_range":
+        return change["added"] == "yes"
+    return False
+
+
+def get_regression_label_date(bug: dict) -> datetime | None:
+    """Return when a bug was first identified as a regression, if ever."""
+    for history in bug["history"]:
+        if any(is_regression_label_change(change) for change in history["changes"]):
+            return dateutil.parser.parse(history["when"])
+
+    return None
+
 
 class DefectModel(BugModel):
+    # Weight of the training samples labelled using the fixed defects rule (see
+    # get_bugbug_labels), relative to the other labels.
+    fixed_defects_weight = 1.0
+
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
+
+        # Cross-validation multiplies the (long) training time, the test set
+        # evaluation is enough.
+        self.cross_validation_enabled = False
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -42,6 +80,13 @@ class DefectModel(BugModel):
             bug_features.AffectedThenUnaffected(),
             bug_features.Product(),
             bug_features.Component(),
+            bug_features.BugReporter(),
+            bug_features.OpSys(),
+            bug_features.Platform(),
+            bug_features.Version(),
+            bug_features.FiledVia(),
+            bug_features.HasImageAttachmentAtBugCreation(),
+            bug_features.HasAttachment(),
         ]
 
         if historical:
@@ -66,33 +111,90 @@ class DefectModel(BugModel):
             ]
         )
 
-        self.clf = ImblearnPipeline(
+        # A linear model on sparse n-gram features is as accurate as gradient
+        # boosted trees for these tasks, and much faster to train. Probabilities
+        # are calibrated on out-of-fold predictions.
+        self.clf = Pipeline(
             [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            (
+                                "title",
+                                self.text_vectorizer(
+                                    min_df=2,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=50000,
+                                ),
+                                "title",
+                            ),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(
+                                    min_df=3,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=100000,
+                                ),
                                 "first_comment",
                             ),
                             (
                                 "comments",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(
+                                    min_df=3,
+                                    ngram_range=(1, 2),
+                                    sublinear_tf=True,
+                                    max_features=100000,
+                                ),
                                 "comments",
                             ),
                         ]
                     ),
                 ),
-                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    CalibratedClassifierCV(
+                        LinearSVC(C=0.1), method="isotonic", cv=3, n_jobs=3
+                    ),
                 ),
             ]
+        )
+
+    def get_rollback_point(self, item: dict, label: Any) -> datetime:
+        """Return the date bugs are rolled back to, for training.
+
+        The models are applied to recently filed bugs, so they are trained on the
+        bugs as they were a few days after being filed. Bugs are rolled back
+        further if they were identified as regressions earlier.
+        """
+        snapshot_date = (
+            dateutil.parser.parse(item["creation_time"]) + TRAINING_SNAPSHOT_AGE
+        )
+        regression_label_date = get_regression_label_date(item)
+        if regression_label_date is not None:
+            snapshot_date = min(snapshot_date, regression_label_date)
+        return snapshot_date
+
+    def items_gen(self, classes):
+        # Remember the bug of each item, to weight training samples (see
+        # get_sample_weights).
+        self.train_bug_ids = []
+        for bug, label in super().items_gen(classes):
+            self.train_bug_ids.append(bug["id"])
+            yield bug, label
+
+    def get_sample_weights(self, X, y):
+        if self.fixed_defects_weight == 1.0:
+            return None
+
+        bug_ids = np.array(self.train_bug_ids)[np.asarray(X.index)]
+        return np.where(
+            np.isin(bug_ids, list(self.fixed_defect_bug_ids)),
+            self.fixed_defects_weight,
+            1.0,
         )
 
     def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
@@ -110,6 +212,7 @@ class DefectModel(BugModel):
             elif kind == "defect_enhancement_task" and category == "True":
                 classes[int(bug_id)] = "defect"
 
+        unknown_regression_bug_ids = set()
         for bug_id, category in labels.get_labels("regression_bug_nobug"):
             assert category in [
                 "nobug",
@@ -121,6 +224,7 @@ class DefectModel(BugModel):
                 classes[int(bug_id)] = 1 if category != "nobug" else 0
             elif kind == "regression":
                 if category == "bug_unknown_regression":
+                    unknown_regression_bug_ids.add(int(bug_id))
                     continue
 
                 classes[int(bug_id)] = 1 if category == "regression" else 0
@@ -166,6 +270,10 @@ class DefectModel(BugModel):
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
+        non_regression_max_creation_time = (
+            datetime.now(timezone.utc) - NON_REGRESSION_MIN_AGE
+        )
+        self.fixed_defect_bug_ids = set()
         bug_ids = set()
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
@@ -251,6 +359,28 @@ class DefectModel(BugModel):
                         classes[bug_id] = 1
                     elif kind == "defect_enhancement_task":
                         classes[bug_id] = "defect"
+
+            # Defects which were fixed without being identified as regressions are
+            # most likely defects which are not regressions. Without them, almost all
+            # defects in the training set would be regressions (as the 'defect' type
+            # is only used when it was explicitly set), while the models are mostly
+            # applied to defects which are not regressions.
+            if (
+                bug_id not in classes
+                and bug_id not in unknown_regression_bug_ids
+                and bug_id > 1540807
+                and bug["type"] == "defect"
+                and bug["resolution"] == "FIXED"
+                and dateutil.parser.parse(bug["creation_time"])
+                < non_regression_max_creation_time
+            ):
+                if kind == "bug":
+                    classes[bug_id] = 1
+                elif kind == "regression":
+                    classes[bug_id] = 0
+                elif kind == "defect_enhancement_task":
+                    classes[bug_id] = "defect"
+                self.fixed_defect_bug_ids.add(bug_id)
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}

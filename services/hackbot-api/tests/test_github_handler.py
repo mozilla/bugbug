@@ -56,7 +56,10 @@ async def test_general_and_inline_actions_send_one_github_review(fake):
     db = AsyncMock()
     db.execute.return_value = SimpleNamespace(scalars=lambda: [1, 2])
     await _apply_pending_rows(
-        db, SimpleNamespace(run_id="run-1", agent="test-agent"), rows, None
+        db,
+        SimpleNamespace(run_id="run-1", agent="test-agent", summary={}),
+        rows,
+        None,
     )
     posts = [
         r

@@ -2,6 +2,7 @@
 
 from app.action_handlers import ApplyContext, get_handler, testrail_handler
 from app.action_handlers.testrail_handler import SubmitTestPlanHandler
+from testrail_client import models as testrail_models
 
 
 def _ctx():
@@ -83,7 +84,7 @@ class _FakeClient:
                 {"id": 101},
                 {"id": 102},
                 {"id": 301},
-                {"results": [{"id": 401}, {"id": 402}]},
+                [{"id": 401}, {"id": 402}],
             ]
         )
 
@@ -95,35 +96,39 @@ class _FakeClient:
 
     async def get_case_types(self):
         self.calls.append(("get_case_types",))
-        return self._next()
+        return [
+            testrail_models.CaseType.model_validate(value) for value in self._next()
+        ]
 
     async def get_templates(self):
         self.calls.append(("get_templates",))
-        return self._next()
+        return [
+            testrail_models.Template.model_validate(value) for value in self._next()
+        ]
 
     async def get_statuses(self):
         self.calls.append(("get_statuses",))
-        return self._next()
+        return [testrail_models.Status.model_validate(value) for value in self._next()]
 
     async def add_suite(self, name):
         self.calls.append(("add_suite", name))
-        return self._next()
+        return testrail_models.Suite.model_validate(self._next())
 
     async def add_section(self, suite_id, name):
         self.calls.append(("add_section", suite_id, name))
-        return self._next()
+        return testrail_models.Section.model_validate(self._next())
 
     async def add_case(self, section_id, payload):
         self.calls.append(("add_case", section_id, payload))
-        return self._next()
+        return testrail_models.Case.model_validate(self._next())
 
     async def add_run(self, payload):
         self.calls.append(("add_run", payload))
-        return self._next()
+        return testrail_models.Run.model_validate(self._next())
 
     async def add_results_for_cases(self, run_id, results):
         self.calls.append(("add_results_for_cases", run_id, results))
-        return self._next()
+        return [testrail_models.Result.model_validate(value) for value in self._next()]
 
     def suite_url(self, suite_id):
         return f"https://testrail.example/index.php?/suites/view/{suite_id}"

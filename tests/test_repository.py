@@ -2438,6 +2438,38 @@ def test_commit_dict_matches_expected():
     # commit_features.source_code_metrics_diff()(commit)
 
 
+def test_transform_metrics_diff(fake_hg_repo, monkeypatch):
+    hg, local, remote = fake_hg_repo
+
+    monkeypatch.setattr(repository, "path_to_component", {})
+
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 1; }\n")
+    commit(hg, "Bug 1 - Add the files. r=moz")
+
+    # A function is added to a.cpp, and a function of b.cpp is changed.
+    add_file(hg, local, "a.cpp", "int f() { return 1; }\nint h() { return 2; }\n")
+    add_file(hg, local, "b.cpp", "int g() { return 2; }\n")
+    revision = commit(hg, "Bug 2 - Change the files. r=moz")
+
+    (mined_commit,) = repository.hg_log(hg, [revision.encode("ascii")])
+
+    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer(
+        1
+    )
+    try:
+        mined_commit = repository.transform(hg, local, mined_commit)
+    finally:
+        repository.code_analysis_server.terminate()
+
+    assert mined_commit.metrics["functions_total"] == 3
+    # The difference is computed from the files before the commit, for all files.
+    assert mined_commit.metrics_diff["functions_total"] == 1
+
+
 def test_set_commit_metrics():
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
@@ -2937,6 +2969,77 @@ void main() {
             }
         ]
     }
+
+
+def test_set_commit_metrics_accumulates_diff_over_files():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    # (path, before, after, deleted_lines, added_lines)
+    files = [
+        # A function is added: +1.
+        (
+            "a.cpp",
+            "int f() { return 1; }\n",
+            "int f() { return 1; }\nint g() { return 2; }\n",
+            [],
+            [2],
+        ),
+        # Two functions are removed: -2.
+        (
+            "b.cpp",
+            "int h() { return 1; }\nint i() { return 2; }\nint j() { return 3; }\n",
+            "int h() { return 1; }\n",
+            [2, 3],
+            [],
+        ),
+        # A new file with three functions: +3.
+        (
+            "c.cpp",
+            None,
+            "int k() { return 1; }\nint l() { return 2; }\nint m() { return 3; }\n",
+            [],
+            [1, 2, 3],
+        ),
+    ]
+
+    for path, before, after, deleted_lines, added_lines in files:
+        after_metrics = code_analysis_server.metrics(path, after, unit=False)
+        before_metrics = (
+            code_analysis_server.metrics(path, before, unit=False)
+            if before is not None
+            else {}
+        )
+
+        repository.set_commit_metrics(
+            commit,
+            path,
+            deleted_lines,
+            added_lines,
+            before_metrics,
+            after_metrics,
+        )
+
+    # The metrics of the commit are the sum of the metrics of its files after
+    # the commit.
+    assert commit.metrics["functions_total"] == 2 + 1 + 3
+    # The difference is the sum of the differences of each file, not only the
+    # difference of the last one.
+    assert commit.metrics_diff["functions_total"] == 1 - 2 + 3
 
 
 def test_import_commits_single_commit(fake_hg_repo):

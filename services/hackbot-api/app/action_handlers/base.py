@@ -50,6 +50,7 @@ class ApplyContext:
     # The `RunAction` row ID of the action. When several actions are applied as
     # one call, it is the one whose comment is posted.
     action_id: int | None = None
+    agent_version: str | None = None
 
     def artifact_key(self, name: str) -> str | None:
         """The uploaded key for an attachment recorded under ``name``, if any."""

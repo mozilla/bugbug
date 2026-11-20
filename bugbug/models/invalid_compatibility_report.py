@@ -32,7 +32,7 @@ class InvalidCompatibilityReportModel(IssueModel):
                 (
                     "report_extractor",
                     issue_features.IssueExtractor(
-                        feature_extractors, cleanup_functions, rollback=False
+                        feature_extractors, cleanup_functions
                     ),
                 ),
             ]

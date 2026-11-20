@@ -854,7 +854,7 @@ class TestSelectModel(Model):
         """Confidence (rounded down to two decimals) that each runnable fails on the commits."""
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.PastFailures(self.granularity, False)
+        past_failures_data = test_scheduling.PastFailures(self.granularity, True)
 
         if push_num is None:
             push_num = past_failures_data.push_num + 1

@@ -31,6 +31,25 @@ skip = "[gecko-triage:skip]"
 easy_fix = "[gecko-triage:easy-fix]"
 gfb_candidate = "[gecko-triage:gfb-candidate]"
 
+[left_to_owner]
+# For severity and for priority, the components whose owners set that field themselves,
+# as "Product :: Component". Some owners find new bugs with a query for severity or
+# priority `--`, and a bug the agent rates leaves that query before they see it. The
+# agent never sets a listed field on a bug in one of these components, or on a bug it
+# moves into one, with or without a team. It still comments and makes its other changes.
+severity = [
+  "Core :: Widget",
+  "Core :: Widget: Cocoa",
+  "Firefox :: Installer",
+  "Toolkit :: Application Update",
+]
+priority = [
+  "Core :: Widget",
+  "Core :: Widget: Cocoa",
+  "Firefox :: Installer",
+  "Toolkit :: Application Update",
+]
+
 [no_team]
 # The products a run with no team may triage. Most of their code is in the
 # mozilla-central checkout the agent reads, so it can find the code at fault. The

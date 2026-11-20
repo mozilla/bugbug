@@ -32,12 +32,7 @@ from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import bugzilla, get_bugbug_version, utils
-from bugbug.model import CommentModel
-from bugbug.models import get_model_class
-from bugbug_http.models import (
-    COMMIT_MODELS,
-    MODELS_NAMES,
-    PUSH_CLASSIFIERS,
+from bugbug_http.jobs import (
     classify_broken_site_report,
     classify_bug,
     classify_comment,
@@ -46,6 +41,12 @@ from bugbug_http.models import (
     get_config_specific_groups,
     schedule_tests,
     schedule_tests_from_patch,
+)
+from bugbug_http.model_names import (
+    COMMENT_MODELS,
+    COMMIT_MODELS,
+    MODELS_NAMES,
+    PUSH_CLASSIFIERS,
 )
 from bugbug_http.sentry import setup_sentry
 
@@ -208,17 +209,31 @@ spec.components.security_scheme("api_key", api_key_scheme)
 
 @dataclass(init=False, frozen=True)
 class JobInfo:
-    func: Callable[..., str]
+    """A job, running one of the functions of bugbug_http.models in the RQ workers.
+
+    The function is given by its name (see bugbug_http.jobs), as the web
+    processes don't import bugbug_http.models (it loads the ML libraries), or
+    as the function itself (in bugbug_http.models).
+    """
+
+    func_name: str
     args: Sequence[Any] = field(default_factory=list)
 
-    def __init__(self, func, *args):
+    def __init__(self, func: str | Callable[..., str], *args):
         # Custom __init__ is needed to support *args, and object.__setattr__ is
         # needed for 'frozen=True'.
-        object.__setattr__(self, "func", func)
+        object.__setattr__(
+            self, "func_name", func if isinstance(func, str) else func.__name__
+        )
         object.__setattr__(self, "args", args)
 
     def __str__(self):
-        return f"{self.func.__name__}:{'_'.join(map(str, self.args))}"
+        return f"{self.func_name}:{'_'.join(map(str, self.args))}"
+
+    @property
+    def func_path(self) -> str:
+        """The path of the job function, which the RQ workers import."""
+        return f"bugbug_http.models.{self.func_name}"
 
     @property
     def mapping_key(self):
@@ -264,7 +279,7 @@ def schedule_job(
     job_id = init_job(job, job_id)
 
     q.enqueue(
-        job.func,
+        job.func_path,
         *job.args,
         job_id=job_id,
         job_timeout=timeout,
@@ -278,7 +293,7 @@ def prepare_queue_job(
 ) -> Queue:
     job_id = init_job(job, job_id)
     return Queue.prepare_data(
-        job.func,
+        job.func_path,
         args=job.args,
         job_id=job_id,
         timeout=timeout,
@@ -443,9 +458,7 @@ def get_comments_last_change_time(comment_ids: Sequence[int]) -> dict[int, str]:
 
 
 def is_comment_model(model_name: str) -> bool:
-    return model_name in MODELS_NAMES and issubclass(
-        get_model_class(model_name), CommentModel
-    )
+    return model_name in COMMENT_MODELS
 
 
 def get_github_issues_update_time(
@@ -481,8 +494,7 @@ def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
     LOGGER.debug("Cleaning results for %s", job)
 
-    redis_conn.delete(job.result_key)
-    redis_conn.delete(job.change_time_key)
+    redis_conn.delete(job.result_key, job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
@@ -515,7 +527,9 @@ def compress_response(data: dict, status_code: int):
     :rtype: Response
     """
 
-    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=9)
+    # Level 6 is about four times faster than level 9, for responses only a few
+    # percent larger.
+    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=6)
 
     response = Response(status=status_code)
     response.set_data(gzip_buffer)
@@ -1312,17 +1326,17 @@ def batch_prediction_broken_site_report(model_name):
             schema:
               type: object
               properties:
-              reports:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    uuid:
-                      type: string
-                    title:
-                      type: string
-                    body:
-                      type: string
+                reports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uuid:
+                        type: string
+                      title:
+                        type: string
+                      body:
+                        type: string
             examples:
               cat:
                 summary: An example of payload
@@ -1605,8 +1619,7 @@ def patch_schedules(base_rev, patch_hash):
             return jsonify({"error": "Patch contains no diff content"}), 400
 
         patch_key = f"bugbug:patch:{patch_hash}"
-        redis_conn.set(patch_key, patch)
-        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+        redis_conn.set(patch_key, patch, ex=7 * 24 * 3600)  # 7 days expiration
 
         LOGGER.info("Stored patch with hash %s", patch_hash)
 

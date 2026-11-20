@@ -16,6 +16,7 @@ bugzilla = [
 ]
 firefox = ["grizzly-framework", "prefpicker"]
 claude-sdk = ["claude-agent-sdk>=0.1.30"]
+mcp-server = ["fastmcp>=3.4.0", "uvicorn"]
 searchfox = ["searchfox>=0.20.3"]
 vcs = ["httpx"]
 

@@ -143,7 +143,7 @@ async def create_run(
                 detail=f"Parent run {parent.run_id} has not succeeded",
             )
 
-    run_id = uuid.uuid4()
+    run_id = uuid.uuid7()
     results_prefix = gcs.run_prefix(str(run_id))
 
     claim = (

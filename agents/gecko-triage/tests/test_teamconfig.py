@@ -369,6 +369,54 @@ def test_the_no_team_products_fail_closed(products):
         Terms.model_validate({**TERMS_DATA, "no_team": {"products": products}})
 
 
+def test_no_field_is_left_to_the_owners_by_default():
+    left = Terms.model_validate(TERMS_DATA).left_to_owner
+    assert (left.severity, left.priority) == (frozenset(), frozenset())
+    assert left.fields("Core", "Widget: Cocoa") == ()
+
+
+def test_the_components_left_to_their_owners_match_loosely_per_field():
+    data = {
+        **TERMS_DATA,
+        "left_to_owner": {"severity": ["Core ::Widget: Cocoa "], "priority": []},
+    }
+    left = Terms.model_validate(data).left_to_owner
+    assert left.fields(" core", "widget: cocoa") == ("severity",)
+    assert left.fields("Core", "Widget") == ()
+    assert left.fields(None, "Widget: Cocoa") == ()
+
+
+@pytest.mark.parametrize("field", ["severity", "priority"])
+@pytest.mark.parametrize(
+    "components", [["Widget: Cocoa"], ["Core ::"], [":: Widget"], ["Core", 1]]
+)
+def test_the_components_left_to_their_owners_fail_closed(field, components):
+    data = {**TERMS_DATA, "left_to_owner": {field: components}}
+    with pytest.raises(ValidationError):
+        Terms.model_validate(data)
+
+
+def test_an_unknown_field_left_to_the_owners_is_refused():
+    data = {**TERMS_DATA, "left_to_owner": {"assignee": ["Core :: Widget"]}}
+    with pytest.raises(ValidationError):
+        Terms.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "product, component",
+    [
+        ("Core", "Widget"),
+        ("Core", "Widget: Cocoa"),
+        ("Firefox", "Installer"),
+        ("Toolkit", "Application Update"),
+    ],
+)
+def test_the_shipped_terms_leave_severity_and_priority_to_these_owners(
+    product, component
+):
+    assert TERMS.left_to_owner.fields(product, component) == ("severity", "priority")
+
+
 def test_the_capture_marker_is_lower_cased():
     data = team(comment={"capture_marker": "About:Logging", "capture_block": "Steps."})
     assert Team.model_validate(data).comment.capture_marker == "about:logging"

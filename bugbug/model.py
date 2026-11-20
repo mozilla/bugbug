@@ -6,8 +6,11 @@
 import logging
 import pickle
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Iterator
+from datetime import datetime
+from multiprocessing import Pool
 from os import makedirs, path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from imblearn.metrics import (
@@ -25,7 +28,7 @@ from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
 from xgboost import XGBModel
 
-from bugbug import bugzilla, db, repository
+from bugbug import bug_snapshot, bugzilla, db, issue_snapshot, repository
 from bugbug.github import Github
 from bugbug.nlp import lemmatizing_tfidf_vectorizer
 from bugbug.utils import split_tuple_generator, to_array
@@ -53,6 +56,32 @@ def get_transformer_pipeline(pipeline: Pipeline) -> Pipeline:
             if hasattr(transformer, "transform")
         ]
     )
+
+
+# Where to roll back a training item to, before extracting its features (see
+# Model.get_rollback_point).
+RollbackPoint = Literal["creation"] | datetime | Callable[[dict], bool] | None
+
+
+def drop_vectorizers_stop_words(estimator) -> None:
+    """Drop the terms ignored by the fitted text vectorizers.
+
+    The vectorizers store the terms they ignored (e.g. because of `min_df` or
+    `max_features`) in `stop_words_`, which is only useful for introspection and
+    can make up most of the size of a pickled model.
+    """
+    if hasattr(estimator, "stop_words_"):
+        estimator.stop_words_ = None
+
+    if isinstance(estimator, Pipeline):
+        children = [step for _, step in estimator.steps]
+    else:
+        children = [
+            transformer for _, transformer, _ in getattr(estimator, "transformers_", [])
+        ]
+
+    for child in children:
+        drop_vectorizers_stop_words(child)
 
 
 def classification_report_imbalanced_values(
@@ -381,6 +410,26 @@ class Model:
         else:
             self.clf.fit(X, y, estimator__sample_weight=sample_weight)
 
+    def get_rollback_point(self, item: Any, label: Any) -> RollbackPoint:
+        """Return the point a training item should be rolled back to.
+
+        Subclasses can override this to train on the items as they were at some
+        point in the past (e.g. when the models are applied to them), instead of
+        their current state. Items are only rolled back for training, not when
+        they are classified.
+
+        The point is either "creation", a datetime (the item is rolled back to its
+        state right before that moment), or a function returning True for the
+        change to roll back to. None means no rollback.
+        """
+        return None
+
+    def rollback_training_items(
+        self, items: Iterable[tuple[Any, Any]]
+    ) -> Iterable[tuple[Any, Any]]:
+        """Roll back the training items (see get_rollback_point)."""
+        return items
+
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
         raise NotImplementedError("The model must implement this method")
@@ -390,7 +439,9 @@ class Model:
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
-        X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
+        X_gen, y = split_tuple_generator(
+            lambda: self.rollback_training_items(self.items_gen(classes))
+        )
 
         # Extract features from the items.
         X = self.extraction_pipeline.transform(X_gen)
@@ -668,6 +719,8 @@ class Model:
             estimator = estimator.__class__(**hyperparameters)
         self.clf.steps.append((step_name, estimator))
 
+        drop_vectorizers_stop_words(self.clf)
+
         model_path = path.join(model_directory, "model.pkl")
         with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -807,6 +860,17 @@ class Model:
         return {}
 
 
+def _rollback_bug(bug_label_point):
+    bug, label, point = bug_label_point
+    if point == "creation":
+        bug = bug_snapshot.rollback(bug)
+    elif isinstance(point, datetime):
+        bug = bug_snapshot.rollback(bug, before=point)
+    elif point is not None:
+        bug = bug_snapshot.rollback(bug, when=point)
+    return bug, label
+
+
 class BugModel(Model):
     def __init__(self, lemmatization=False, commit_data=False):
         Model.__init__(self, lemmatization)
@@ -842,6 +906,23 @@ class BugModel(Model):
                     bug["commits"] = []
 
             yield bug, classes[bug_id]
+
+    def rollback_training_items(self, items):
+        if type(self).get_rollback_point is Model.get_rollback_point:
+            return items
+
+        return self._rollback_bugs(items)
+
+    def _rollback_bugs(self, items) -> Iterator[tuple[Any, Any]]:
+        with Pool() as p:
+            yield from p.imap(
+                _rollback_bug,
+                (
+                    (bug, label, self.get_rollback_point(bug, label))
+                    for bug, label in items
+                ),
+                chunksize=256,
+            )
 
 
 class CommitModel(Model):
@@ -897,6 +978,14 @@ class IssueModel(Model):
                 continue
 
             yield issue, classes[issue_number]
+
+    def rollback_training_items(self, items):
+        for issue, label in items:
+            point = self.get_rollback_point(issue, label)
+            if point is not None:
+                assert point == "creation", "Issues can only be rolled back to creation"
+                issue = issue_snapshot.rollback(issue)
+            yield issue, label
 
 
 class CommentModel(Model):

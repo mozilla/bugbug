@@ -42,6 +42,7 @@ on:
         # hackbot-deploy: names
         options:
           - agents/autowebcompat-diagnosis
+          - agents/autowebcompat-intervention
           - agents/autowebcompat-repro
           - agents/bug-fix
           - agents/build-repair
@@ -51,6 +52,7 @@ on:
           - agents/test-plan-generator
           - agents/test-repair
           - agents/test-repair-fix
+          - agents/uplift-resolve
           - services/hackbot-api
           - services/hackbot-ui
       action:

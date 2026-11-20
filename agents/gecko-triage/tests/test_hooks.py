@@ -599,6 +599,54 @@ def test_a_defect_may_get_a_severity(new_state):
     assert _update(rec, {"severity": "S3"})["params"]["changes"]["severity"] == "S3"
 
 
+def _in(state: TriageState, component: str) -> TriageState:
+    return TriageState(
+        bug=dict(state.bug, component=component), comments=state.comments, now=NOW
+    )
+
+
+@pytest.mark.usefixtures("left_to_owner")
+def test_no_severity_where_the_owners_set_it(new_state):
+    rec = _recorder(new_state)
+    _comment(rec)
+    with pytest.raises(ToolError, match="set severity themselves"):
+        _update(rec, {"severity": "S3", "priority": "P3"})
+    action = _update(rec, {"priority": "P3"})
+    assert action["params"]["changes"] == {"priority": "P3"}
+
+
+@pytest.mark.usefixtures("left_to_owner")
+def test_no_severity_or_priority_where_the_owners_set_both(new_state):
+    rec = _recorder(_in(new_state, "Widget: Cocoa"))
+    _comment(rec)
+    for changes, names in (
+        ({"severity": "S3", "priority": "P3"}, "severity and priority"),
+        ({"priority": "P3"}, "priority"),
+        ({"severity": "S3"}, "severity"),
+    ):
+        with pytest.raises(ToolError, match=f"Widget: Cocoa set {names} themselves"):
+            _update(rec, changes)
+    assert len(rec.actions) == 1
+
+
+@pytest.mark.usefixtures("left_to_owner")
+def test_no_severity_or_priority_on_a_move_to_where_the_owners_set_them(new_state):
+    rec = _recorder(_in(new_state, "Graphics"))
+    _comment(rec)
+    with pytest.raises(ToolError, match="Widget: Cocoa set priority themselves"):
+        _update(rec, {"component": "Widget: Cocoa", "priority": "P3"})
+    action = _update(rec, {"component": "Widget: Cocoa"})
+    assert action["params"]["changes"]["component"] == "Widget: Cocoa"
+
+
+@pytest.mark.usefixtures("left_to_owner")
+def test_severity_and_priority_are_set_where_the_owners_leave_them(new_state):
+    rec = _recorder(_in(new_state, "Graphics"))
+    _comment(rec)
+    action = _update(rec, {"severity": "S3", "priority": "P3"})
+    assert action["params"]["changes"] == {"severity": "S3", "priority": "P3"}
+
+
 def test_the_agent_may_set_only_p1_to_p3():
     assert {"P1", "P2", "P3"} == TRIAGE_PRIORITIES
 

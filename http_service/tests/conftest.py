@@ -22,6 +22,7 @@ import responses
 import zstandard
 from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
+from rq.utils import import_attribute
 
 import bugbug.models
 import bugbug.models.testconfigselect
@@ -61,7 +62,10 @@ def patch_resources(monkeypatch, jobs):
             self.data = {}
             self.expirations = {}
 
-        def set(self, k, v):
+        def set(self, k, v, ex=None):
+            if ex is not None:
+                self.expirations[k] = ex
+
             # keep track of job ids for testing purposes
             if k.startswith("bugbug:job_id"):
                 key = k.split(":", 2)[-1]
@@ -82,12 +86,9 @@ def patch_resources(monkeypatch, jobs):
         def exists(self, k):
             return k in self.data
 
-        def delete(self, k):
-            if self.exists(k):
-                del self.data[k]
-
-        def expire(self, key, expiration):
-            self.expirations[key] = expiration
+        def delete(self, *keys):
+            for k in keys:
+                self.data.pop(k, None)
 
     class QueueMock:
         """Mock class to mimic rq.Queue."""
@@ -98,10 +99,13 @@ def patch_resources(monkeypatch, jobs):
         def enqueue(
             self, func, *args, job_id=None, job_timeout=None, ttl=None, failure_ttl=None
         ):
-            pass
+            # The web processes refer to the job functions by path: check that the RQ workers
+            # would find them.
+            assert callable(import_attribute(func))
 
         def enqueue_many(self, job_datas, pipeline=None):
-            pass
+            for job_data in job_datas:
+                assert callable(import_attribute(job_data.func))
 
     class JobMock:
         """Mock class to mimic rq.job.Job."""

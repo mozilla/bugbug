@@ -127,6 +127,8 @@ write-actions append to.
   reasoning, tool calls, results, tokens) to stdout and the run log, and collects the
   outcome as `reporter.result`, since Codex sends no result message. Needs the
   `codex-sdk` extra.
+- **`codex.mcp_servers_config`** — the `thread_start(config=...)` that points Codex at
+  MCP servers by name and URL, as started with `agent_tools.mcp_server.serve`.
 - **`searchfox`** — expands `{{searchfox.permalink}}` placeholders in recorded comments
   into revision-pinned Searchfox URLs at record time, and declines to link paths that
   don't exist in the checkout. Registered as an action hook.
