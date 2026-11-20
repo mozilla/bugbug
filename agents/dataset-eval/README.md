@@ -38,8 +38,11 @@ environment says it is being evaluated.
 The open-model harnesses reach their models through an
 [otari](https://github.com/mozilla-ai/otari) gateway
 ([`otari.py`](hackbot_agents/dataset_eval/prompt_executor/harnesses/otari.py)):
-`MODEL` is named as otari names it, e.g. `deepinfra:Qwen/Qwen3.8-27B`, and the
-model's limits, the run's usage and its cost come from otari.
+`MODEL` is named as otari names it, and the model's limits, the run's usage and
+its cost come from otari. Pin a provider, e.g. `nebius:Qwen/Qwen3.8-27B`: with a
+catalog id such as `alibaba/qwen3.8-27b`, otari picks the provider per request
+and falls back between them, so requests can be served by different deployments
+at different prices.
 
 The image's [`machrc`](machrc) stops a single-test `mach wpt` from waiting for
 someone to close the browser, which an unattended run would wait on until it
