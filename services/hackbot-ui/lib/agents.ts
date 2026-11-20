@@ -12,6 +12,7 @@ export const AGENTS = [
   { value: "build-repair", label: "build-repair" },
   { value: "frontend-triage", label: "frontend-triage" },
   { value: "gecko-triage", label: "gecko-triage" },
+  { value: "perf-triage", label: "perf-triage" },
   { value: "test-repair", label: "test-repair" },
   { value: "test-repair-fix", label: "test-repair-fix" },
   { value: "test-plan-generator", label: "test-plan-generator" },
