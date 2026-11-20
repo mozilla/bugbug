@@ -1,0 +1,4 @@
+# mach settings for unattended runs. A single-test `mach wpt` otherwise waits for
+# someone to close the browser, which nobody here does.
+[alias]
+wpt = wpt --no-pause-after-test

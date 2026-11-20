@@ -102,6 +102,8 @@ RUN case "$TARGETARCH" in \
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
 COPY agents/dataset-eval/hackbot.toml /app/hackbot.toml
+COPY agents/dataset-eval/machrc /etc/machrc
+ENV MACHRC=/etc/machrc
 COPY agents/dataset-eval/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

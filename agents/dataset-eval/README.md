@@ -41,6 +41,10 @@ The open-model harnesses reach their models through an
 `MODEL` is named as otari names it, e.g. `deepinfra:Qwen/Qwen3.8-27B`, and the
 model's limits, the run's usage and its cost come from otari.
 
+The image's [`machrc`](machrc) stops a single-test `mach wpt` from waiting for
+someone to close the browser, which an unattended run would wait on until it
+timed out.
+
 ## Dataset
 
 One row per example; extra fields are ignored:
