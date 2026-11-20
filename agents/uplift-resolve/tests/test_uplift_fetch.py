@@ -78,14 +78,10 @@ async def test_a_git_source_that_cannot_be_fetched_fails_the_run(tmp_path, git_i
     )
 
     with pytest.raises(AgentError, match="could not fetch"):
-        await agent.fetch_source_commits(
-            checkout, [GitSource(commit="f" * 40)], [None]
-        )
+        await agent.fetch_source_commits(checkout, [GitSource(commit="f" * 40)], [None])
 
 
-async def test_a_phabricator_base_that_cannot_be_fetched_is_skipped(
-    tmp_path, git_in
-):
+async def test_a_phabricator_base_that_cannot_be_fetched_is_skipped(tmp_path, git_in):
     to_uplift, _ = build_upstream(git_in, tmp_path / "upstream")
     checkout = shallow_stable_checkout(
         git_in, tmp_path / "upstream", tmp_path / "checkout"
