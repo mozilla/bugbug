@@ -215,11 +215,16 @@ def update_config_selection_tasks(revs: list[str]) -> None:
         )
         if tasks:
             # The test tasks which aren't eligible: the ones of the task graph which aren't among
-            # the tasks.
+            # the tasks, and the target ones which aren't in the task graph (all the tasks that
+            # test selection optimizes run on backstop pushes, so the others are optimized
+            # otherwise, e.g. jittest when no JS engine file changed).
             ignored = {
-                _without_chunk(task["label"])
-                for task in task_graph.values()
-                if task["label"].startswith("test-")
+                _without_chunk(label)
+                for label in (
+                    *(task["label"] for task in task_graph.values()),
+                    *target_tasks,
+                )
+                if label.startswith("test-")
             } - tasks.keys()
             state = {
                 "backstop": rev,

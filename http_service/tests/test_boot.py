@@ -328,22 +328,26 @@ def test_update_config_selection_tasks(
         boot._decision_artifact_url("b1", "task-graph.json"),
         json=TASK_GRAPH,
     )
+    # A target task of the backstop pushes isn't in their task graph: it's optimized otherwise
+    # than by test selection.
+    jittest = "test-linux2404-64/opt-jittest-1proc-1"
     responses.add(
         responses.GET,
         boot._decision_artifact_url("b1", "target-tasks.json"),
-        json=sorted(KNOWN_TASKS),
+        json=sorted(KNOWN_TASKS) + [jittest],
     )
     responses.add(
         responses.GET,
         boot._decision_artifact_url("b2", "target-tasks.json"),
-        json=sorted(KNOWN_TASKS) + [renamed["label"]],
+        json=sorted(KNOWN_TASKS) + [jittest, renamed["label"]],
     )
     # A push after the backstop push has tasks renamed since then (found among its target tasks,
     # as they could have been optimized away). Shippable ones are still ignored.
     responses.add(
         responses.GET,
         boot._decision_artifact_url("p1", "target-tasks.json"),
-        json=sorted(KNOWN_TASKS) + [renamed["label"], renamed_shippable["label"]],
+        json=sorted(KNOWN_TASKS)
+        + [jittest, renamed["label"], renamed_shippable["label"]],
     )
     responses.add(
         responses.GET,
@@ -369,6 +373,7 @@ def test_update_config_selection_tasks(
     ignored = [
         "test-linux2404-64-shippable/opt-mochitest-plain",
         "test-linux2404-64/debug-mochitest-plain",
+        "test-linux2404-64/opt-jittest-1proc",
         "test-linux2404-64/opt-mochitest-plain-standalone",
     ]
     boot.update_config_selection_tasks(["b1", "p1", "p2"])
@@ -382,7 +387,8 @@ def test_update_config_selection_tasks(
             ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
         ),
     }
-    # The full task graph was only needed for p1's renamed tasks.
+    # The full task graph was only needed for p1's renamed tasks: the jittest task was already
+    # known not to be eligible.
     full_graphs = [
         call.request.url
         for call in responses.calls
