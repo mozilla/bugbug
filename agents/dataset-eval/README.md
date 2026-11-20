@@ -72,9 +72,10 @@ directory off the repo.
 ## Metrics
 
 `test_progress` (per test file, the share of the gap to passing that the patch
-closes), `test_regressions`, `builds`, `integrity`, `quality`, and cost from
-token usage ([`prices.py`](hackbot_agents/dataset_eval/prices.py)), or from otari
-for the models it serves.
+closes), `test_regressions`, `builds`, `integrity`, `quality`, each rubric
+criterion, and `cost_usd` as the harness reports it: Claude Code's own, or
+otari's for the open models. Codex reports no cost, so its runs are costed only
+in Weave's Cost column, which Weave prices from the token usage.
 
 ## Input
 

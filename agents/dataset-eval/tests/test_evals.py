@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from hackbot_agents.dataset_eval import dataset, prices, runner, tree
+from hackbot_agents.dataset_eval import dataset, runner, tree, weave_log
 from hackbot_agents.dataset_eval.grading import checks, tests
 from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
 from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
@@ -102,28 +102,6 @@ def test_harness_env_keeps_only_own_vendor(monkeypatch):
     claude, codex = harness_env("anthropic"), harness_env("openai")
     assert "ANTHROPIC_FEDERATION_RULE_ID" in claude and "CODEX_API_KEY" not in claude
     assert "CODEX_API_KEY" in codex and "ANTHROPIC_FEDERATION_RULE_ID" not in codex
-
-
-def test_cost():
-    usage = {
-        "claude-opus-5-5": {
-            "input_tokens": 1_000_000,
-            "cache_read_input_tokens": 1_000_000,
-        }
-    }
-    assert prices.cost(usage) == pytest.approx(4.0 + 0.4)
-    assert prices.cost({"unknown": {"input_tokens": 1}}) is None
-    assert prices.cost({}) is None
-    assert prices.run_cost(usage, 9.0) == pytest.approx(4.4)
-    assert prices.run_cost({"unknown": {"input_tokens": 1}}, 9.0) == 9.0
-    codex = {
-        "gpt-6.1-sol": {
-            "input_tokens": 1_000_000,
-            "cache_read_input_tokens": 1_000_000,
-            "output_tokens": 1_000_000,
-        }
-    }
-    assert prices.cost(codex) == pytest.approx(2.0 + 0.10 + 10.0)
 
 
 PATCH = (
@@ -243,6 +221,28 @@ def test_run_isolated_times_out_and_kills_the_group(tmp_path):
     time.sleep(0.2)
     pid = marker.read_text().strip()
     assert subprocess.run(["kill", "-0", pid], capture_output=True).returncode != 0
+
+
+def test_weave_cost_is_what_weave_priced_the_usage_at(monkeypatch):
+    import weave
+
+    costs = {
+        "gpt-6-luna": {
+            "prompt_tokens_total_cost": 0.002,
+            "completion_tokens_total_cost": 0.0005,
+            "cache_read_input_tokens_total_cost": 0.0001,
+            "cache_creation_input_tokens_total_cost": None,
+            "prompt_token_cost": 1e-7,
+        }
+    }
+    call = SimpleNamespace(summary={"weave": {"costs": costs}})
+    client = SimpleNamespace(flush=lambda: None, get_call=lambda *a, **k: call)
+    monkeypatch.setattr(weave, "get_client", lambda: client)
+    usage_call = SimpleNamespace(id="c1")
+
+    assert weave_log._weave_cost([usage_call]) == pytest.approx(0.0026)
+    costs.clear()
+    assert weave_log._weave_cost([usage_call]) is None
 
 
 def test_weave_log_is_a_no_op_without_a_client():

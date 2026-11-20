@@ -43,6 +43,34 @@ def _agent_usage():
     return agent_usage
 
 
+def _weave_cost(calls) -> float | None:
+    """What Weave prices the calls' usage at, from its own price list.
+
+    A workaround for Codex, which reports no cost when it runs with an API key.
+    """
+    import weave
+
+    try:
+        client = weave.get_client()
+        client.flush()
+        total = 0.0
+        for call in calls:
+            summary = client.get_call(call.id, include_costs=True).summary or {}
+            costs = (summary.get("weave") or {}).get("costs")
+            if not costs:
+                return None
+            total += sum(
+                value or 0.0
+                for model in costs.values()
+                for key, value in model.items()
+                if key.endswith("_tokens_total_cost")
+            )
+        return round(total, 4)
+    except Exception:
+        log.exception("Weave did not price the agent's usage")
+        return None
+
+
 class WeaveLog:
     def __init__(self, name: str, model: dict, dataset: str, rows: list[dict]):
         self._ev = None
@@ -79,22 +107,31 @@ class WeaveLog:
         output: dict,
         scores: dict[str, float],
         usage: dict[str, dict[str, int]] | None = None,
-    ) -> None:
+        cost: float | None = None,
+    ) -> float | None:
         """Close a prediction; ``usage`` is the agent's, by model, for Weave to cost.
 
         The agent's own model calls are traced in another process, so Weave would
-        not count them in the evaluation's tokens and cost.
+        not count them in the evaluation's tokens and cost. Returns ``cost``, the
+        harness's own, or else what Weave prices ``usage`` at.
         """
         if pred is None:
-            return
+            return cost
         from weave.trace.context import call_context
 
         with call_context.set_call_stack([pred.predict_call]):
-            for model, counts in (usage or {}).items():
-                _agent_usage()(model, counts)
+            calls = [
+                _agent_usage().call(model, counts)[1]
+                for model, counts in (usage or {}).items()
+            ]
+        if cost is None and calls:
+            cost = _weave_cost(calls)
+        if cost is not None:
+            scores = {**scores, "cost_usd": cost}
         for name, value in scores.items():
             pred.log_score(scorer=name, score=value)
         pred.finish(output)
+        return cost
 
     def summary(self, summary: dict) -> None:
         if self._ev:

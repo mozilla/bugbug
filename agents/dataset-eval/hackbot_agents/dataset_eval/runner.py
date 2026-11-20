@@ -19,7 +19,7 @@ from agent_tools.firefox.tools import bootstrap_firefox, build_firefox, run_test
 from agent_tools.firefox.tools.run_tests import TEST_DIRS, TEST_ROOTS
 from hackbot_runtime import AgentError, HackbotContext
 
-from . import prices, tree
+from . import tree
 from .grading import checks, tests
 from .grading.judge import judge
 from .isolation import example_env, run_isolated
@@ -331,9 +331,6 @@ class Runner:
                         log.warning("%s rep %d: judge failed: %s", row["id"], rep, exc)
                     record.update(
                         scores=scores,
-                        cost_usd=prices.run_cost(
-                            out.get("usage") or {}, out.get("cost_usd")
-                        ),
                         usage=out.get("usage"),
                         lines_changed=checks.lines_changed(patch),
                         **{
@@ -348,17 +345,16 @@ class Runner:
                     )
                     records.append(record)
                 details = {
-                    k: v for k, v in record.items() if k not in ("id", "rep", "scores")
+                    k: v
+                    for k, v in record.items()
+                    if k not in ("id", "rep", "scores", "cost_usd")
                 }
-                cost = record.get("cost_usd")
-                weave_log.finish(
+                record["cost_usd"] = weave_log.finish(
                     pred,
                     {"message": out.get("message", ""), "patch": patch, **details},
-                    {
-                        **record.get("scores", {}),
-                        **({"cost_usd": cost} if cost is not None else {}),
-                    },
+                    record.get("scores", {}),
                     out.get("usage"),
+                    out.get("cost_usd"),
                 )
                 self.publish(
                     f"{row['id']}_rep{rep}", record, patch, out.get("transcript", [])
