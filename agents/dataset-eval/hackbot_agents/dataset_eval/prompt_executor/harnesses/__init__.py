@@ -233,8 +233,9 @@ def harness_env(vendor: str) -> dict[str, str]:
 def get_harness(name: str) -> Harness:
     from .claude_code import ClaudeCode
     from .codex import Codex
+    from .oh_my_pi import OhMyPi
 
-    harnesses = {h.name: h for h in (ClaudeCode(), Codex())}
+    harnesses = {h.name: h for h in (ClaudeCode(), Codex(), OhMyPi())}
     if name not in harnesses:
         raise ValueError(f"unknown harness {name!r}; known: {', '.join(harnesses)}")
     return harnesses[name]

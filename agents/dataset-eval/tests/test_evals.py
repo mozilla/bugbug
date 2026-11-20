@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -22,6 +23,7 @@ from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
     to_messages,
     usage_of,
 )
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.oh_my_pi import OhMyPi
 from hackbot_agents.dataset_eval.weave_log import WeaveLog
 
 
@@ -351,6 +353,108 @@ def test_codex_items_are_traced_as_a_weave_conversation():
     assert "execute_tool shell" in spans and "chat gpt-x" in spans
     assert spans["execute_tool shell"].status.status_code.name == "ERROR"
     assert any(n.startswith("invoke_agent") for n in spans)
+
+
+def _fake_cli(
+    tmp_path, monkeypatch, name: str, events: list, then: str = "", stored=({}, None)
+) -> None:
+    """Put ``name`` on PATH: it saves its stdin, env and args and prints ``events``.
+
+    otari is stubbed: it serves any model and reports ``stored`` as the run's usage.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cli = bin_dir / name
+    cli.write_text(
+        "#!/bin/sh\n"
+        f'cat > {tmp_path}/stdin; env > {tmp_path}/env; echo "$@" > {tmp_path}/args\n'
+        + "".join(
+            f"echo '{e if isinstance(e, str) else json.dumps(e)}'\n" for e in events
+        )
+        + then
+    )
+    cli.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "a")
+    monkeypatch.setenv("OTARI_API_KEY", "k")
+    monkeypatch.setenv("OTARI_BASE_URL", "https://otari.test/api")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def usage(tag, model):
+        return stored
+
+    async def served(m):
+        return otari.Model(m, 1000, 100, True)
+
+    monkeypatch.setattr(otari, "model", served)
+    monkeypatch.setattr(otari, "usage", usage)
+
+
+def _env(tmp_path) -> dict[str, str]:
+    return dict(
+        line.split("=", 1)
+        for line in (tmp_path / "env").read_text().splitlines()
+        if "=" in line
+    )
+
+
+def test_oh_my_pi_events(tmp_path, monkeypatch):
+    usage = {"input": 10, "output": 5, "cacheRead": 90, "cacheWrite": 0}
+    call = {
+        "role": "assistant",
+        "provider": "otari",
+        "model": "deepinfra:qwen",
+        "content": [
+            {"type": "thinking", "thinking": "look"},
+            {"type": "toolCall", "id": "t1", "name": "bash", "arguments": {"c": "ls"}},
+        ],
+        "usage": usage,
+        "stopReason": "toolUse",
+    }
+    result = {
+        "role": "toolResult",
+        "toolCallId": "t1",
+        "content": [{"type": "text", "text": "x"}],
+        "isError": True,
+    }
+    answer = {
+        **call,
+        "content": [{"type": "text", "text": "done"}],
+        "stopReason": "stop",
+    }
+    events = [
+        "Warning: not JSON",
+        {"type": "message_end", "message": {"role": "user", "content": "Do it."}},
+        {"type": "message_end", "message": call},
+        {"type": "message_end", "message": result},
+        {"type": "turn_end", "message": call, "toolResults": [result]},
+        {"type": "message_end", "message": answer},
+        {"type": "turn_end", "message": answer, "toolResults": []},
+    ]
+    # With a subagent's 100 input tokens that the stream did not show.
+    stored = {"deepinfra:qwen": {"input_tokens": 120, "cache_read_input_tokens": 180}}
+    _fake_cli(tmp_path, monkeypatch, "omp", events, stored=(stored, 0.75))
+
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(OhMyPi().run("Do it.", tmp_path, "deepinfra:qwen", "high", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "tool_call", "tool_result", "assistant"]
+    assert run.tool_errors == 1 and run.models == ["deepinfra:qwen"]
+    assert run.usage["deepinfra:qwen"]["input_tokens"] == 120
+    assert run.cost_usd == 0.75
+    assert (tmp_path / "stdin").read_text() == "Do it."
+    args = (tmp_path / "args").read_text()
+    assert "--model otari/deepinfra:qwen" in args and "--thinking high" in args
+    config = json.loads((tmp_path / ".omp" / "agent" / "models.yml").read_text())
+    provider = config["providers"]["otari"]
+    assert provider["baseUrl"] == "https://otari.test/api/v1"
+    assert provider["headers"]["Otari-Tags"].startswith("hackbot_attempt=")
+    assert provider["models"][0]["contextWindow"] == 1000
+    env = _env(tmp_path)
+    assert "ANTHROPIC_API_KEY" not in env and env["OTARI_API_KEY"] == "k"
+    assert env["PWD"] == str(tmp_path)
 
 
 def test_a_response_is_one_chat_span_with_its_usage():
