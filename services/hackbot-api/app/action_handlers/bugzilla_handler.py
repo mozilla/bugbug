@@ -57,6 +57,54 @@ def _request(method: str, path: str, json_body: dict[str, Any]) -> dict[str, Any
     return response.json()
 
 
+def _front_matter(ctx: ApplyContext) -> str:
+    """The block that links a comment to the run and action that wrote it.
+
+    BMO's Hackbot extension reads it off the top of comments from the Hackbot
+    account, hides it, and shows the agent and a link to the run in the comment
+    header instead. BMO only accepts identifiers for `run`, `action` and `agent`,
+    which a run ID, a `RunAction` row ID and a registered agent name always are
+    (`test_agent_names_are_identifiers` keeps it that way).
+
+    Added here rather than by the agent so a model can't write or change it.
+    Empty when no action is known, such as field updates merged without a
+    comment.
+    """
+    if ctx.action_id is None:
+        return ""
+    url = f"{settings.hackbot_ui_url.rstrip('/')}/runs/{ctx.run_id}"
+    return "\n".join(
+        [
+            "---",
+            "hackbot:",
+            f"  run: {ctx.run_id}",
+            f"  action: {ctx.action_id}",
+            f"  agent: {ctx.agent}",
+            f"  url: {url}",
+            "---",
+            "",
+            "",
+        ]
+    )
+
+
+def _escape_front_matter(text: str) -> str:
+    """Agent text that BMO can't take for front matter.
+
+    BMO reads a block only at the very start of a comment, so text that starts
+    with a rule is moved down a line: a block the model wrote is then shown as
+    text rather than taken as the comment's metadata.
+    """
+    return "\n" + text if text.startswith("---") else text
+
+
+def _with_front_matter(comment: dict[str, Any], ctx: ApplyContext) -> dict[str, Any]:
+    """The comment with its front matter, or with none that BMO would read."""
+    front_matter = _front_matter(ctx)
+    body = comment["body"] if front_matter else _escape_front_matter(comment["body"])
+    return {**comment, "body": front_matter + body}
+
+
 def _comment_body(params: dict[str, Any]) -> dict[str, Any]:
     """Build the ``comment`` object for a PUT /bug/{id}.
 
@@ -83,6 +131,10 @@ class UpdateBugHandler:
         if params.get("comment"):
             body["comment"] = params["comment"]
             body["comment_tags"] = [ctx.agent]
+        # Also a comment the agent put in `changes` itself, which is posted from
+        # the Hackbot account too.
+        if body.get("comment"):
+            body["comment"] = _with_front_matter(body["comment"], ctx)
         try:
             _request("PUT", f"bug/{bug_id}", body)
         except Exception as exc:
@@ -94,7 +146,8 @@ class UpdateBugHandler:
 class AddCommentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]
-        body: dict[str, Any] = {"comment": _comment_body(params)}
+        comment = _with_front_matter(_comment_body(params), ctx)
+        body: dict[str, Any] = {"comment": comment}
         body["comment_tags"] = [ctx.agent]
         try:
             _request("PUT", f"bug/{bug_id}", body)
@@ -126,7 +179,7 @@ class AddAttachmentHandler:
             "is_patch": params.get("is_patch", False),
         }
         if params.get("comment"):
-            body["comment"] = params["comment"]
+            body["comment"] = _escape_front_matter(params["comment"])
 
         try:
             data = _request("POST", f"bug/{bug_id}/attachment", body)
@@ -146,6 +199,12 @@ class AddAttachmentHandler:
 
 class CreateBugHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        # The description is comment 0, which gets no front matter.
+        if isinstance(params.get("description"), str):
+            params = {
+                **params,
+                "description": _escape_front_matter(params["description"]),
+            }
         try:
             data = _request("POST", "bug", params)
         except Exception as exc:

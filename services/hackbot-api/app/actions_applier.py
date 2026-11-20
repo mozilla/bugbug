@@ -184,12 +184,30 @@ async def ensure_action_rows(
     return rows
 
 
+def _comment_row_id(member_rows: list[RunAction]) -> int:
+    """The row whose comment a merged PUT posts, which the front matter names.
+
+    The group's `add_comment` if it has one, else the last update with a
+    comment in its `changes` (later changes win). With no comment, nothing
+    reads the ID, so the last row's will do. That includes a GitHub review,
+    which has no front matter.
+    """
+    for member in member_rows:
+        if member.type == "bugzilla.add_comment":
+            return member.id
+    for member in reversed(member_rows):
+        if "comment" in (member.params.get("changes") or {}):
+            return member.id
+    return member_rows[-1].id
+
+
 async def _dispatch(
     run: Run,
     action_type: str,
     params: dict,
     attachments: list[dict],
     hackbot_client: HackbotClient,
+    action_id: int,
 ) -> ActionResult:
     """Run one handler call, converting failures into a failed `ActionResult`.
 
@@ -210,6 +228,7 @@ async def _dispatch(
         attachments=attachments,
         agent=run.agent,
         hackbot_client=hackbot_client,
+        action_id=action_id,
         # TODO: use ["agent_version"] once no runs from before #7337 have
         # pending actions.
         agent_version=run.summary.get("agent_version"),
@@ -334,14 +353,19 @@ async def _apply_pending_rows(
                 for member in member_rows
             ]
             outcome = await _dispatch(
-                run, action_type, merge(entries), [], hackbot_client
+                run,
+                action_type,
+                merge(entries),
+                [],
+                hackbot_client,
+                _comment_row_id(member_rows),
             )
         else:
             member_rows = [row]
             member_result = _shared_result
             params = resolve_placeholders(row.params, results_by_ref)
             outcome = await _dispatch(
-                run, row.type, params, attachments, hackbot_client
+                run, row.type, params, attachments, hackbot_client, row.id
             )
 
         # Only stamp applied_at on a real success, so a failed row isn't
