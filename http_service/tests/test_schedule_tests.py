@@ -612,6 +612,7 @@ def test_schedule_config_groups_with_new_tasks(
                 "new_tasks": {
                     "test-linux1804-64/opt-mochitest-renamed": "test-linux1804-64/opt-*"
                 },
+                "ignored": [],
             },
             f,
         )

@@ -159,6 +159,24 @@ def _get(rev: str, path: str) -> requests.Response:
     return requests.get(_decision_artifact_url(rev, path), timeout=REQUEST_TIMEOUT)
 
 
+def _classify_new_tasks(
+    state: dict, ignored: set[str], rev: str, labels: set[str], graph: dict[str, dict]
+) -> None:
+    """Classify test tasks of a push after the backstop push.
+
+    `labels` are the tasks to classify (without chunk number), `graph` the definitions available
+    for them (some can be missing, e.g. from the push's full task graph). The eligible ones become
+    new tasks (unless they are candidates already), and the others are ignored.
+    """
+    eligible = {label: config for label, config, _ in _eligible_tasks(graph)}
+    for label in labels:
+        if label not in eligible:
+            ignored.add(label)
+        elif label not in state["tasks"]:
+            logger.info("New test task %s (%s) in push %s", label, eligible[label], rev)
+            state["new_tasks"][label] = eligible[label]
+
+
 def update_config_selection_tasks(revs: list[str]) -> None:
     """Retrieve the test tasks among which configs are selected.
 
@@ -167,8 +185,20 @@ def update_config_selection_tasks(revs: list[str]) -> None:
     selected by bugbug). Older backstop pushes are used if the graph of a newer one isn't
     available or has none of the tasks.
 
+    The tasks of the pushes after it which aren't known (e.g. because a task was renamed since the
+    backstop push) are stored too, with their config: the taskgraph matches the labels of its tasks
+    with the ones of the selected configs, which would otherwise not run on the renamed tasks. They
+    are found among the target tasks of the pushes (before optimization, which could remove them as
+    they match none of the labels in the replies), and their definitions in the full task graph
+    (only when there are some). Their manifests aren't known (only the ones selected by bugbug run on
+    those pushes), so the replies give them for all the groups the configs are selected for (see
+    testconfigselect.task_labels). The test tasks which aren't eligible (see _eligible_tasks) are
+    remembered, so that they aren't looked for again.
+
     `revs` are the recent autoland pushes, from the oldest.
     """
+    # The latest backstop push with tasks.
+    state: dict | None = None
     for rev in reversed(revs):
         r = _get(rev, "parameters.yml")
         if not r.ok or not yaml.safe_load(r.text).get("backstop"):
@@ -177,18 +207,60 @@ def update_config_selection_tasks(revs: list[str]) -> None:
         targets = _get(rev, "target-tasks.json")
         if not r.ok or not targets.ok:
             continue
-        tasks = get_config_selection_tasks(orjson.loads(r.content), targets.json())
+        task_graph = orjson.loads(r.content)
+        target_tasks = targets.json()
+        tasks = get_config_selection_tasks(task_graph, target_tasks)
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
         )
         if tasks:
-            _write(
-                CONFIG_SELECTION_TASKS_PATH,
-                orjson.dumps({"backstop": rev, "tasks": tasks}).decode(),
-            )
-            return
+            # The test tasks which aren't eligible: the ones of the task graph which aren't among
+            # the tasks.
+            ignored = {
+                _without_chunk(task["label"])
+                for task in task_graph.values()
+                if task["label"].startswith("test-")
+            } - tasks.keys()
+            state = {
+                "backstop": rev,
+                "tasks": tasks,
+                "new_tasks": {},
+                "ignored": sorted(ignored),
+            }
+            break
 
-    logger.warning("No backstop push with test tasks to retrieve")
+    if state is None:
+        logger.warning("No backstop push with test tasks to retrieve")
+        return
+
+    # The tasks of the later pushes. The ones without their target tasks or full task graph (yet,
+    # e.g. if the decision task is still running, or ever, e.g. for DONTBUILD pushes or failed
+    # decision tasks) are left for the next update, without blocking the others.
+    ignored = set(state["ignored"])
+    for rev in revs[revs.index(state["backstop"]) + 1 :]:
+        r = _get(rev, "target-tasks.json")
+        if not r.ok:
+            continue
+        unknown = {
+            label
+            for label in r.json()
+            if label.startswith("test-")
+            and _without_chunk(label) not in state["tasks"]
+            and _without_chunk(label) not in state["new_tasks"]
+            and _without_chunk(label) not in ignored
+        }
+        if unknown:
+            r = _get(rev, "full-task-graph.json")
+            if not r.ok:
+                continue
+            graph = get_full_graph_tasks(r.content, unknown)
+            del r
+            _classify_new_tasks(
+                state, ignored, rev, {_without_chunk(label) for label in unknown}, graph
+            )
+    state["ignored"] = sorted(ignored)
+
+    _write(CONFIG_SELECTION_TASKS_PATH, orjson.dumps(state).decode())
 
 
 def get_recent_revs() -> list[str]:

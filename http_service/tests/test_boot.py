@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -220,6 +221,9 @@ def test_retrieve_schedulable_tasks(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    # No tasks were retrieved before.
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
     # A transient failure is retried.
     responses.add(
         responses.GET,
@@ -265,7 +269,17 @@ def test_retrieve_schedulable_tasks(
     with open("known_tasks") as f:
         assert set(f.read().split("\n")) == KNOWN_TASKS
     with open("config_selection_tasks.json") as f:
-        assert json.load(f) == {"backstop": "rev1", "tasks": CONFIG_SELECTION_TASKS}
+        assert json.load(f) == {
+            "backstop": "rev1",
+            "tasks": CONFIG_SELECTION_TASKS,
+            "new_tasks": {},
+            # The test tasks of the backstop push which aren't eligible.
+            "ignored": [
+                "test-linux2404-64-shippable/opt-mochitest-plain",
+                "test-linux2404-64/debug-mochitest-plain",
+                "test-linux2404-64/opt-mochitest-plain-standalone",
+            ],
+        }
 
 
 def test_get_full_graph_tasks() -> None:
@@ -284,3 +298,116 @@ def test_get_full_graph_tasks() -> None:
     assert (
         boot.get_full_graph_tasks(orjson.dumps(graph), {"test-unknown/opt-x-1"}) == {}
     )
+
+
+def test_update_config_selection_tasks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    # No tasks were retrieved before.
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
+    renamed = _task(
+        "test-linux2404-64/opt-mochitest-plain-renamed-1",
+        "linux2404-64/opt",
+        ["dom/a.toml"],
+    )
+    renamed_shippable = _task(
+        "test-linux2404-64-shippable/opt-mochitest-plain-renamed-1",
+        "linux2404-64-shippable/opt",
+        ["dom/a.toml"],
+    )
+    for rev, backstop in (("b1", True), ("p1", False), ("p2", False), ("b2", True)):
+        responses.add(
+            responses.GET,
+            boot._decision_artifact_url(rev, "parameters.yml"),
+            body=f"backstop: {'true' if backstop else 'false'}\n",
+        )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b1", "task-graph.json"),
+        json=TASK_GRAPH,
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b1", "target-tasks.json"),
+        json=sorted(KNOWN_TASKS),
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b2", "target-tasks.json"),
+        json=sorted(KNOWN_TASKS) + [renamed["label"]],
+    )
+    # A push after the backstop push has tasks renamed since then (found among its target tasks,
+    # as they could have been optimized away). Shippable ones are still ignored.
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p1", "target-tasks.json"),
+        json=sorted(KNOWN_TASKS) + [renamed["label"], renamed_shippable["label"]],
+    )
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p1", "full-task-graph.json"),
+        body=orjson.dumps(
+            {
+                task["label"]: task
+                for task in (*TASK_GRAPH.values(), renamed, renamed_shippable)
+            }
+        ),
+    )
+    # The target tasks of the next one aren't there: it doesn't block the others.
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("p2", "target-tasks.json"),
+        status=404,
+    )
+
+    def read() -> dict:
+        with open("config_selection_tasks.json") as f:
+            return json.load(f)
+
+    ignored = [
+        "test-linux2404-64-shippable/opt-mochitest-plain",
+        "test-linux2404-64/debug-mochitest-plain",
+        "test-linux2404-64/opt-mochitest-plain-standalone",
+    ]
+    boot.update_config_selection_tasks(["b1", "p1", "p2"])
+    assert read() == {
+        "backstop": "b1",
+        "tasks": CONFIG_SELECTION_TASKS,
+        "new_tasks": {
+            "test-linux2404-64/opt-mochitest-plain-renamed": "test-linux2404-64/opt-*"
+        },
+        "ignored": sorted(
+            ignored + ["test-linux2404-64-shippable/opt-mochitest-plain-renamed"]
+        ),
+    }
+    # The full task graph was only needed for p1's renamed tasks.
+    full_graphs = [
+        call.request.url
+        for call in responses.calls
+        if call.request.url.endswith("full-task-graph.json")
+    ]
+    assert full_graphs == [boot._decision_artifact_url("p1", "full-task-graph.json")]
+
+    # A newer backstop push replaces the tasks, which include the renamed one, even if the target
+    # tasks of the recent pushes are from before the rename (they are only refreshed daily).
+    responses.add(
+        responses.GET,
+        boot._decision_artifact_url("b2", "task-graph.json"),
+        json={**TASK_GRAPH, "r": renamed},
+    )
+    boot.update_config_selection_tasks(["b1", "p1", "p2", "b2"])
+    assert read() == {
+        "backstop": "b2",
+        "tasks": {
+            **CONFIG_SELECTION_TASKS,
+            "test-linux2404-64/opt-mochitest-plain-renamed": {
+                "config": "test-linux2404-64/opt-*",
+                "manifests": ["dom/a.toml"],
+            },
+        },
+        "new_tasks": {},
+        "ignored": ignored,
+    }
+    assert_requests_have_timeouts()
