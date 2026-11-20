@@ -27,12 +27,20 @@ the test files fails `integrity`.
 `prompt-executor` ([`prompt_executor/`](hackbot_agents/dataset_eval/prompt_executor/))
 is a hackbot agent like the others -- inputs from env, result in `summary.json`,
 logged with `Reporter` and traced to Weave under this run's id -- that runs a coding
-harness unmodified on the prompt: `claude_code` (Claude Agent SDK),
-`codex` (Codex Python SDK), or, for open models,
-`oh_my_pi` ([omp](https://github.com/can1357/oh-my-pi) in JSON print mode),
-`opencode` ([OpenCode](https://github.com/anomalyco/opencode) `run --format json`)
-and `deepseek_harness` ([DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-headless). Each sees only its own vendor's credentials, and nothing in its
+harness unmodified on the prompt. `HARNESS` picks it, `MODEL` the model:
+
+- `claude_code` (default): the Claude Agent SDK, with Claude models, e.g.
+  `claude-sonnet-5-5` (default), `claude-opus-5-5`, `claude-haiku-5-5`.
+- `codex`: the Codex Python SDK, with OpenAI models, e.g. `gpt-6-sol`,
+  `gpt-6-luna`.
+- Open models, any served by otari, e.g. `nebius:Qwen/Qwen3.8-27B`,
+  `fireworks:accounts/fireworks/models/deepseek-v4p1-flash`:
+  - `oh_my_pi`: [omp](https://github.com/can1357/oh-my-pi) in JSON print mode.
+  - `opencode`: [OpenCode](https://github.com/anomalyco/opencode) `run --format json`.
+  - `deepseek_harness`: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+    headless.
+
+Each harness sees only its own vendor's credentials, and nothing in its
 environment says it is being evaluated.
 
 The open-model harnesses reach their models through an
