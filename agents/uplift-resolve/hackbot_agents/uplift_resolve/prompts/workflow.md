@@ -15,7 +15,8 @@ For a **Git** source (a commit SHA):
 
 1. Fetch the commit and its parent so cherry-pick can three-way merge:
    `git fetch --depth=2 origin <commit>`
-2. `git cherry-pick -x <commit>`
+2. `git cherry-pick <commit>`. Leave out `-x`: its "(cherry picked from commit ...)"
+   line would end up in the uplift's commit message.
 3. If it conflicts, resolve the conflicts and commit the fixed patch.
 
 For a **Phabricator** source (a revision id):

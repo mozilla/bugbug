@@ -115,6 +115,17 @@ def test_the_workflow_tells_the_agent_to_name_sources_by_d_number():
     )
 
 
+def test_the_workflow_cherry_picks_without_a_trailer():
+    prompt = load_workflow()
+
+    assert "git cherry-pick <commit>" in prompt, (
+        "The agent should cherry-pick git sources without `-x`."
+    )
+    assert "cherry-pick -x" not in prompt, (
+        '`-x` would add a "(cherry picked from commit ...)" line to the uplift\'s message.'
+    )
+
+
 def test_render_sources_says_what_phabricator_did_not_record():
     """A base commit is not guaranteed, and guessing one lands a bad patch."""
     sources = [PhabricatorSource(revision_id=88)]
