@@ -21,6 +21,7 @@ sheets/
 .pytest_cache/
 *.pyc
 .coverage
+.venv/
 
 # Distribution / packaging
 .Python

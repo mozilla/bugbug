@@ -10,10 +10,12 @@ GCS/Cloud Run collaborators are monkeypatched and the DB session is the shared
 
 import json
 import uuid
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from app import gcs, jobs
+from app import bz_token, gcs, jobs
+from app.agents import AGENT_REGISTRY
 from app.auth import require_api_key
 from app.schemas import RunStatus
 
@@ -23,7 +25,7 @@ def _stub_gcp(monkeypatch):
     async def fake_policy(run_id, timeout_seconds):
         return {"url": "https://upload.example/", "fields": {"key": "v"}}
 
-    async def fake_trigger(job_name, env, timeout_seconds):
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
         return "projects/p/locations/l/jobs/j/executions/e"
 
     monkeypatch.setattr(gcs, "run_prefix", lambda run_id: f"results/{run_id}/")
@@ -145,6 +147,47 @@ def test_a_run_that_cannot_start_records_why_and_keeps_its_key(
     assert db.added.dedupe_key == "push:autoland:abc"
 
 
+def test_the_token_covers_the_agents_own_timeout(client, db, monkeypatch):
+    # Agents may set their own execution timeout, and a token that expires
+    # before the run does fails it partway, so minting gets the same timeout
+    # the execution is started with.
+    monkeypatch.setitem(
+        AGENT_REGISTRY,
+        "bug-fix",
+        replace(AGENT_REGISTRY["bug-fix"], execution_timeout_seconds=2 * 60 * 60),
+    )
+    seen = {}
+
+    def capture(**kwargs):
+        seen["mint"] = kwargs["timeout_seconds"]
+        return {}
+
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
+        seen["execution"] = timeout_seconds
+        return "projects/p/locations/l/jobs/j/executions/e"
+
+    monkeypatch.setattr(bz_token, "broker_env_for", capture)
+    monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
+
+    _create(client)
+    assert seen == {"mint": 2 * 60 * 60, "execution": 2 * 60 * 60}
+
+
+def test_a_run_whose_token_cannot_be_minted_is_failed_not_left_pending(
+    client, db, monkeypatch
+):
+    # Minting happens after the claim is committed, so a failure there must
+    # mark the run failed like any other start failure, or it sits in pending.
+    def fail(**_k):
+        raise RuntimeError("IAM refused to sign")
+
+    monkeypatch.setattr(bz_token, "broker_env_for", fail)
+
+    assert _create_keyed(client).status_code == 502
+    assert db.added.status == RunStatus.failed.value
+    assert "IAM refused to sign" in db.added.error
+
+
 @pytest.mark.parametrize("raw", ["", "   ", "x" * 500])
 def test_an_unusable_dedupe_key_is_rejected(client, db, raw):
     # Blank is not taken as "no key": a caller that built a name out of a value
@@ -175,7 +218,7 @@ def _chain(client, db, monkeypatch, parent):
 
     envs = []
 
-    async def fake_trigger(job_name, env, timeout_seconds):
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 
@@ -225,7 +268,7 @@ def test_a_chained_run_needs_an_existing_parent(client, db, monkeypatch):
 def test_an_unchained_run_gets_no_parent_artifacts(client, db, monkeypatch):
     envs = []
 
-    async def fake_trigger(job_name, env, timeout_seconds):
+    async def fake_trigger(job_name, env, timeout_seconds, broker_env=None):
         envs.append(env)
         return "projects/p/locations/l/jobs/j/executions/e"
 
