@@ -79,9 +79,31 @@ RUN install -d -o root -g root -m 755 /etc/pipewire \
 # The tree's skills run Python helper scripts with `uv run`.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
+# The oh_my_pi harness.
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+        arm64) arch=arm64; sha=6301041309d9bb26c19576ab116d828dba9c74654507cfa3594d62d310864626 ;; \
+        *) arch=x64; sha=c7cc5c8d505053c8ffaf180417e5d5c781235b9d936f286810560151120109bf ;; \
+    esac \
+    && curl -fsSLo /usr/local/bin/omp "https://github.com/can1357/oh-my-pi/releases/download/v19.0.0/omp-linux-${arch}" \
+    && echo "$sha  /usr/local/bin/omp" | sha256sum -c - \
+    && chmod +x /usr/local/bin/omp
+
+# The opencode harness.
+RUN case "$TARGETARCH" in \
+        arm64) arch=arm64; sha=5b68c1f4c5e75b4134e664cc8f36d634d64208d4fcfe5bcf3b48bab699c2dbac ;; \
+        *) arch=x64; sha=47734e08968b30cc22a0bffb6d9feeed76ad4aa743213a12122040392d09a057 ;; \
+    esac \
+    && curl -fsSLo /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v1.19.6/opencode-linux-${arch}.tar.gz" \
+    && echo "$sha  /tmp/opencode.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/opencode.tar.gz -C /usr/local/bin opencode \
+    && rm /tmp/opencode.tar.gz
+
 # hackbot.toml lives at the agent root (not inside the package), so copy it into
 # the working dir; the runtime discovers it there (cwd) at startup.
 COPY agents/dataset-eval/hackbot.toml /app/hackbot.toml
+COPY agents/dataset-eval/machrc /etc/machrc
+ENV MACHRC=/etc/machrc
 COPY agents/dataset-eval/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

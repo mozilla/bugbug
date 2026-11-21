@@ -33,7 +33,8 @@ PROMPT = """\
 {summary}
 </summary>
 
-Judge the patch on each criterion below, then give an overall score from 1 to 5.
+Judge the patch on each criterion below, named as the rubric names it, then give
+an overall score from 1 to 5.
 
 {rubric}"""
 
@@ -56,6 +57,7 @@ async def judge(
     summary: str,
     model: str,
     rubric: str,
+    effort: str | None = None,
 ) -> tuple[Judgment, str, dict]:
     """The judgment, the model that served it and its usage."""
     if len(patch) > MAX_PATCH_CHARS:
@@ -76,6 +78,7 @@ async def judge(
             }
         ],
         output_format=Judgment,
+        **({"output_config": {"effort": effort}} if effort else {}),
     )
     if response.stop_reason == "refusal" or response.parsed_output is None:
         raise RuntimeError(f"judge returned no judgment ({response.stop_reason})")

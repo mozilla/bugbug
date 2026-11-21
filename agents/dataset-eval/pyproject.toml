@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings",
     "anthropic",
     "openai-codex==0.167.0",
+    "deepseek-harness-runtime-bin==0.2.2rc2",
 ]
 
 [project.optional-dependencies]

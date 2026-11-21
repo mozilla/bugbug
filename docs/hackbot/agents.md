@@ -43,6 +43,9 @@ ref = "..."                                     # optional; SOURCE_REF overrides
 [firefox]                                       # Firefox build paths from that checkout
 enabled = true
 objdir = "objdir-ff-asan"
+
+[tracing]                                       # Weave project; WEAVE_PROJECT overrides per run
+weave_project = "moz-bugbug/hackbot-dev"
 ```
 
 Not here: per-run inputs, secrets, model choice, tool selection. Those are environment

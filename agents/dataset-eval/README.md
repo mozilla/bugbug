@@ -27,9 +27,34 @@ the test files fails `integrity`.
 `prompt-executor` ([`prompt_executor/`](hackbot_agents/dataset_eval/prompt_executor/))
 is a hackbot agent like the others -- inputs from env, result in `summary.json`,
 logged with `Reporter` and traced to Weave under this run's id -- that runs a coding
-harness unmodified on the prompt: `claude_code` (Claude Agent SDK)
-or `codex` (Codex Python SDK). Each sees only its own vendor's credentials, and
-nothing in its environment says it is being evaluated.
+harness unmodified on the prompt. `HARNESS` picks it, `MODEL` the model:
+
+- `claude_code` (default): the Claude Agent SDK, with Claude models, e.g.
+  `claude-sonnet-5-5` (default), `claude-opus-5-5`, `claude-haiku-5-5`.
+- `codex`: the Codex Python SDK, with OpenAI models, e.g. `gpt-6-sol`,
+  `gpt-6-luna`.
+- Open models, any served by otari, e.g. `nebius:Qwen/Qwen3.8-27B`,
+  `fireworks:accounts/fireworks/models/deepseek-v4p1-flash`:
+  - `oh_my_pi`: [omp](https://github.com/can1357/oh-my-pi) in JSON print mode.
+  - `opencode`: [OpenCode](https://github.com/anomalyco/opencode) `run --format json`.
+  - `deepseek_harness`: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+    headless.
+
+Each harness sees only its own vendor's credentials, and nothing in its
+environment says it is being evaluated.
+
+The open-model harnesses reach their models through an
+[otari](https://github.com/mozilla-ai/otari) gateway
+([`otari.py`](hackbot_agents/dataset_eval/prompt_executor/harnesses/otari.py)):
+`MODEL` is named as otari names it, and the model's limits, the run's usage and
+its cost come from otari. Pin a provider, e.g. `nebius:Qwen/Qwen3.8-27B`: with a
+catalog id such as `alibaba/qwen3.8-27b`, otari picks the provider per request
+and falls back between them, so requests can be served by different deployments
+at different prices.
+
+The image's [`machrc`](machrc) stops a single-test `mach wpt` from waiting for
+someone to close the browser, which an unattended run would wait on until it
+timed out.
 
 ## Dataset
 
@@ -55,15 +80,21 @@ directory off the repo.
 ## Metrics
 
 `test_progress` (per test file, the share of the gap to passing that the patch
-closes), `test_regressions`, `builds`, `integrity`, `quality`, and cost from
-token usage ([`prices.py`](hackbot_agents/dataset_eval/prices.py)).
+closes), `test_regressions`, `builds`, `integrity`, `quality`, each rubric
+criterion, and `cost_usd` as the harness reports it: Claude Code's own, or
+otari's for the open models. Codex reports no cost, so its runs are costed only
+in Weave's Cost column, which Weave prices from the token usage.
 
 ## Input
 
 `DATASET` and `JUDGE_RUBRIC` (Weave prompt ref) are required; `AGENT`, `HARNESS`,
 `MODEL`, `EFFORT`, `REPS`, `TASKS` (JSON list of row ids), `EXAMPLE_TIMEOUT_MIN`,
-`JUDGE_MODEL`, `LABEL` (appended to the experiment's name) and
-`WEAVE_PROJECT`.
+`JUDGE_MODEL`, `JUDGE_EFFORT`, `LABEL` (appended to the experiment's name) and
+`WEAVE_PROJECT`. Their defaults are in
+[`__main__.py`](hackbot_agents/dataset_eval/__main__.py), and `WEAVE_PROJECT`'s
+(`moz-bugbug/hackbot-evals-dev`) in [`hackbot.toml`](hackbot.toml); the API and UI
+pass on only what a run sets. Local runs through `compose.yml` default to
+`moz-bugbug/hackbot-evals`.
 
 ## Running locally
 
@@ -73,6 +104,13 @@ FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>
 ```
 
 `.env` needs `ANTHROPIC_API_KEY` and `WANDB_API_KEY` (and `CODEX_API_KEY` for the
-`codex` harness); `WEAVE_PROJECT` defaults to `moz-bugbug/hackbot-evals`. The local
+`codex` harness, and `OTARI_API_KEY`, with the `usage:read` scope, and
+`OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses).
+The local
 Firefox clone is mounted read-only and lends its objects to the tree, so nothing
-is cloned; the run uses its checked-out HEAD.
+is cloned; the run uses its checked-out HEAD, or `SOURCE_REF`.
+
+The tree and its build persist in the `dataset-eval-workspace` volume. A run on
+the commit the last one built skips the bootstrap, and the first build too when
+the last build was of the clean tree; rows without tests are not built for
+grading and get no `builds` score. On a fixed commit a run is mostly agent time.

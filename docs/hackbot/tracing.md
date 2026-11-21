@@ -12,7 +12,8 @@ model response, and tool call, labelled with the agent's name (so the Weave
 
 It is **opt-in**: the runtime only traces when it has W&B credentials, and never
 fails a run if Weave can't start. `WEAVE_PROJECT` picks the destination project
-(a bare `project` or `entity/project`; defaults to `hackbot-test`).
+(a bare `project` or `entity/project`), else the agent's `[tracing] weave_project`
+in `hackbot.toml`, else `hackbot-test`.
 
 ## Linking a run to its traces
 

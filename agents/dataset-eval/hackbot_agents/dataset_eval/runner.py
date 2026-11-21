@@ -19,7 +19,7 @@ from agent_tools.firefox.tools import bootstrap_firefox, build_firefox, run_test
 from agent_tools.firefox.tools.run_tests import TEST_DIRS, TEST_ROOTS
 from hackbot_runtime import AgentError, HackbotContext
 
-from . import prices, tree
+from . import tree
 from .grading import checks, tests
 from .grading.judge import judge
 from .isolation import example_env, run_isolated
@@ -28,6 +28,8 @@ from .weave_log import WeaveLog
 log = logging.getLogger(__name__)
 
 AGENTS = {"prompt-executor": "hackbot_agents.dataset_eval.prompt_executor"}
+# Past its own time limit, for the agent to stop and report what it did.
+STOP_GRACE_S = 120
 METRICS = (
     "test_progress",
     "quality",
@@ -51,6 +53,7 @@ class Experiment:
     judge_rubric: str
     # What else sets this run apart, e.g. a prompt change; appended to the name.
     label: str | None = None
+    judge_effort: str | None = None
 
     @property
     def name(self) -> str:
@@ -72,7 +75,7 @@ def summarize(records: list[dict], errors: int) -> dict:
             out[metric] = round(sum(values) / len(values), 4)
     costs = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
     if costs:
-        out["cost_usd_total"] = round(sum(costs), 2)
+        out["cost_usd_total"] = round(sum(costs), 4)
     return out
 
 
@@ -85,8 +88,13 @@ class Runner:
 
         self.rubric = weave.ref(exp.judge_rubric).get().content
 
-    async def build(self, src: Path) -> bool:
+    async def build(self, src: Path, base: str) -> bool:
+        if tree.built(src, base):
+            log.info("the build is of this tree; not building")
+            return True
         started = time.monotonic()
+        stamp = tree.stamp(src)
+        stamp.unlink(missing_ok=True)
         result = await build_firefox(src, tree.mozconfig(src), src / tree.OBJDIR)
         if not result.get("success"):
             output = (result.get("stdout") or "") + (result.get("stderr") or "")
@@ -97,6 +105,7 @@ class Runner:
                 output[-3000:],
             )
             return False
+        stamp.write_text(tree.state(src, base))
         log.info("build done in %s", _since(started))
         return True
 
@@ -108,6 +117,8 @@ class Runner:
             ran = await run_tests(
                 src, suite["harness"], suite["paths"], report, suite.get("prefs")
             )
+            test_log = report.with_suffix(".log")
+            self.ctx.publish_file(f"test-logs/{test_log.name}", test_log, "text/plain")
             results.update({f"{i}:{test}": entry for test, entry in ran.items()})
         return results
 
@@ -130,6 +141,7 @@ class Runner:
                 "HARNESS": exp.harness,
                 "MODEL": exp.model,
                 "EFFORT": exp.effort or "",
+                "TIMEOUT_S": str(exp.example_timeout_min * 60),
                 "SOURCE_REPO": str(src),
                 "RUN_ID": self.ctx.run_id,
                 "ARTIFACTS_DIR": str(ex_dir / "artifacts"),
@@ -139,7 +151,7 @@ class Runner:
             [sys.executable, "-m", AGENTS[exp.agent]],
             env,
             Path.cwd(),
-            exp.example_timeout_min * 60,
+            exp.example_timeout_min * 60 + STOP_GRACE_S,
             ex_dir / "agent.log",
             f"[{row['id']}] ",
         )
@@ -177,16 +189,19 @@ class Runner:
 
         Editing a harness's tests fails integrity; its metadata, such as the prefs
         a test directory runs with, is the agent's to change, but is restored too.
+        A row without tests is not built.
         """
         scores: dict[str, float] = {}
         harnesses = {suite["harness"] for suite in row.get("tests", [])}
-        if harnesses:
-            scores["integrity"] = float(
-                not any(checks.touches(patch, TEST_DIRS[h]) for h in harnesses)
-            )
-            for harness in harnesses:
+        if not harnesses:
+            return scores
+        scores["integrity"] = float(
+            not any(checks.touches(patch, TEST_DIRS[h]) for h in harnesses)
+        )
+        for harness in harnesses:
+            if checks.touches(patch, TEST_ROOTS[harness]):
                 tree.restore(src, base, TEST_ROOTS[harness])
-        built = await self.build(src)
+        built = await self.build(src, base)
         scores["builds"] = float(built)
         if baseline is not None:
             if built:
@@ -208,16 +223,22 @@ class Runner:
             base[:12],
         )
         started = time.monotonic()
-        log.info("bootstrapping the toolchain")
-        bootstrap = await bootstrap_firefox(src)
-        if not bootstrap.get("success"):
-            raise AgentError(f"bootstrap failed: {bootstrap.get('message')}")
-        log.info(
-            "bootstrap done in %s; building Firefox (the first build is the long one)",
-            _since(started),
-        )
-        if not await self.build(src):
-            raise AgentError(f"could not build Firefox at {base}")
+        tree.reset(src, base)
+        if tree.built(src, base):
+            log.info("reusing the build of %s", base[:12])
+        else:
+            # A build at this commit, of a patched tree, needs no new toolchain.
+            if tree.built_base(src) != base:
+                log.info("bootstrapping the toolchain")
+                bootstrap = await bootstrap_firefox(src)
+                if not bootstrap.get("success"):
+                    raise AgentError(f"bootstrap failed: {bootstrap.get('message')}")
+            log.info(
+                "building Firefox after %s (the first build is the long one)",
+                _since(started),
+            )
+            if not await self.build(src, base):
+                raise AgentError(f"could not build Firefox at {base}")
         baselines = {}
         for row in self.rows:
             if row.get("tests"):
@@ -290,7 +311,9 @@ class Runner:
                             out.get("message", ""),
                             exp.judge_model,
                             self.rubric,
+                            exp.judge_effort,
                         )
+                        scores.update({c.name: float(c.met) for c in judgment.criteria})
                         scores["quality"] = float(judgment.quality)
                         record.update(
                             judge=judgment.model_dump(),
@@ -308,9 +331,6 @@ class Runner:
                         log.warning("%s rep %d: judge failed: %s", row["id"], rep, exc)
                     record.update(
                         scores=scores,
-                        cost_usd=out.get("cost_usd")
-                        if out.get("cost_usd") is not None
-                        else prices.cost(out.get("usage") or {}),
                         usage=out.get("usage"),
                         lines_changed=checks.lines_changed(patch),
                         **{
@@ -325,12 +345,16 @@ class Runner:
                     )
                     records.append(record)
                 details = {
-                    k: v for k, v in record.items() if k not in ("id", "rep", "scores")
+                    k: v
+                    for k, v in record.items()
+                    if k not in ("id", "rep", "scores", "cost_usd")
                 }
-                weave_log.finish(
+                record["cost_usd"] = weave_log.finish(
                     pred,
                     {"message": out.get("message", ""), "patch": patch, **details},
                     record.get("scores", {}),
+                    out.get("usage"),
+                    out.get("cost_usd"),
                 )
                 self.publish(
                     f"{row['id']}_rep{rep}", record, patch, out.get("transcript", [])

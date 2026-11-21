@@ -14,10 +14,69 @@ configured.
 
 from __future__ import annotations
 
+import functools
 import logging
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+@functools.cache
+def _agent_usage():
+    """An op whose output Weave reads as one model's token usage."""
+    import weave
+
+    @weave.op(name="agent_usage")
+    def agent_usage(model: str, usage: dict[str, int]) -> dict:
+        cache_read = usage.get("cache_read_input_tokens", 0)
+        cache_write = usage.get("cache_creation_input_tokens", 0)
+        return {
+            "model": model,
+            "usage": {
+                "input_tokens": usage.get("input_tokens", 0) + cache_read + cache_write,
+                "output_tokens": usage.get("output_tokens", 0),
+                "cache_read_input_tokens": cache_read,
+                "cache_creation_input_tokens": cache_write,
+            },
+        }
+
+    return agent_usage
+
+
+def _call_costs(client, call_id: str) -> dict | None:
+    try:
+        summary = client.get_call(call_id, include_costs=True).summary or {}
+    except Exception:
+        return None
+    return (summary.get("weave") or {}).get("costs") or None
+
+
+def _weave_cost(calls, wait_s: float = 60) -> float | None:
+    """What Weave prices the calls' usage at, from its own price list.
+
+    A workaround for Codex, which reports no cost when it runs with an API key.
+    The calls reach Weave in the background, so this waits for them; flushing
+    would also wait on the prediction still open around them.
+    """
+    import weave
+
+    client = weave.get_client()
+    deadline = time.monotonic() + wait_s
+    total = 0.0
+    for call in calls:
+        while (costs := _call_costs(client, call.id)) is None:
+            if time.monotonic() > deadline:
+                log.warning("Weave did not price the agent's usage")
+                return None
+            time.sleep(1)
+        total += sum(
+            value or 0.0
+            for model in costs.values()
+            for key, value in model.items()
+            if key.endswith("_tokens_total_cost")
+        )
+    return round(total, 4)
 
 
 class WeaveLog:
@@ -31,10 +90,9 @@ class WeaveLog:
                 return
             # A local directory has no Weave dataset to refer to.
             data = rows if Path(dataset).is_dir() else weave.ref(dataset).get()
+            # Top-level fields, so Weave shows each as a column.
             self._ev = EvaluationLogger(
-                name=name,
-                model={"name": name, "metadata": model},
-                dataset=data,
+                name=name, model={**model, "name": name}, dataset=data
             )
         except Exception:
             log.exception("Weave evaluation logging is off for this run")
@@ -51,12 +109,37 @@ class WeaveLog:
             inputs=inputs, example_id=example_id, trial_index=rep
         )
 
-    def finish(self, pred, output: dict, scores: dict[str, float]) -> None:
+    def finish(
+        self,
+        pred,
+        output: dict,
+        scores: dict[str, float],
+        usage: dict[str, dict[str, int]] | None = None,
+        cost: float | None = None,
+    ) -> float | None:
+        """Close a prediction; ``usage`` is the agent's, by model, for Weave to cost.
+
+        The agent's own model calls are traced in another process, so Weave would
+        not count them in the evaluation's tokens and cost. Returns ``cost``, the
+        harness's own, or else what Weave prices ``usage`` at.
+        """
         if pred is None:
-            return
+            return cost
+        from weave.trace.context import call_context
+
+        with call_context.set_call_stack([pred.predict_call]):
+            calls = [
+                _agent_usage().call(model, counts)[1]
+                for model, counts in (usage or {}).items()
+            ]
+        if cost is None and calls:
+            cost = _weave_cost(calls)
+        if cost is not None:
+            scores = {**scores, "cost_usd": cost}
         for name, value in scores.items():
             pred.log_score(scorer=name, score=value)
         pred.finish(output)
+        return cost
 
     def summary(self, summary: dict) -> None:
         if self._ev:

@@ -9,14 +9,35 @@ The agent under evaluation, run like any hackbot agent: inputs from env, the
 result in ``summary.json``, traced by the runtime.
 """
 
+import asyncio
 import os
 import time
 from pathlib import Path
 
 from hackbot_runtime import HackbotAgentResult, HackbotContext, run_async
+from opentelemetry import trace as otel_trace
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .harnesses import get_harness
+from .harnesses import Run, get_harness
+
+# Weave surfaces it as ``attributes.hackbot.harness`` on every call of the run.
+HARNESS_SPAN_ATTRIBUTE = "wandb.attributes.hackbot.harness"
+
+
+class _HarnessTag(SpanProcessor):
+    def __init__(self, harness: str) -> None:
+        self._harness = harness
+
+    def on_start(self, span, parent_context=None) -> None:
+        span.set_attribute(HARNESS_SPAN_ATTRIBUTE, self._harness)
+
+
+def tag_traces(harness: str) -> None:
+    """Tag every span this process traces with the harness, when tracing is on."""
+    provider = otel_trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.add_span_processor(_HarnessTag(harness))
 
 
 class AgentInputs(BaseSettings):
@@ -24,6 +45,7 @@ class AgentInputs(BaseSettings):
     harness: str
     model: str
     effort: str | None = None
+    timeout_s: float | None = None
     source_repo: Path
 
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
@@ -39,18 +61,27 @@ class PromptExecutorResult(HackbotAgentResult):
     tool_errors: int = 0
     cost_usd: float | None = None
     latency_s: float = 0.0
+    timed_out: bool = False
 
 
 async def main(ctx: HackbotContext) -> PromptExecutorResult:
     inputs = AgentInputs()
     # The agent sees the tree and its task, nothing that says it is being measured.
-    for name in ("prompt", "harness", "model", "effort"):
+    for name in ("prompt", "harness", "model", "effort", "timeout_s"):
         os.environ.pop(name.upper(), None)
+    tag_traces(inputs.harness)
     started = time.monotonic()
-    run = await get_harness(inputs.harness).run(
-        inputs.prompt, inputs.source_repo, inputs.model, inputs.effort
-    )
+    run = Run(transcript=[{"role": "user", "content": inputs.prompt}])
+    timed_out = False
+    try:
+        async with asyncio.timeout(inputs.timeout_s):
+            await get_harness(inputs.harness).run(
+                inputs.prompt, inputs.source_repo, inputs.model, inputs.effort, run
+            )
+    except TimeoutError:
+        timed_out = True
     return PromptExecutorResult(
+        timed_out=timed_out,
         num_turns=sum(t["role"] == "assistant" for t in run.transcript),
         message=run.message,
         transcript=run.transcript,

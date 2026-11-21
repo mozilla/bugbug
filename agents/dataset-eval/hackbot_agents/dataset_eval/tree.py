@@ -9,6 +9,7 @@ The mozconfig and objdir survive resets, so every build after the first is
 incremental.
 """
 
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -49,6 +50,35 @@ def diff(tree: Path, base: str) -> str:
     """Everything changed since ``base``, new files included."""
     _git(tree, "add", "-A")
     return _git(tree, "diff", "--staged", base)
+
+
+def state(tree: Path, base: str) -> str:
+    """What the tree would be built from: ``base`` and the changes on it."""
+    return f"{base} {hashlib.sha256(diff(tree, base).encode()).hexdigest()}"
+
+
+def stamp(tree: Path) -> Path:
+    """Where the objdir records the :func:`state` it was last built from."""
+    return tree / OBJDIR / "eval-built"
+
+
+def built_base(tree: Path) -> str | None:
+    """The commit the objdir was last built at, with or without changes on it."""
+    path = stamp(tree)
+    return path.read_text().split()[0] if path.exists() else None
+
+
+def built(tree: Path, base: str) -> bool:
+    """Whether the objdir holds a build of the tree as it is, and none since.
+
+    A build the agent ran itself leaves no stamp but newer binaries.
+    """
+    path = stamp(tree)
+    if not path.exists() or path.read_text() != state(tree, base):
+        return False
+    stamped = path.stat().st_mtime
+    binaries = (tree / OBJDIR / "dist" / "bin").rglob("*")
+    return all(p.stat().st_mtime <= stamped for p in binaries if p.is_file())
 
 
 def restore(tree: Path, base: str, path: str) -> None:
