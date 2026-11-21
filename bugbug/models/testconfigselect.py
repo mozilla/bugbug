@@ -24,13 +24,11 @@ groups of the push are cheaper, as their tasks run anyway.
 """
 
 import collections
-import fnmatch
 import functools
 import logging
 import math
 import os
 import random
-import re
 from typing import Any, Collection, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
 import numpy as np
@@ -312,49 +310,66 @@ def generate_rows(
         history.add(regression)
 
 
-def _label_without_chunk(label: str) -> str:
-    parts = label.split("-")
-    return "-".join(parts[:-1] if parts[-1].isdigit() else parts)
+class LiveTask(NamedTuple):
+    """A test task of the current task graph, by label without chunk number (see live_candidates)."""
+
+    # Its config, as mozci names it (see mozci.task.get_configuration).
+    config: str
+    # The manifests run by its chunks.
+    manifests: Sequence[str]
+
+
+def live_tasks(tasks: Mapping[str, LiveTask]) -> dict[str, dict[str, list[str]]]:
+    """The tasks of the current task graph running each group, by config.
+
+    `tasks` are the test tasks of the push's project among which configs are selected (see
+    bugbug_http.boot), by label without chunk number. Groups are named as by the models (see
+    test_scheduling.normalize_group).
+    """
+    result: dict[str, dict[str, set[str]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    for label, task in tasks.items():
+        for manifest in task.manifests:
+            result[test_scheduling.normalize_group(manifest)][task.config].add(label)
+
+    return {
+        group: {config: sorted(labels) for config, labels in configs.items()}
+        for group, configs in result.items()
+    }
 
 
 def live_candidates(
-    manifests_by_task: Mapping[str, Iterable[str]], known_configs: Iterable[str]
+    tasks_by_group: Mapping[str, Mapping[str, Sequence[str]]],
 ) -> dict[str, list[str]]:
-    """The configs of the tasks in the current task graph that run each group.
-
-    `manifests_by_task` maps the labels of the tasks scheduled on the push's project to the manifests
-    they run (the decision task's manifests-by-task.json, restricted to its target tasks, as it comes
-    from the full task graph, which also has tasks of other projects, e.g. shippable variants). The
-    configs are patterns over task labels without their chunk number (e.g.
-    test-macosx1500-aarch64/debug-*-swr), as the taskgraph matches them: each task is named after
-    the most specific `known_configs` pattern it matches, or after its own label without the chunk
-    number if none matches (e.g. for a new platform).
+    """The configs of the tasks in the current task graph that run each group (see live_tasks).
 
     As the candidates come from the current task graph, configs that don't exist anymore (e.g. after
-    a platform migration) are never selected. Groups are named as by the models (see
-    test_scheduling.normalize_group).
+    a platform migration) are never selected.
     """
-    patterns = sorted(
-        ((len(c), c, re.compile(fnmatch.translate(c))) for c in set(known_configs)),
-        reverse=True,
-    )
+    return {group: sorted(configs) for group, configs in tasks_by_group.items()}
 
-    @functools.cache
-    def config_of(label: str) -> str:
-        for _, config, pattern in patterns:
-            if pattern.match(label):
-                return config
-        return label
 
-    result: dict[str, set[str]] = collections.defaultdict(set)
-    for label, manifests in manifests_by_task.items():
-        if not label.startswith("test-"):
-            continue
-        config = config_of(_label_without_chunk(label))
-        for manifest in manifests:
-            result[test_scheduling.normalize_group(manifest)].add(config)
+def task_labels(
+    tasks_by_group: Mapping[str, Mapping[str, Sequence[str]]],
+    group: str,
+    configs: Iterable[str],
+    new_tasks: Mapping[str, str] | None = None,
+) -> list[str]:
+    """The labels (without chunk number) of the tasks running a group on the given configs.
 
-    return {group: sorted(configs) for group, configs in result.items()}
+    The taskgraph matches them with the labels of its tasks. `tasks_by_group` comes from live_tasks.
+    `new_tasks` are tasks whose manifests aren't known (e.g. renamed since the task graph the others
+    come from), by label, with their config: they are given for every group selected on their config,
+    as the taskgraph only runs a task for a group if the task runs it.
+    """
+    configs = set(configs)
+    tasks = tasks_by_group.get(group, {})
+    labels = {label for config in configs for label in tasks.get(config, ())}
+    labels |= {
+        label for label, config in (new_tasks or {}).items() if config in configs
+    }
+    return sorted(labels)
 
 
 class GroupCandidates(NamedTuple):
@@ -380,11 +395,9 @@ def _plainest_cheapest(configs: Iterable[str]) -> str:
 
 def load_regressions(
     with_patches: bool = True,
-) -> tuple[
-    list[test_scheduling.ConfigSelectRegression], set[str], dict[int, PatchInfo]
-]:
-    """The regressions of the push data, the configs seen recently, and the patch of each regression's push."""
-    regressions, known_configs = test_scheduling.get_config_select_regressions(
+) -> tuple[list[test_scheduling.ConfigSelectRegression], dict[int, PatchInfo]]:
+    """The regressions of the push data, and the patch of each regression's push."""
+    regressions = test_scheduling.get_config_select_regressions(
         lambda: db.read(test_scheduling.PUSH_DATA_CONFIG_GROUP_DB)
     )
     logger.info(
@@ -394,7 +407,7 @@ def load_regressions(
     )
 
     if not with_patches:
-        return regressions, known_configs, {}
+        return regressions, {}
 
     revs = {rev: r.push_index for r in regressions for rev in r.revs}
     files: dict[int, list[str]] = collections.defaultdict(list)
@@ -408,7 +421,7 @@ def load_regressions(
         for push_index, push_files in files.items()
     }
     logger.info("Patches found for %d pushes", len(patches))
-    return regressions, known_configs, patches
+    return regressions, patches
 
 
 def split_push_index(
@@ -671,10 +684,8 @@ class TestConfigSelectModel(ConfigSelector, Model):
         self.calculate_importance = False
         self.entire_dataset_training = True
 
-        # Inference state: the failure history up to the end of the training data, and the configs
-        # seen recently (to name the tasks of the current task graph, see live_candidates).
+        # Inference state: the failure history up to the end of the training data.
         self.history = ConfigHistory()
-        self.known_configs: set[str] = set()
 
         self._regressions: list[test_scheduling.ConfigSelectRegression] | None = None
         self._patches: dict[int, PatchInfo] = {}
@@ -735,7 +746,7 @@ class TestConfigSelectModel(ConfigSelector, Model):
 
     def _load_regressions(self) -> list[test_scheduling.ConfigSelectRegression]:
         if self._regressions is None:
-            self._regressions, self.known_configs, self._patches = load_regressions()
+            self._regressions, self._patches = load_regressions()
         return self._regressions
 
     def _split_push_index(self) -> int:

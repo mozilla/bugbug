@@ -1711,9 +1711,7 @@ def test_get_config_select_regressions() -> None:
         (["rev3"], None, [("test-windows11-64-24h2/opt-*", G)], [], []),
     ]
 
-    regressions, recent_configs = test_scheduling.get_config_select_regressions(
-        lambda: iter(pushes), recent_pushes=2
-    )
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     culprit, later = regressions
     assert culprit == test_scheduling.ConfigSelectRegression(
@@ -1723,8 +1721,6 @@ def test_get_config_select_regressions() -> None:
     assert later == test_scheduling.ConfigSelectRegression(
         1, (Revision("rev1"),), G, frozenset({ANDROID}), frozenset({ANDROID, MAC})
     )
-    # The configs that ran in the last two pushes.
-    assert recent_configs == {LINUX, "test-windows11-64-24h2/opt-*"}
 
 
 def test_get_config_select_regressions_failure_after_later_pass() -> None:
@@ -1747,7 +1743,7 @@ def test_get_config_select_regressions_failure_after_later_pass() -> None:
         (["rev4"], None, [], [], []),
     ]
 
-    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     assert regressions[0] == test_scheduling.ConfigSelectRegression(
         0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX})
@@ -1767,7 +1763,7 @@ def test_get_config_select_regressions_ignored_configs_only() -> None:
         (["rev1"], None, [(VERIFY, G)], [(VERIFY, G)], []),
     ]
 
-    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     assert regressions == [
         test_scheduling.ConfigSelectRegression(
@@ -1790,9 +1786,7 @@ def test_get_config_select_regressions_window_is_capped(monkeypatch) -> None:
         (["rev4"], None, [], [], []),
     ]
 
-    (regression,), _ = test_scheduling.get_config_select_regressions(
-        lambda: iter(pushes)
-    )
+    (regression,) = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
     assert regression.observed == frozenset({A, B})
 
 

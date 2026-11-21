@@ -71,6 +71,7 @@ repos:
           - types-python-dateutil==2.9.0.20261104
           - types-orjson==3.6.2
           - types-tabulate==0.10.0.20261006
+          - types-PyYAML==6.0.12.20261113
   - repo: local
     hooks:
       - id: hackbot-deploy-names
