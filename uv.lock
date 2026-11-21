@@ -2744,7 +2744,8 @@ requires-dist = [
 name = "hackbot-agent-uplift-resolve"
 source = { editable = "agents/uplift-resolve" }
 dependencies = [
-    { name = "agent-tools", extra = ["searchfox", "vcs"] },
+    { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
+    { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
@@ -2763,7 +2764,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-tools", extras = ["searchfox", "vcs"], editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["bugzilla", "searchfox", "vcs"], editable = "libs/agent-tools" },
+    { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },

@@ -16,7 +16,8 @@ from hackbot_agents.uplift_resolve import agent
 from hackbot_agents.uplift_resolve.models import GitSource
 from hackbot_runtime import AgentError
 
-BUGBUG_MCP = {"type": "http", "url": "http://localhost:8080/mcp"}
+BUGZILLA_MCP = {"type": "http", "url": "http://localhost:8765/bugzilla/mcp"}
+PHABRICATOR_MCP = {"type": "http", "url": "http://localhost:8765/phabricator/mcp"}
 
 REPORT = {
     "resolved": True,
@@ -65,7 +66,8 @@ def fake_session(
 
 async def run(monkeypatch, session, repo, **overrides):
     kwargs = dict(
-        bugbug_mcp_server=BUGBUG_MCP,
+        bugzilla_mcp_server=BUGZILLA_MCP,
+        phabricator_mcp_server=PHABRICATOR_MCP,
         broker_url="http://uplift-resolve-broker:8765",
         source_repo=repo,
         target_branch="beta",
@@ -127,11 +129,19 @@ async def test_run_uplift_wires_every_mozilla_mcp_server(monkeypatch, repo, git_
 
     await run(monkeypatch, session, repo)
 
-    assert set(captured["options"].mcp_servers) == {
-        "bugbug",
+    mcp_servers = captured["options"].mcp_servers
+    assert set(mcp_servers) == {
+        "bugzilla",
+        "phabricator",
         "searchfox",
         "mozilla_vcs",
-    }, "The session should get the bugbug server plus the in-process Mozilla ones."
+    }, "The session should get the broker's servers plus the in-process Mozilla ones."
+    assert mcp_servers["bugzilla"] == BUGZILLA_MCP, (
+        "The Bugzilla server `run_uplift` was given should reach the session."
+    )
+    assert mcp_servers["phabricator"] == PHABRICATOR_MCP, (
+        "The Phabricator server `run_uplift` was given should reach the session."
+    )
     assert "beta" in captured["prompt"], (
         "The session's prompt should name the branch being uplifted onto."
     )

@@ -14,7 +14,9 @@ from hackbot_agents.uplift_resolve.agent import (
 )
 from hackbot_agents.uplift_resolve.models import EFFORT, MODEL
 
-MCP_SERVERS = {"bugbug": {"type": "http", "url": "http://localhost:8080/mcp"}}
+MCP_SERVERS = {
+    "bugzilla": {"type": "http", "url": "http://localhost:8765/bugzilla/mcp"}
+}
 
 
 def make_options(**overrides):

@@ -51,7 +51,6 @@ def recorded_run(monkeypatch) -> dict:
 def agent_env(monkeypatch) -> None:
     monkeypatch.setenv("TARGET_BRANCH", "beta")
     monkeypatch.setenv("SOURCES", '[{"kind": "git", "commit": "' + "a" * 40 + '"}]')
-    monkeypatch.setenv("BUGBUG_MCP_URL", "http://localhost:8080/mcp")
     monkeypatch.setenv("BROKER_URL", "http://localhost:8765")
     for name in (
         "BUG_ID",
@@ -172,3 +171,22 @@ async def test_inputs_parse_mixed_sources_from_the_environment(monkeypatch, agen
         PhabricatorSource,
     ], "`SOURCES` should parse to the discriminated source kinds, in order."
     assert inputs.sources[1].diff_id == 500, "A pinned `diff_id` should survive."
+
+
+async def test_the_broker_serves_the_bugzilla_and_phabricator_tools(
+    agent_env, recorded_run
+):
+    """Both MCP endpoints come from `BROKER_URL`, as `bug-fix` derives them."""
+    await entrypoint.main(StubContext())
+
+    assert recorded_run["bugzilla_mcp_server"] == {
+        "type": "http",
+        "url": "http://localhost:8765/bugzilla/mcp",
+    }, "The Bugzilla tools should be the broker's `/bugzilla/mcp` endpoint."
+    assert recorded_run["phabricator_mcp_server"] == {
+        "type": "http",
+        "url": "http://localhost:8765/phabricator/mcp",
+    }, "The Phabricator tools should be the broker's `/phabricator/mcp` endpoint."
+    assert recorded_run["broker_url"] == "http://localhost:8765", (
+        "The broker URL should still reach the agent, for the Conduit proxy."
+    )

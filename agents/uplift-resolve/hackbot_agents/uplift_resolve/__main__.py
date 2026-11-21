@@ -29,10 +29,8 @@ class AgentInputs(BaseSettings):
     # The patches to apply onto the branch, in this order; a stack is several.
     sources: list[UpliftSource]
 
-    # The bugbug MCP, serving the bug, revision and fx-docs tools.
-    bugbug_mcp_url: str
-
-    # The broker sidecar, whose Conduit proxy diffs are fetched through.
+    # The broker sidecar, serving the Bugzilla and Phabricator tools and the
+    # Conduit proxy diffs are fetched through.
     broker_url: str
 
     # The originating bug, for context when a conflict's intent is unclear.
@@ -50,6 +48,23 @@ class AgentInputs(BaseSettings):
     # Compose passes unset inputs as empty strings (``${BUG_ID:-}``).
     model_config = SettingsConfigDict(extra="ignore", env_ignore_empty=True)
 
+    def broker_endpoint(self, path: str) -> str:
+        return f"{self.broker_url.rstrip('/')}/{path.lstrip('/')}"
+
+    @property
+    def bugzilla_mcp_url(self) -> str:
+        return self.broker_endpoint("/bugzilla/mcp")
+
+    @property
+    def phabricator_mcp_url(self) -> str:
+        """The broker's Phabricator MCP endpoint.
+
+        Derived from the broker URL rather than taken as its own input: both
+        endpoints are served by the same sidecar, so there is nothing for a
+        caller to configure independently.
+        """
+        return self.broker_endpoint("/phabricator/mcp")
+
 
 async def main(ctx: HackbotContext) -> UpliftResult:
     inputs = AgentInputs()
@@ -60,9 +75,13 @@ async def main(ctx: HackbotContext) -> UpliftResult:
     source_repo = await ctx.prepare_repo(ref=ref)
 
     return await run_uplift(
-        bugbug_mcp_server={
+        bugzilla_mcp_server={
             "type": "http",
-            "url": inputs.bugbug_mcp_url,
+            "url": inputs.bugzilla_mcp_url,
+        },
+        phabricator_mcp_server={
+            "type": "http",
+            "url": inputs.phabricator_mcp_url,
         },
         broker_url=inputs.broker_url,
         source_repo=source_repo,
