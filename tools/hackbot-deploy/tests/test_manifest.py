@@ -63,6 +63,15 @@ def test_agents_without_a_deploy_table_are_left_out(tmp_path: Path) -> None:
     assert list(manifest.load_configs(tmp_path)) == ["deployed"]
 
 
+def test_no_agent_can_be_called_all(tmp_path: Path) -> None:
+    (tmp_path / "all").mkdir()
+    (tmp_path / "all" / "hackbot.toml").write_text(
+        '[deploy]\nruntime = "cloud_run_job"\ncpu = "1"\nmemory = "2Gi"\n'
+    )
+    with pytest.raises(manifest.ManifestError, match="'all'"):
+        manifest.load_configs(tmp_path)
+
+
 def test_an_invalid_table_names_the_file(tmp_path: Path) -> None:
     (tmp_path / "typo").mkdir()
     path = tmp_path / "typo" / "hackbot.toml"

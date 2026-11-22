@@ -160,8 +160,8 @@ def workflow_names(
     agents_dir: AgentsDir = Path("agents"),
     services_dir: ServicesDir = Path("services"),
 ) -> None:
-    """Fill a workflow's name choices with every deployable agent and service."""
-    names = deployables(agents_dir, services_dir)
+    """Fill a workflow's name choices: all, then every deployable agent and service."""
+    names = [release.ALL, *deployables(agents_dir, services_dir)]
     text = workflow.read_text()
     updated = set_workflow_names(text, names)
     if updated != text:
@@ -389,17 +389,34 @@ def rollback(name: Name, env: EnvOption, dry_run: DryRun = False) -> None:
 
 
 @app.command()
-def promotion(
-    name: Name,
+def promotions(
+    names: Annotated[
+        list[str], typer.Argument(help="agents/<name>, services/<name>, or all.")
+    ],
     source: Annotated[Env, typer.Option("--from")],
     target: Annotated[Env, typer.Option("--to")],
     output: Annotated[Path, typer.Option(help="Where to write the JSON.")],
+    agents_dir: AgentsDir = Path("agents"),
+    services_dir: ServicesDir = Path("services"),
 ) -> None:
-    """Write what promoting would put on, or {} when there is nothing to promote."""
-    planned = deploy.promotion(
-        GoogleCloud(), name, deploy.ENVIRONMENTS[source], deploy.ENVIRONMENTS[target]
-    )
-    output.write_text(json.dumps(planned or {}, indent=2) + "\n")
+    """Write a JSON list of what promoting would put on: one entry per name that differs.
+
+    all means every deployable agent and service. An empty list: nothing to
+    promote.
+    """
+    if names == [release.ALL]:
+        names = deployables(agents_dir, services_dir)
+    cloud = GoogleCloud()
+    planned = [
+        p
+        for name in names
+        if (
+            p := deploy.promotion(
+                cloud, name, deploy.ENVIRONMENTS[source], deploy.ENVIRONMENTS[target]
+            )
+        )
+    ]
+    output.write_text(json.dumps(planned, indent=2) + "\n")
 
 
 @app.command()
