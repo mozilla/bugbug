@@ -107,6 +107,9 @@ def load_configs(agents_dir: Path) -> dict[str, DeployConfig]:
         config = load_config(path)
         if config is not None:
             configs[path.parent.name] = config
+    # Deploys say "all" for every agent (dev/agents/all, promote all).
+    if "all" in configs:
+        raise ManifestError(f"{agents_dir}/all: no agent can be called 'all'")
     return configs
 
 

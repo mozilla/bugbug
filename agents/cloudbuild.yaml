@@ -7,7 +7,8 @@
 #                 the one stage runs. Run by hand, it releases every agent
 #                 regardless of version, or those in _AGENTS=a,b.
 #   dev-agents    a push to dev/agents/<agent> or dev/agents/<agent>/<anything>.
-#                 Releases that agent to dev, always.
+#                 Releases that agent to dev, always; dev/agents/all releases
+#                 every agent.
 # Prod is a separate, approved promotion; nothing here reaches it.
 #
 # `release-plan` decides what to release and `release` deploys it, one agent
