@@ -2611,7 +2611,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-gecko-triage"
-version = "0.1.0"
 source = { editable = "agents/gecko-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
