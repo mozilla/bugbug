@@ -31,9 +31,12 @@ def _download(bucket: str, name: str, out: BinaryIO) -> None:
     storage.Client().bucket(bucket).blob(name).download_to_file(out, checksum="crc32c")
 
 
-def _unpack_snapshot(source_repo: Path, bucket: str, name: str) -> None:
-    """Stream the snapshot tar into ``source_repo`` without a copy on disk."""
+def _check_out_snapshot(
+    source_repo: Path, bucket: str, name: str, repo_url: str, fetch_target: str
+) -> None:
+    log.info("restoring %s from gs://%s/%s", source_repo, bucket, name)
     source_repo.mkdir(parents=True, exist_ok=True)
+    # Stream straight into tar, so the tar never takes disk space of its own.
     tar = subprocess.Popen(
         ["tar", "-x", "-f", "-", "-C", str(source_repo)], stdin=subprocess.PIPE
     )
@@ -44,13 +47,6 @@ def _unpack_snapshot(source_repo: Path, bucket: str, name: str) -> None:
         returncode = tar.wait()
     if returncode:
         raise subprocess.CalledProcessError(returncode, tar.args)
-
-
-def _check_out_snapshot(
-    source_repo: Path, bucket: str, name: str, repo_url: str, fetch_target: str
-) -> None:
-    log.info("restoring %s from gs://%s/%s", source_repo, bucket, name)
-    _unpack_snapshot(source_repo, bucket, name)
     log.info("snapshot unpacked; fetching %s", fetch_target)
     # Name the unpacked repository, so a tar without .git fails here instead of
     # git finding an enclosing repository. Relative to -C, so relative paths work.
@@ -124,12 +120,7 @@ def _shallow_clone(
         _git(source_repo, "checkout", "-q", "FETCH_HEAD")
     else:
         log.info("cloning %s (shallow) to %s", repo_url, source_repo)
-        subprocess.run(
-            ["git", "clone", f"--depth={depth}", repo_url, str(source_repo)],
-            check=True,
-            stdout=sys.stderr,
-            stderr=sys.stderr,
-        )
+        _git(source_repo, "clone", f"--depth={depth}", repo_url, ".")
     log.info("shallow clone complete")
 
 
