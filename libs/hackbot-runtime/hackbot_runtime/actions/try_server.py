@@ -108,8 +108,9 @@ async def push(
     This records the push for review rather than performing it, so you will not
     see the results.
 
-    Record this before your patch action, then link the push in that patch's
-    `test_plan` as ``{{actions.<action_id>.url}}``, using the ID this returns.
+    Record this before your patch action, then link the push as
+    ``{{actions.<action_id>.url}}``: in ``submit_patch``'s `test_plan`, or, when
+    updating a revision, in an ``add_comment`` recorded after ``update_patch``.
     """
     cleaned_tasks = [task.strip() for task in (tasks or []) if task and task.strip()]
     if cleaned_tasks and auto:
@@ -138,10 +139,7 @@ async def push(
         params["test_paths"] = validate_test_paths(tests)
 
     action = recorder.record(TRY_PUSH_ACTION_TYPE, params, reasoning=reasoning)
-    return (
-        f"{confirmation(action)} Link it in your patch's test_plan as "
-        f"{{{{actions.{action['action_id']}.url}}}}."
-    )
+    return confirmation(action)
 
 
 TOOLS = tools_in(__name__)

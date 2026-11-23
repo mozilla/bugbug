@@ -172,8 +172,7 @@ async def update_patch(
         Field(
             description=(
                 "New test plan for the revision. Replaces the current one "
-                "entirely. Leave unset to keep the same test plan. If you "
-                "recorded a Try push, link it as {{actions.<action_id>.url}}."
+                "entirely. Leave unset to keep the same test plan."
             )
         ),
     ] = None,
