@@ -1501,7 +1501,11 @@ def download_commits(
                 # Fixing https://github.com/mozilla/bugbug/issues/3131
                 mp_context=mp.get_context("fork"),
             ) as executor:
-                commits_iter = executor.map(_transform, commits, chunksize=64)
+                # Large chunks reduce the overhead when mining many commits, but with few of them
+                # (e.g. when updating the DB) they would leave most processes idle: give several
+                # chunks to each process.
+                chunksize = max(1, min(64, commits_num // ((cpu_count or 1) * 4)))
+                commits_iter = executor.map(_transform, commits, chunksize=chunksize)
                 commits_iter = tqdm(commits_iter, total=commits_num)
                 commits = tuple(commits_iter)
         else:
