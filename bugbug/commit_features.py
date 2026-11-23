@@ -2,10 +2,15 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+import bisect
+import re
 import sys
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Collection, Iterable, Sequence
 
+import dateutil.parser
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -904,6 +909,269 @@ class TypesCounts(object):
             type_ = repository.get_type(path)
             counts[f"{type_} count"] = counts.get(f"{type_} count", 0) + 1
         return counts
+
+
+# Stack and bug landing history.
+#
+# A commit is rarely reviewed alone: it is part of a stack of patches for the same bug, which
+# usually land together, and the bug may have landed patches before (possibly backed out).
+# Since regressions are attributed to bugs, the risk of a commit depends on its whole stack
+# and on the bug's history. When training, a stack is approximated by the commits of the same
+# bug landed in the same push; when classifying a patch under review, it is the stack being
+# reviewed. The bug's history only uses pushes before the commit's push.
+
+PART_RE = re.compile(r"\bpart\s*(\d+)", re.IGNORECASE)
+
+STACK_SUM_FIELDS = (
+    "source_code_added",
+    "source_code_deleted",
+    "test_added",
+    "source_code_files_modified_num",
+    "test_files_modified_num",
+    "functions_touched_num",
+)
+
+
+def _part_number(desc: str) -> int | None:
+    match = PART_RE.search(desc.split("\n", 1)[0])
+    return int(match.group(1)) if match else None
+
+
+def stack_member(commit: repository.CommitDict) -> dict[str, Any]:
+    """Keep only the fields of a commit needed to describe its stack."""
+    return {
+        "node": commit["node"],
+        "source_code_added": commit["source_code_added"],
+        "source_code_deleted": commit["source_code_deleted"],
+        "test_added": commit["test_added"],
+        "source_code_files_modified_num": commit["source_code_files_modified_num"],
+        "test_files_modified_num": commit["test_files_modified_num"],
+        "functions_touched_num": sum(len(f) for f in commit["functions"].values()),
+        "components": commit["components"],
+        "directories": commit["directories"],
+        "types": commit["types"],
+        "part": _part_number(commit["desc"]),
+    }
+
+
+def compute_stack_info(
+    commit: repository.CommitDict,
+    stack: Sequence[dict[str, Any]],
+    landings: Sequence[tuple[datetime, bool]],
+) -> dict[str, Any]:
+    """Describe the stack of a commit and the earlier landings of its bug.
+
+    stack contains the stack members (see _stack_member) of all the commits of the stack,
+    including the commit itself; landings contains (push date, backed out) for every commit
+    of the bug in the commits DB, sorted by push date.
+    """
+    pushdate = dateutil.parser.parse(commit["pushdate"])
+
+    info: dict[str, Any] = {"commits": len(stack)}
+    for field in STACK_SUM_FIELDS:
+        values = [member[field] for member in stack]
+        info[f"total {field}"] = sum(values)
+        info[f"max {field}"] = max(values)
+
+    directories = set(d for member in stack for d in member["directories"])
+    info["components"] = len(set(c for member in stack for c in member["components"]))
+    info["top-level directories"] = len([d for d in directories if "/" not in d])
+    info["directories"] = len(directories)
+    info["file types"] = len(set(t for member in stack for t in member["types"]))
+
+    with_tests = [member["test_files_modified_num"] > 0 for member in stack]
+    info["any test change"] = any(with_tests)
+    info["share of commits with tests"] = sum(with_tests) / len(stack)
+    info["test/code lines ratio"] = info["total test_added"] / (
+        info["total source_code_added"] + 1
+    )
+
+    part = _part_number(commit["desc"])
+    max_part = max(
+        (member["part"] for member in stack if member["part"] is not None), default=None
+    )
+    info["part"] = part
+    info["max part"] = max_part
+
+    earlier = landings[: bisect.bisect_left(landings, (pushdate, False))]
+    info["earlier pushes"] = len(set(date for date, _ in earlier))
+    info["earlier backed-out commits"] = sum(backed_out for _, backed_out in earlier)
+    info["days since first landing"] = (
+        (pushdate - earlier[0][0]).days if earlier else -1
+    )
+    info["days since last landing"] = (
+        (pushdate - earlier[-1][0]).days if earlier else -1
+    )
+
+    return info
+
+
+class StackInfoIndex:
+    """Stacks and landing histories of bugs, from a sequence of commits (e.g. the commits DB)."""
+
+    def __init__(
+        self,
+        commits: Iterable[repository.CommitDict],
+        bug_ids: Collection[int] | None = None,
+        stacks: bool = True,
+    ) -> None:
+        """Index the given commits (of bug_ids only, if given).
+
+        With stacks=False, only the landing histories are kept, which takes much less memory
+        when indexing all bugs; the stacks must then be passed to attach.
+        """
+        self.stacks: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+        landings: dict[int, list[tuple[datetime, bool]]] = defaultdict(list)
+
+        for commit in commits:
+            bug_id = commit["bug_id"]
+            if not bug_id or (bug_ids is not None and bug_id not in bug_ids):
+                continue
+
+            if stacks:
+                self.stacks[(bug_id, commit["pushdate"])].append(stack_member(commit))
+            landings[bug_id].append(
+                (
+                    dateutil.parser.parse(commit["pushdate"]),
+                    bool(commit["backedoutby"]),
+                )
+            )
+
+        self.landings = {bug_id: sorted(dates) for bug_id, dates in landings.items()}
+
+    def attach(
+        self,
+        commit: repository.CommitDict,
+        stack: Sequence[repository.CommitDict] | None = None,
+        other_commits: Sequence[repository.CommitDict] = (),
+    ) -> None:
+        """Set commit["stack_info"].
+
+        By default, the stack is made of the commits of the same bug with the same push date,
+        among the indexed commits and other_commits (e.g. commits which are not in the commits
+        DB yet); pass stack (including the commit itself) for patches under review.
+        """
+        bug_id = commit["bug_id"]
+        if stack is not None:
+            members = [stack_member(c) for c in stack]
+        elif bug_id:
+            members = list(self.stacks.get((bug_id, commit["pushdate"]), []))
+            nodes = set(member["node"] for member in members)
+            members += [
+                stack_member(c)
+                for c in other_commits
+                if c["bug_id"] == bug_id
+                and c["pushdate"] == commit["pushdate"]
+                and c["node"] not in nodes
+            ]
+            if commit["node"] not in nodes and not any(
+                c["node"] == commit["node"] for c in other_commits
+            ):
+                members.append(stack_member(commit))
+        else:
+            members = [stack_member(commit)]
+
+        commit["stack_info"] = compute_stack_info(
+            commit, members, self.landings.get(bug_id, []) if bug_id else []
+        )
+
+
+def _stack_info(commit: repository.CommitDict) -> dict[str, Any] | None:
+    return commit.get("stack_info")
+
+
+class StackSize(object):
+    def __call__(self, commit, **kwargs):
+        info = _stack_info(commit)
+        if info is None:
+            return None
+
+        return {
+            "Stack commits": info["commits"],
+            **{
+                f"Stack {agg} {field}": info[f"{agg} {field}"]
+                for field in STACK_SUM_FIELDS
+                for agg in ("total", "max")
+            },
+        }
+
+
+class StackSpread(object):
+    def __call__(self, commit, **kwargs):
+        info = _stack_info(commit)
+        if info is None:
+            return None
+
+        return {
+            "Stack components": info["components"],
+            "Stack top-level directories": info["top-level directories"],
+            "Stack directories": info["directories"],
+            "Stack file types": info["file types"],
+        }
+
+
+class StackTests(object):
+    def __call__(self, commit, **kwargs):
+        info = _stack_info(commit)
+        if info is None:
+            return None
+
+        return {
+            "Stack has test changes": info["any test change"],
+            "Stack share of commits with tests": info["share of commits with tests"],
+            "Stack test/code lines ratio": info["test/code lines ratio"],
+        }
+
+
+class StackPartPosition(object):
+    def __call__(self, commit, **kwargs):
+        info = _stack_info(commit)
+        if info is None:
+            return None
+
+        part, max_part = info["part"], info["max part"]
+        return {
+            "Has part number": part is not None,
+            "Part number": part or 0,
+            "Is last part": part is not None and part == max_part,
+            "Part relative position": part / max_part if part and max_part else 0.0,
+        }
+
+
+class BugLandingHistory(object):
+    def __call__(self, commit, **kwargs):
+        info = _stack_info(commit)
+        if info is None:
+            return None
+
+        return {
+            "Bug earlier pushes": info["earlier pushes"],
+            "Bug earlier backed-out commits": info["earlier backed-out commits"],
+            "Bug is a reland": info["earlier backed-out commits"] > 0,
+            "Bug days since first landing": info["days since first landing"],
+            "Bug days since last landing": info["days since last landing"],
+        }
+
+
+class BugProduct(object):
+    name = "Bug product"
+
+    def __call__(self, commit, **kwargs):
+        bug = commit.get("bug")
+        return bug["product"] if bug else None
+
+
+class BugAgeAtLanding(object):
+    name = "Bug age at landing"
+
+    def __call__(self, commit, **kwargs):
+        bug = commit.get("bug")
+        if not bug:
+            return None
+
+        created = dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+        pushdate = dateutil.parser.parse(commit["pushdate"])
+        return max((pushdate - created).days, 0)
 
 
 def merge_metrics(objects):

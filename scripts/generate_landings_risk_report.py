@@ -30,8 +30,16 @@ import sendgrid
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
+from bugbug import (
+    bug_features,
+    bugzilla,
+    commit_features,
+    db,
+    phabricator,
+    repository,
+    test_scheduling,
+)
+from bugbug.models.regressor import BUG_FIELDS, BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
     download_model,
@@ -453,6 +461,20 @@ class LandingsRiskReportGenerator(object):
 
             if bug_id in self.bug_map:
                 bug_to_commits[bug_id].append(commit)
+
+        # The regressor model uses the stacks and landing histories of the bugs, which are made
+        # of the commits collected above.
+        all_commits = [
+            commit for commits in bug_to_commits.values() for commit in commits
+        ]
+        self.regressor_model.add_stack_and_bug_info(
+            all_commits,
+            {
+                bug_id: {field: self.bug_map[bug_id][field] for field in BUG_FIELDS}
+                for bug_id in bug_to_commits
+            },
+            stack_index=commit_features.StackInfoIndex(all_commits),
+        )
 
         # All bugs blocking the "fuzz" bug and its dependent meta bugs are fuzzing bugs.
         fuzzblocker_bugs = set(
