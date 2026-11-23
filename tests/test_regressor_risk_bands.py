@@ -61,8 +61,8 @@ def test_fit_classifier_bug_weights(monkeypatch):
     monkeypatch.setattr(
         model.clf,
         "fit",
-        lambda X, y, estimator__sample_weight: captured.update(
-            w=estimator__sample_weight
+        lambda X, y, estimator__sample_weight, estimator__calibration_weight: (
+            captured.update(w=estimator__sample_weight, c=estimator__calibration_weight)
         ),
     )
     model.fit_classifier(X, y)
@@ -73,6 +73,10 @@ def test_fit_classifier_bug_weights(monkeypatch):
     assert np.isclose(w[0], w[1]) and np.isclose(w[1], w[2])
     # Both classes have the same total weight.
     assert np.isclose(captured["w"][y == 1].sum(), captured["w"][y == 0].sum())
+    # The calibration weights don't balance the classes: each bug has a total weight of 1.
+    c = dict(zip(X.index, captured["c"]))
+    assert np.isclose(c[0] + c[1] + c[2], 1.0) and np.isclose(c[3], 1.0)
+    assert np.isclose(captured["c"].sum(), 6.0)
 
 
 def test_cross_validation_bug_weights(monkeypatch):

@@ -317,19 +317,38 @@ class RegressorModel(CommitModel):
             self.train_bug_ids.append(commit["bug_id"])
             yield commit, label
 
-    def get_sample_weights(self, X, y):
+    def get_bug_weights(self, X):
         # Labels are per bug (a commit is a regressor if its bug caused a regression), and
         # predictions are evaluated per bug, so bugs with many commits would otherwise dominate
-        # training: each bug gets the same total weight, split among its commits. The classes
-        # are balanced with weights too (instead of undersampling, which would not keep the
-        # weights aligned with the samples).
+        # training: each bug gets the same total weight, split among its commits.
         bug_ids = np.array(self.train_bug_ids)[np.asarray(X.index)]
         _, inverse, counts = np.unique(bug_ids, return_inverse=True, return_counts=True)
-        sample_weight = 1.0 / counts[inverse]
+        return 1.0 / counts[inverse]
+
+    def get_sample_weights(self, X, y):
+        # The classes are balanced with weights too (instead of undersampling, which would not
+        # keep the weights aligned with the samples).
+        sample_weight = self.get_bug_weights(X)
         for label in np.unique(y):
             mask = y == label
             sample_weight[mask] *= len(y) / (2 * sample_weight[mask].sum())
         return sample_weight
+
+    def fit_classifier(self, X, y):
+        if not isinstance(
+            self.clf.named_steps["estimator"], IsotonicRegressionCalibrator
+        ):
+            super().fit_classifier(X, y)
+            return
+
+        # The calibration doesn't balance the classes, so the risks are the regression rates
+        # of bugs (and not of a set of bugs half of which caused regressions).
+        self.clf.fit(
+            X,
+            y,
+            estimator__sample_weight=self.get_sample_weights(X, y),
+            estimator__calibration_weight=self.get_bug_weights(X),
+        )
 
     def get_labels(self):
         classes = {}

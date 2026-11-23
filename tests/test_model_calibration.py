@@ -49,3 +49,25 @@ def test_calibrator_methods_keep_or_tie_the_ranking() -> None:
 
     # Isotonic calibration is a step function, sigmoid calibration is strictly monotonic.
     assert distinct["sigmoid"] > 10 * distinct["isotonic"]
+
+
+def test_calibration_weight() -> None:
+    import xgboost
+
+    from bugbug.model_calibration import IsotonicRegressionCalibrator
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(4000, 3))
+    # 10% positives.
+    y = (X[:, 0] + rng.normal(size=4000) > 1.8).astype(int)
+    balanced = np.where(y == 1, 0.5 / y.mean(), 0.5 / (1 - y.mean()))
+
+    calibrator = IsotonicRegressionCalibrator(
+        xgboost.XGBClassifier(n_estimators=20), method="sigmoid"
+    )
+    # Calibrating with class-balanced weights inflates the risks...
+    calibrator.fit(X, y, sample_weight=balanced)
+    assert calibrator.predict_proba(X)[:, 1].mean() > 0.3
+    # ...unlike calibrating without them.
+    calibrator.fit(X, y, sample_weight=balanced, calibration_weight=np.ones(len(y)))
+    assert abs(calibrator.predict_proba(X)[:, 1].mean() - y.mean()) < 0.03
