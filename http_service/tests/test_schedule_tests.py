@@ -114,7 +114,7 @@ def test_simple_schedule(
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
-    assert len(result) == 8
+    assert len(result) == 7
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose
     assert result["reduced_tasks"] == reduced_labels
@@ -122,9 +122,6 @@ def test_simple_schedule(
     assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
-    assert {k: set(v) for k, v in result["config_group_configs"].items()} == {
-        k: set(v) for k, v in config_groups.items()
-    }
     # The taskgraph is given the labels of the tasks of the selected configs.
     assert result["config_groups"] == {
         group: task_labels(group, configs) for group, configs in config_groups.items()
@@ -579,10 +576,6 @@ def test_schedule_config_selection_by_level(
         ({"test-group1": 0.99}, []),
         ({"test-group2": group2_confidence}, ["test-linux1804-64/opt-*"]),
     ]
-    assert result["config_group_configs"] == {
-        "test-group1": ["test-linux1804-64/opt-*"],
-        "test-group2": ["test-windows10/opt-*"],
-    }
     assert result["config_groups"] == {
         "test-group1": ["test-linux1804-64/opt-mochitest"],
         "test-group2": ["test-windows10/opt-mochitest"],
