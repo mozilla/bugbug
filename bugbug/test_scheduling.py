@@ -8,6 +8,7 @@ import collections
 import dataclasses
 import glob
 import itertools
+import json
 import logging
 import math
 import os
@@ -185,6 +186,37 @@ def normalize_group(group: str) -> str:
 
     # Manifests included by another manifest are reported as "manifest:parent".
     return group.split(":")[0]
+
+
+def get_full_graph_tasks(content: bytes, labels: set[str]) -> dict[str, dict]:
+    """The definitions of some tasks from a decision task's full-task-graph.json, by label.
+
+    The full task graph is hundreds of MB, and much more once parsed, so only the definitions of
+    the given tasks are parsed, where they are in the text. If one isn't found this way (e.g. if
+    the format of the file changed), the whole graph is parsed.
+    """
+    text = content.decode()
+    decoder = json.JSONDecoder()
+    tasks: dict[str, dict] = {}
+    for label in labels:
+        key = f"{json.dumps(label)}:{{"
+        start = text.find(key)
+        while start != -1:
+            try:
+                task, _ = decoder.raw_decode(text, start + len(key) - 1)
+            except ValueError:
+                task = None
+            if isinstance(task, dict) and task.get("label") == label:
+                tasks[label] = task
+                break
+            start = text.find(key, start + 1)
+
+    missing = labels - tasks.keys()
+    if missing:
+        del text
+        graph = orjson.loads(content)
+        tasks.update({label: graph[label] for label in missing if label in graph})
+    return tasks
 
 
 def rename_task(task: str) -> str:

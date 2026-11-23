@@ -4,11 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import json
 import math
 from datetime import datetime
 from typing import Any, Iterator
 
 import hglib
+import orjson
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -1850,3 +1852,32 @@ def test_config_dimensions(config: str, dimensions: dict[str, str]) -> None:
 )
 def test_normalize_group(group: str, expected: str) -> None:
     assert test_scheduling.normalize_group(group) == expected
+
+
+def test_get_full_graph_tasks() -> None:
+    graph = {
+        label: {"label": label, "attributes": {"test_manifests": manifests}}
+        for label, manifests in (
+            ("test-linux2404-64/opt-mochitest-plain-1", ["dom/a.toml"]),
+            ("test-linux2404-64/opt-mochitest-plain-2", ["dom/b.toml"]),
+            ("build-linux64/opt", []),
+        )
+    }
+    labels = {"test-linux2404-64/opt-mochitest-plain-1", "build-linux64/opt"}
+    expected = {label: graph[label] for label in labels}
+    # The definitions are found in the text, as the full task graph is compact JSON.
+    assert test_scheduling.get_full_graph_tasks(orjson.dumps(graph), labels) == expected
+    # Otherwise, the whole graph is parsed.
+    assert (
+        test_scheduling.get_full_graph_tasks(
+            json.dumps(graph, indent=2).encode(), labels
+        )
+        == expected
+    )
+    # Tasks which aren't in the graph are left out.
+    assert (
+        test_scheduling.get_full_graph_tasks(
+            orjson.dumps(graph), {"test-unknown/opt-x-1"}
+        )
+        == {}
+    )
