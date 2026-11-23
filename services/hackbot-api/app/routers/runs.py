@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
+from app.accounts import find_or_create_account
 from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
@@ -47,6 +48,7 @@ def _normalize_identity(email: str | None) -> str | None:
 
 
 UserEmail = Annotated[str | None, BeforeValidator(_normalize_identity)]
+
 
 DedupeKey = (
     Annotated[
@@ -112,6 +114,35 @@ async def create_run(
             description="Email of the user this run is requested for.",
         ),
     ] = None,
+    source: Annotated[
+        str | None,
+        Header(
+            alias="X-Source",
+            description="Where the run was triggered from, e.g. `bugzilla`.",
+        ),
+    ] = None,
+    identity_provider: Annotated[
+        str | None,
+        Header(
+            alias="X-Identity-Provider",
+            description="The service `X-User-Id` belongs to, e.g. `bugzilla`.",
+        ),
+    ] = None,
+    user_id: Annotated[
+        str | None,
+        Header(
+            alias="X-User-Id",
+            description="The stable ID, on the identity provider, of the person "
+            "who triggered the run.",
+        ),
+    ] = None,
+    username: Annotated[
+        str | None,
+        Header(
+            alias="X-Username",
+            description="That person's readable name on the identity provider.",
+        ),
+    ] = None,
     dedupe_key: Annotated[
         DedupeKey,
         Query(
@@ -143,6 +174,12 @@ async def create_run(
                 detail=f"Parent run {parent.run_id} has not succeeded",
             )
 
+    account_id = None
+    if identity_provider and user_id:
+        account_id = await find_or_create_account(
+            db, identity_provider, user_id, username
+        )
+
     run_id = uuid.uuid7()
     results_prefix = gcs.run_prefix(str(run_id))
 
@@ -155,6 +192,8 @@ async def create_run(
             inputs=inputs.model_dump(mode="json"),
             requested_by=on_behalf_of,
             requested_via=requested_via,
+            source=source,
+            account_id=account_id,
             dedupe_key=dedupe_key,
             results_prefix=results_prefix,
             artifacts=[],

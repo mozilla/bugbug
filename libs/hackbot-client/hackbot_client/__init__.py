@@ -5,6 +5,7 @@ from hackbot_client.client import (
 )
 from hackbot_client.models import (
     ApplyActionsResponse,
+    Identity,
     RunAction,
     RunRef,
     RunStatus,
@@ -15,6 +16,7 @@ __all__ = [
     "HackbotAPIError",
     "HackbotClient",
     "HackbotInvalidResponseError",
+    "Identity",
     "RunAction",
     "ApplyActionsResponse",
     "RunRef",

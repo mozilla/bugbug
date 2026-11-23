@@ -8,6 +8,7 @@ from hackbot_client import (
     HackbotAPIError,
     HackbotClient,
     HackbotInvalidResponseError,
+    Identity,
     RunStatus,
 )
 from hackbot_client import client as client_module
@@ -108,6 +109,35 @@ async def test_trigger_run_omits_attribution_when_not_provided(monkeypatch):
     await _client().trigger_run("bug-fix", {"bug_id": 1234})
 
     assert captured["headers"] == {"X-API-Key": "secret"}
+
+
+async def test_trigger_run_sends_who_triggered_the_run_and_from_where(monkeypatch):
+    captured = _capture_post(
+        monkeypatch,
+        httpx.Response(
+            201,
+            json={"run_id": RUN_ID, "agent": "bug-fix", "status": "pending"},
+        ),
+    )
+
+    await _client().trigger_run(
+        "bug-fix",
+        {"bug_id": 1234},
+        source="bugzilla",
+        identity=Identity(
+            identity_provider="bugzilla",
+            user_id="560562",
+            username="alice@example.com",
+        ),
+    )
+
+    assert captured["headers"] == {
+        "X-API-Key": "secret",
+        "X-Source": "bugzilla",
+        "X-Identity-Provider": "bugzilla",
+        "X-User-Id": "560562",
+        "X-Username": "alice@example.com",
+    }
 
 
 async def test_trigger_run_raises_for_http_errors(monkeypatch):

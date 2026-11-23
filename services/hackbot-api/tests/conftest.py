@@ -24,7 +24,7 @@ os.environ.setdefault("SLACK_BOT_TOKEN", "xoxb-test-token")
 import pytest  # noqa: E402
 from app.auth import require_api_key  # noqa: E402
 from app.database.connection import get_db  # noqa: E402
-from app.database.models import Run  # noqa: E402
+from app.database.models import Account, Run  # noqa: E402
 from app.main import app  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import Insert, Update  # noqa: E402
@@ -36,7 +36,7 @@ from sqlalchemy.exc import (  # noqa: E402
 )
 
 
-def _statement_values(stmt) -> dict:
+def _statement_values(stmt, table=Run.__table__) -> dict:
     """The column values a statement would write, as a plain dict.
 
     Compiled params also carry the WHERE clause's binds, which SQLAlchemy names
@@ -44,7 +44,7 @@ def _statement_values(stmt) -> dict:
     values being written.
     """
     params = stmt.compile(dialect=postgresql.dialect()).params
-    columns = {column.name for column in Run.__table__.columns}
+    columns = {column.name for column in table.columns}
     return {name: value for name, value in params.items() if name in columns}
 
 
@@ -97,6 +97,9 @@ class FakeSession:
     def __init__(self, matches: list | None = None):
         self.matches = matches or []
         self.added = None
+        # What the last find-or-create asked for, and the ID it is answered with.
+        self.account = None
+        self.account_id = 17
         self.conflict = False
         self.statements: list = []
         self.commits = 0
@@ -117,6 +120,10 @@ class FakeSession:
             for column, value in _statement_values(stmt).items():
                 setattr(self.added, column, value)
             return _Result([])
+
+        if isinstance(stmt, Insert) and stmt.table.name == Account.__tablename__:
+            self.account = _statement_values(stmt, Account.__table__)
+            return _Result([self.account_id])
 
         if isinstance(stmt, Insert):
             if self.conflict:

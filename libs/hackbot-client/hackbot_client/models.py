@@ -18,6 +18,18 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class Identity(BaseModel):
+    """A person on an identity provider, such as a Bugzilla or GitHub user.
+
+    `user_id` is their stable ID there. `username` is their readable name,
+    which they can change.
+    """
+
+    identity_provider: str
+    user_id: str
+    username: str | None = None
+
+
 class RunRef(BaseModel):
     run_id: UUID
     agent: str

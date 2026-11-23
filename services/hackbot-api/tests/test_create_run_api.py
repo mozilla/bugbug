@@ -58,6 +58,26 @@ def test_create_run_records_requested_via_from_caller(client, db):
     assert db.added.requested_via == "listener@example.iam.gserviceaccount.com"
 
 
+def test_create_run_records_the_account_and_source(client, db):
+    _create(
+        client,
+        {
+            "X-Source": "bugzilla",
+            "X-Identity-Provider": "bugzilla",
+            "X-User-Id": "560562",
+            "X-Username": "alice@example.com",
+        },
+    )
+
+    assert db.account == {
+        "identity_provider": "bugzilla",
+        "external_id": "560562",
+        "username": "alice@example.com",
+    }
+    assert db.added.account_id == db.account_id
+    assert db.added.source == "bugzilla"
+
+
 @pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])
 def test_create_run_leaves_run_unattributed_without_header(client, db, headers):
     # Automation (e.g. the Phabricator webhook) omits the header entirely; a
