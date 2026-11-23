@@ -2960,6 +2960,7 @@ source = { editable = "libs/hackbot-runtime" }
 dependencies = [
     { name = "agent-tools" },
     { name = "google-auth" },
+    { name = "google-cloud-storage" },
     { name = "httpx" },
     { name = "phabricator-client" },
     { name = "pydantic-settings" },
@@ -2993,6 +2994,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["mcp-server"], marker = "extra == 'mcp-server'", editable = "libs/agent-tools" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-sdk'", specifier = ">=0.1.30" },
     { name = "google-auth", specifier = ">=2.0.0" },
+    { name = "google-cloud-storage", specifier = ">=2.16.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "mozphab", marker = "extra == 'phabricator'", specifier = "==2.15.3" },
     { name = "openai-codex", marker = "extra == 'codex-sdk'", specifier = ">=0.163.0" },

@@ -172,11 +172,12 @@ def test_fresh_checkout_uses_snapshot_and_fetches_newer_commits(tmp_path, monkey
     requested = []
     _redirect_github(monkeypatch, remote)
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
-    monkeypatch.setattr(
-        source,
-        "_download",
-        lambda bucket, name: requested.append((bucket, name)) or iter([snapshot]),
-    )
+
+    def download(bucket, name, out):
+        requested.append((bucket, name))
+        out.write(snapshot)
+
+    monkeypatch.setattr(source, "_download", download)
 
     dest = tmp_path / "dest"
     ensure_source_repo(dest, GITHUB_URL, depth=1)
@@ -194,8 +195,8 @@ def test_fresh_checkout_uses_snapshot_and_fetches_newer_commits(tmp_path, monkey
 
 
 def test_failed_snapshot_restore_leaves_no_git_dir(tmp_path, monkeypatch):
-    def fail(bucket, name):
-        yield b"not a tar"
+    def fail(bucket, name, out):
+        out.write(b"not a tar")
         raise OSError("connection reset")
 
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
@@ -212,7 +213,9 @@ def test_failed_fetch_after_restore_falls_back_to_clone(tmp_path, monkeypatch):
     snapshot = _snapshot(tmp_path, remote)
     _redirect_github(monkeypatch, remote)
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
-    monkeypatch.setattr(source, "_download", lambda bucket, name: iter([snapshot]))
+    monkeypatch.setattr(
+        source, "_download", lambda bucket, name, out: out.write(snapshot)
+    )
     real_run = subprocess.run
 
     def fail_snapshot_fetch(cmd, **kwargs):
@@ -267,7 +270,9 @@ def test_snapshot_without_git_dir_leaves_an_enclosing_repo_alone(tmp_path, monke
         capture_output=True,
     ).stdout
     monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
-    monkeypatch.setattr(source, "_download", lambda bucket, name: iter([no_git]))
+    monkeypatch.setattr(
+        source, "_download", lambda bucket, name, out: out.write(no_git)
+    )
 
     assert not source._restore_snapshot(outer / "dest", GITHUB_URL, "HEAD")
     origin = subprocess.run(
