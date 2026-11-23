@@ -14,7 +14,7 @@ import orjson
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
-from bugbug import repository, test_scheduling
+from bugbug import db, repository, test_scheduling
 from bugbug.repository import CommitDict
 from bugbug.test_scheduling import (
     ConfigGroup,
@@ -198,6 +198,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
     update_touched_together_gen.send(Revision("commit4"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 2
+    test_scheduling.close_touched_together_db()
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 2
     assert test_scheduling.get_touched_together("dom", "dom/tests/manifest1.ini") == 2
     assert test_scheduling.get_touched_together("dom", "dom/tests") == 2
@@ -343,6 +344,82 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
         test_scheduling.get_touched_together("layout", "dom/tests/manifest1.ini") == 1
     )
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 1
+
+
+def test_touched_together_recent(monkeypatch: MonkeyPatch) -> None:
+    test_scheduling.touched_together = None
+
+    repository.path_to_component = {
+        "dom/file1.cpp": "Core::DOM",
+        "dom/tests/manifest1.ini": "Core::DOM",
+    }
+
+    def make_commit(node: str) -> CommitDict:
+        return (
+            repository.Commit(
+                node=node,
+                author="author1",
+                desc=node,
+                pushdate=datetime(2019, 1, 1),
+                bug_id=123,
+                backsout=[],
+                backedoutby="",
+                author_email="author1@mozilla.org",
+                reviewers=["reviewer1"],
+            )
+            .set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {})
+            .to_dict()
+        )
+
+    def run(*end_revisions: str) -> None:
+        gen = test_scheduling.update_touched_together()
+        next(gen)
+        for end_revision in end_revisions:
+            gen.send(Revision(end_revision))
+        with contextlib.suppress(StopIteration):
+            gen.send(None)
+
+    def count() -> int:
+        result = test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests")
+        test_scheduling.close_touched_together_db()
+        return result
+
+    def add_commits(start: int, end: int) -> None:
+        db.append(
+            repository.COMMITS_DB,
+            [make_commit(f"commit{i}") for i in range(start, end + 1)],
+        )
+
+    def fail_get_commits():
+        raise AssertionError("The whole commits DB should not be read")
+        yield
+
+    monkeypatch.setattr(test_scheduling, "TOUCHED_TOGETHER_RECENT_COMMITS", 4)
+    monkeypatch.setattr(test_scheduling, "TOUCHED_TOGETHER_RECENT_MARGIN", 1)
+
+    db.write(repository.COMMITS_DB, [])
+    add_commits(1, 2)
+    run("commit2")
+    assert count() == 2
+
+    # The last analyzed commit (commit2) is among the last 4 commits, after the margin: only
+    # those are read. A revision before it, in the margin, is found as already analyzed.
+    add_commits(3, 4)
+    with monkeypatch.context() as m:
+        m.setattr(repository, "get_commits", fail_get_commits)
+        run("commit1", "commit4")
+    assert count() == 4
+
+    # The last analyzed commit (commit4) isn't among the last 4 commits: all are read.
+    add_commits(5, 8)
+    run("commit8")
+    assert count() == 8
+
+    # The last analyzed commit (commit8) is among the last 4 commits, but in the margin: all are
+    # read.
+    add_commits(9, 11)
+    run("commit11")
+    assert count() == 11
 
 
 def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
