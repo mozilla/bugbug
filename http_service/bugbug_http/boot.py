@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import collections
 import concurrent.futures
 import contextlib
 import json
@@ -17,9 +16,8 @@ import orjson
 import requests
 import tenacity
 import yaml
-from tqdm import tqdm
 
-from bugbug import build_platforms, repository, test_scheduling, utils
+from bugbug import build_platforms, db, repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
 logger = logging.getLogger(__name__)
@@ -421,13 +419,13 @@ def retrieve_build_platforms() -> None:
 
 def update_commits() -> None:
     """Mine the autoland commits after the last one in the commits DB, and update the DBs derived from them."""
-    logger.info("Browsing all commits...")
-    nodes = collections.deque(
-        (commit["node"] for commit in tqdm(repository.get_commits())),
-        maxlen=4096,
-    )
-    nodes.reverse()
-    logger.info("All commits browsed.")
+    # The last commits of the DB, from the newest. They aren't filtered (like get_commits does), as
+    # the commits after the last one are the ones to mine: starting from an older one would mine
+    # again (and add to the DB) the last commits if they are filtered out (e.g. backouts).
+    nodes = [
+        commit["node"] for commit in reversed(db.read_last(repository.COMMITS_DB, 4096))
+    ]
+    logger.info("Read the last %d commits of the commits DB.", len(nodes))
 
     with hglib.open(REPO_DIR) as hg:
         # Try using nodes backwards, in case we have some node that was on central at the time
