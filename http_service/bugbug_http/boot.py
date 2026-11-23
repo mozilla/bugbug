@@ -56,34 +56,6 @@ def _without_chunk(label: str) -> str:
     return re.sub(r"-\d+$", "", label)
 
 
-def _set_test_variants(rev: str) -> None:
-    """Make mozci name the configurations of the tasks of a push with the push's test variants.
-
-    mozci memoizes the test variants of mozilla-central for the lifetime of the process (the refresh
-    runs for weeks), and a variant added on autoland isn't on mozilla-central until it's merged.
-    The variants are the ones of the push's taskcluster/test_configs/variants.yml, parsed like mozci
-    does; if they can't be retrieved, mozci retrieves the current ones of mozilla-central again.
-    """
-    # mozci.data needs to be imported before mozci.task to avoid a circular import.
-    import mozci.data  # noqa: F401
-    from mozci import task as mozci_task
-
-    mozci_task.fetch_test_variant_yaml.clear()
-    try:
-        r = requests.get(
-            f"https://hg.mozilla.org/integration/autoland/raw-file/{rev}/taskcluster/test_configs/variants.yml",
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        variants = yaml.load(r.text, yaml.BaseLoader)
-        mozci_task.fetch_test_variant_yaml[()] = {
-            **mozci_task.REMOVED_TEST_VARIANTS,
-            **{name: variant["suffix"] for name, variant in variants.items()},
-        }
-    except Exception:
-        logger.warning("Failed to retrieve the test variants of %s", rev, exc_info=True)
-
-
 def _minimal_task(task: dict) -> dict:
     """The parts of a task's definition needed to compute its config and manifests."""
     extra = task["task"]["extra"]
@@ -102,10 +74,10 @@ def _minimal_task(task: dict) -> dict:
 
 
 def _eligible_tasks(
-    task_graph: dict[str, dict], failed: dict[str, list[dict]] | None = None
+    task_graph: dict[str, dict], rev: str, failed: dict[str, list[dict]] | None = None
 ) -> Iterator[tuple[str, str, list[str]]]:
-    """The test tasks of a task graph that test selection optimizes: (label without chunk number,
-    config as mozci names it, manifests).
+    """The test tasks of a task graph (of the push `rev`) that test selection optimizes: (label
+    without chunk number, config as mozci names it, manifests).
 
     The tasks that test selection doesn't optimize (e.g. the standalone ones, which only run on
     backstop pushes) are left out. So are shippable tasks, as they are too costly to select: the
@@ -134,7 +106,7 @@ def _eligible_tasks(
         label = _without_chunk(task["label"])
         if label not in configurations:
             try:
-                configuration = get_configuration(task)
+                configuration = get_configuration(task, "autoland", rev)
             except Exception:
                 logger.warning(
                     "Failed to get the configuration of %s",
@@ -161,6 +133,7 @@ def _eligible_tasks(
 def get_config_selection_tasks(
     task_graph: dict[str, dict],
     target_tasks: Iterable[str],
+    rev: str,
     failed: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict]:
     """The test tasks among which configs are selected, by label without chunk number.
@@ -173,7 +146,7 @@ def get_config_selection_tasks(
     """
     targets = {_without_chunk(label) for label in target_tasks}
     tasks: dict[str, dict] = {}
-    for label, config, manifests in _eligible_tasks(task_graph, failed):
+    for label, config, manifests in _eligible_tasks(task_graph, rev, failed):
         if label not in targets:
             continue
         task = tasks.setdefault(label, {"config": config, "manifests": []})
@@ -205,9 +178,10 @@ def _classify_new_tasks(
     new tasks (unless they are candidates already), and the others are ignored, except the ones
     whose config can't be computed, which are returned (see _eligible_tasks).
     """
-    _set_test_variants(rev)
     failed: dict[str, list[dict]] = {}
-    eligible = {label: config for label, config, _ in _eligible_tasks(graph, failed)}
+    eligible = {
+        label: config for label, config, _ in _eligible_tasks(graph, rev, failed)
+    }
     for label in labels - failed.keys():
         if label not in eligible:
             ignored.add(label)
@@ -232,9 +206,8 @@ def _resolve_unresolved(state: dict, ignored: set[str], revs: set[str]) -> None:
         graph = {task["label"]: task for task in entry["tasks"]}
         labels = {_without_chunk(label) for label in graph}
         if entry["backstop"]:
-            _set_test_variants(rev)
             failed: dict[str, list[dict]] = {}
-            tasks = get_config_selection_tasks(graph, graph, failed)
+            tasks = get_config_selection_tasks(graph, graph, rev, failed)
             state["tasks"].update(tasks)
             ignored |= labels - tasks.keys() - failed.keys()
         else:
@@ -294,9 +267,8 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             continue
         task_graph = orjson.loads(r.content)
         target_tasks = targets.json()
-        _set_test_variants(rev)
         failed: dict[str, list[dict]] = {}
-        tasks = get_config_selection_tasks(task_graph, target_tasks, failed)
+        tasks = get_config_selection_tasks(task_graph, target_tasks, rev, failed)
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
         )
