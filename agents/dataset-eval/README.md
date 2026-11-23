@@ -116,3 +116,5 @@ The tree and its build persist in the `dataset-eval-workspace` volume. A run on
 the commit the last one built skips the bootstrap, and the first build too when
 the last build was of the clean tree; rows without tests are not built for
 grading and get no `builds` score. On a fixed commit a run is mostly agent time.
+Builds compile through the bootstrapped sccache, with its cache in the volume,
+so rebuilding the clean tree after a patched one is mostly cache hits.

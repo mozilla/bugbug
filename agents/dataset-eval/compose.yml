@@ -33,6 +33,10 @@ services:
       - WANDB_API_KEY=${WANDB_API_KEY:-}
       - WEAVE_PROJECT=${WEAVE_PROJECT:-moz-bugbug/hackbot-evals}
       - ARTIFACTS_DIR=/artifacts
+      # Kept with the tree, so switching between a clean and a patched tree
+      # recompiles from the cache.
+      - SCCACHE_DIR=/workspace/sccache
+      - SCCACHE_CACHE_SIZE=8G
     shm_size: 2gb
     volumes:
       - ${FIREFOX_GIT_REPO:-/firefox}:/firefox:ro

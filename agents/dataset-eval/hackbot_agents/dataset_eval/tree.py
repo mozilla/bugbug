@@ -10,6 +10,7 @@ incremental.
 """
 
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -21,6 +22,15 @@ ac_add_options --enable-optimize
 ac_add_options --disable-debug-symbols
 mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/{OBJDIR}
 """
+# Installed by `mach bootstrap`.
+SCCACHE = Path.home() / ".mozbuild" / "sccache" / "sccache"
+
+
+def mozconfig_text() -> str:
+    """The mozconfig; it compiles through sccache when SCCACHE_DIR keeps a cache."""
+    if os.environ.get("SCCACHE_DIR") and SCCACHE.exists():
+        return MOZCONFIG + f"ac_add_options --with-ccache={SCCACHE}\n"
+    return MOZCONFIG
 
 
 def _git(tree: Path, *args: str) -> str:
@@ -35,8 +45,9 @@ def head(tree: Path) -> str:
 
 def mozconfig(tree: Path) -> Path:
     path = tree / ".mozconfig"
-    if not path.exists() or path.read_text() != MOZCONFIG:
-        path.write_text(MOZCONFIG)
+    text = mozconfig_text()
+    if not path.exists() or path.read_text() != text:
+        path.write_text(text)
     return path
 
 
@@ -53,8 +64,9 @@ def diff(tree: Path, base: str) -> str:
 
 
 def state(tree: Path, base: str) -> str:
-    """What the tree would be built from: ``base`` and the changes on it."""
-    return f"{base} {hashlib.sha256(diff(tree, base).encode()).hexdigest()}"
+    """What the tree would be built from: ``base``, the changes on it, the mozconfig."""
+    built_from = mozconfig_text() + diff(tree, base)
+    return f"{base} {hashlib.sha256(built_from.encode()).hexdigest()}"
 
 
 def stamp(tree: Path) -> Path:

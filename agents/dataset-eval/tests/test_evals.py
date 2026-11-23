@@ -159,6 +159,16 @@ def _git(repo, *args):
     ).stdout.strip()
 
 
+def test_builds_go_through_sccache_when_it_keeps_a_cache(tmp_path, monkeypatch):
+    sccache = tmp_path / "sccache"
+    sccache.write_text("")
+    monkeypatch.setattr(tree, "SCCACHE", sccache)
+    monkeypatch.delenv("SCCACHE_DIR", raising=False)
+    assert tree.mozconfig_text() == tree.MOZCONFIG
+    monkeypatch.setenv("SCCACHE_DIR", str(tmp_path / "cache"))
+    assert f"--with-ccache={sccache}" in tree.mozconfig_text()
+
+
 def test_tree_reset_keeps_only_the_build(tmp_path):
     repo = tmp_path / "firefox"
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -170,7 +180,7 @@ def test_tree_reset_keeps_only_the_build(tmp_path):
     _git(repo, "commit", "-qm", "base")
     base = tree.head(repo)
     (repo / ".mozconfig").write_text("left by an older evaluator\n")
-    assert tree.mozconfig(repo).read_text() == tree.MOZCONFIG
+    assert tree.mozconfig(repo).read_text() == tree.mozconfig_text()
     (repo / tree.OBJDIR).mkdir()
     (repo / tree.OBJDIR / "libxul.so").write_text("built")
 
