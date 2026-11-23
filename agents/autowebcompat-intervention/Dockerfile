@@ -35,6 +35,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         # ./mach needs mercurial for its vcs checks even on a git checkout.
         mercurial git curl zip unzip \
+        # For `./mach try fuzzy`, which otherwise prompts to download it.
+        fzf \
         # Node.js, to run the Firefox DevTools MCP server.
         nodejs npm \
         ca-certificates \
