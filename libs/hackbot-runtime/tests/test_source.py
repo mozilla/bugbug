@@ -194,6 +194,21 @@ def test_fresh_checkout_uses_snapshot_and_fetches_newer_commits(tmp_path, monkey
     assert (dest / "README.md").read_text() == "newer"
 
 
+def test_snapshot_restores_into_a_relative_path(tmp_path, monkeypatch):
+    remote = tmp_path / "remote"
+    _make_remote(remote)
+    snapshot = _snapshot(tmp_path, remote)
+    _redirect_github(monkeypatch, remote)
+    monkeypatch.setenv("SOURCE_SNAPSHOT_BUCKET", "snapshots")
+    monkeypatch.setattr(
+        source, "_download", lambda bucket, name, out: out.write(snapshot)
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert source._restore_snapshot(Path("dest"), GITHUB_URL, "HEAD")
+    assert (tmp_path / "dest" / "README.md").read_text() == "hello"
+
+
 def test_failed_snapshot_restore_leaves_no_git_dir(tmp_path, monkeypatch):
     def fail(bucket, name, out):
         out.write(b"not a tar")

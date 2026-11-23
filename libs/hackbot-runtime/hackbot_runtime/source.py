@@ -27,7 +27,8 @@ def _git(source_repo: Path, *args: str) -> None:
 
 def _download(bucket: str, name: str, out: BinaryIO) -> None:
     """Write ``gs://bucket/name`` to ``out``, checking its checksum."""
-    storage.Client().bucket(bucket).blob(name).download_to_file(out)
+    # crc32c: large uploads are composite objects, which have no md5.
+    storage.Client().bucket(bucket).blob(name).download_to_file(out, checksum="crc32c")
 
 
 def _unpack_snapshot(source_repo: Path, bucket: str, name: str) -> None:
@@ -52,8 +53,8 @@ def _check_out_snapshot(
     _unpack_snapshot(source_repo, bucket, name)
     log.info("snapshot unpacked; fetching %s", fetch_target)
     # Name the unpacked repository, so a tar without .git fails here instead of
-    # git finding an enclosing repository.
-    git_dir = (f"--git-dir={source_repo / '.git'}", f"--work-tree={source_repo}")
+    # git finding an enclosing repository. Relative to -C, so relative paths work.
+    git_dir = ("--git-dir=.git", "--work-tree=.")
     _git(source_repo, *git_dir, "remote", "set-url", "origin", repo_url)
     _git(source_repo, *git_dir, "fetch", "origin", fetch_target)
     _git(source_repo, *git_dir, "checkout", "-q", "-f", "FETCH_HEAD")
