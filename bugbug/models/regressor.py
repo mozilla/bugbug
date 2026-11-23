@@ -64,7 +64,7 @@ RISK_BAND_SHARES = (
 def compute_risk_bands(risks: np.ndarray) -> list[tuple[str, float, float]]:
     """Split the risk scale into contiguous bands holding the RISK_BAND_SHARES of risks.
 
-    Calibrated risks take few distinct values, so a plain quantile could fall in a large
+    Calibrated risks can take few distinct values, so a plain quantile could fall in a large
     group of tied risks and leave a band almost empty. Instead, each threshold is the
     distinct risk value whose share of risks at or below it is closest to the target.
     A risk equal to a threshold belongs to the lower band.
@@ -252,7 +252,9 @@ class RegressorModel(CommitModel):
             n_jobs=utils.get_physical_cpu_count(),
         )
         if calibration:
-            estimator = IsotonicRegressionCalibrator(estimator)
+            # Sigmoid calibration keeps the ranking of the classifier (isotonic calibration
+            # ties many patches, which costs ~1 point of average precision at bug level).
+            estimator = IsotonicRegressionCalibrator(estimator, method="sigmoid")
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
         self.clf = Pipeline(

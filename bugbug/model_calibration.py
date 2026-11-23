@@ -34,10 +34,17 @@ def fit_isotonic_breakpoints(
 
 
 class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_clf):
+    def __init__(self, base_clf, method="isotonic"):
+        """Calibrate base_clf on a held-out 20% of the training set.
+
+        method is "isotonic" (by default) or "sigmoid" (Platt scaling): isotonic calibration
+        is a step function, so it maps many scores to the same probability and loses part
+        of the ranking; sigmoid calibration is strictly monotonic, so it keeps it.
+        """
         self.base_clf = base_clf
+        self.method = method
         self.calibrated_clf = CalibratedClassifierCV(
-            base_clf, cv="prefit", method="isotonic"
+            base_clf, cv="prefit", method=method
         )
 
     def fit(self, X_train, y_train, sample_weight=None):

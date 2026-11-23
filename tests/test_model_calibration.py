@@ -25,3 +25,27 @@ def test_isotonic_breakpoints_pool_violators_and_interpolate() -> None:
     assert np.interp(1.0, x, y) == pytest.approx(0.3)
     between = np.interp([0.825], x, y)
     assert 0.0175 < between[0] < 0.3
+
+
+def test_calibrator_methods_keep_or_tie_the_ranking() -> None:
+    import xgboost
+
+    from bugbug.model_calibration import IsotonicRegressionCalibrator
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(2000, 3))
+    y = (X[:, 0] + rng.normal(size=2000) > 0).astype(int)
+
+    distinct = {}
+    for method in ("isotonic", "sigmoid"):
+        calibrator = IsotonicRegressionCalibrator(
+            xgboost.XGBClassifier(n_estimators=20), method=method
+        )
+        assert calibrator.get_params()["method"] == method
+        calibrator.fit(X, y)
+        probs = calibrator.predict_proba(X)[:, 1]
+        assert ((probs >= 0) & (probs <= 1)).all()
+        distinct[method] = len(np.unique(probs))
+
+    # Isotonic calibration is a step function, sigmoid calibration is strictly monotonic.
+    assert distinct["sigmoid"] > 10 * distinct["isotonic"]
