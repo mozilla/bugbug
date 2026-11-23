@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import glob
 import json
 import os
 import pickle
@@ -167,6 +168,21 @@ def test_clone(fake_hg_repo):
     # Assert that we do have the file from the remote repository, since we cloned
     # and updated the working dir.
     assert os.path.exists(os.path.join(f"{tmp_repo_dir}2", "file1"))
+
+
+def test_clone_changetracker_db(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    repository.clone("ciao", url=remote)
+
+    # mozext records the pushes in the changetracker.db of each repository, so it is only in the
+    # share and not in the pooled store, to download the pushlog only once.
+    assert os.path.exists(os.path.join("ciao", ".hg", "changetracker.db"))
+    assert not glob.glob(os.path.join("ciao-shared", "*", ".hg", "changetracker.db"))
 
 
 def test_get_revs(fake_hg_repo):

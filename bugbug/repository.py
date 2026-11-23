@@ -1702,6 +1702,10 @@ def clone(
         if "abort: repository" not in str(e) and "not found" not in str(e):
             raise
 
+    # robustcheckout pulls twice: into the pooled store, and then into the share. mozext records
+    # the pushes in the `changetracker.db` of each repository (not in the shared store), so it would
+    # download the whole pushlog for both pulls, and the copy of the pooled store is never used. Its
+    # database is disabled for the clone, and the pushes are retrieved once by pulling in the share.
     cmd = _build_hg_cmd(
         "robustcheckout",
         url,
@@ -1711,8 +1715,12 @@ def clone(
         networkattempts=7,
         branch=b"default",
         noupdate=not update,
+        config=b"mozext.disable_local_database=true",
     )
     subprocess.run(cmd, check=True)
+
+    with hglib.open(repo_dir) as hg:
+        hg.pull(update=update)
 
     logger.info("%s cloned", repo_dir)
 
