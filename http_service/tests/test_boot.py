@@ -224,9 +224,11 @@ AUTOLAND_VARIANTS = re.compile(
 
 
 @pytest.fixture(autouse=True)
-def mock_test_variants() -> None:
-    # mozci memoizes the test variants.
+def mock_test_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    # mozci memoizes the test variants, of mozilla-central and of the pushes.
     mozci_task.fetch_test_variant_yaml.clear()
+    monkeypatch.setattr(mozci_task, "_push_test_variants", {})
+    monkeypatch.setattr(mozci_task, "_push_test_variants_revs", set())
     # The suffixes of the test variants, of mozilla-central (retrieved by mozci) and of the pushes.
     responses.add(
         responses.GET,
@@ -238,7 +240,7 @@ def mock_test_variants() -> None:
 
 def test_get_config_selection_tasks() -> None:
     assert (
-        boot.get_config_selection_tasks(TASK_GRAPH, KNOWN_TASKS)
+        boot.get_config_selection_tasks(TASK_GRAPH, KNOWN_TASKS, "rev")
         == CONFIG_SELECTION_TASKS
     )
 
@@ -544,8 +546,8 @@ def test_update_config_selection_tasks_retries_unresolved(
     monkeypatch.chdir(tmp_path)
     with contextlib.suppress(FileNotFoundError):
         os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
-    # Test variants added on autoland, which aren't on mozilla-central yet: the latest one isn't in
-    # the variants of the pushes at first either (e.g. a transient failure).
+    # A test variant added on autoland, which isn't on mozilla-central yet: the variants of the
+    # pushes can't be retrieved at first (e.g. a transient failure).
     new_variant = _task(
         "test-linux2404-64/opt-mochitest-plain-newv-1",
         "linux2404-64/opt",
@@ -601,12 +603,13 @@ def test_update_config_selection_tasks_retries_unresolved(
         boot._decision_artifact_url("p1", "full-task-graph.json"),
         body=orjson.dumps({**graph, renamed["label"]: renamed}),
     )
-    # The variants of the pushes don't have the latest one yet (e.g. a transient failure).
+    # The other variant is on mozilla-central, but the variants of the pushes can't be retrieved.
     responses.replace(
         responses.GET,
-        AUTOLAND_VARIANTS,
+        "https://hg.mozilla.org/mozilla-central/raw-file/default/taskcluster/test_configs/variants.yml",
         body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\n",
     )
+    responses.replace(responses.GET, AUTOLAND_VARIANTS, status=500)
 
     def read() -> dict:
         with open(boot.CONFIG_SELECTION_TASKS_PATH) as f:
@@ -614,7 +617,7 @@ def test_update_config_selection_tasks_retries_unresolved(
 
     boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
     state = read()
-    # The configs are named with the push's test variants.
+    # The configs of the tasks with known variants are computed.
     assert state["tasks"]["test-linux2404-64/opt-mochitest-plain-newv"] == {
         "config": "test-linux2404-64/opt-*-newv",
         "manifests": ["dom/a.toml"],
@@ -633,11 +636,11 @@ def test_update_config_selection_tasks_retries_unresolved(
     ]
     assert full_graphs == [boot._decision_artifact_url("p1", "full-task-graph.json")]
 
-    # Once the variants are known, they are resolved on the next update.
+    # Once the variants of the pushes can be retrieved, they are resolved on the next update.
     responses.replace(
         responses.GET,
         AUTOLAND_VARIANTS,
-        body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\nlatervariant:\n  suffix: later\n",
+        body="xorigin:\n  suffix: xorig\nlatervariant:\n  suffix: later\n",
     )
     boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
     state = read()

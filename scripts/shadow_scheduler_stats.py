@@ -214,7 +214,9 @@ def get_task_configurations(
             continue
 
         try:
-            configurations[task] = get_configuration(definitions[task])
+            configurations[task] = get_configuration(
+                definitions[task], push.branch, push.rev
+            )
         except Exception:
             logger.warning("Failed to get the configuration of %s", task, exc_info=True)
 
@@ -349,7 +351,7 @@ def analyze_shadow_schedulers(
                 push.__dict__.pop("_get_shadow_scheduler_tasks", None)
 
             config_groups = {
-                (get_configuration(task), group)
+                (get_configuration(task, push.branch, push.rev), group)
                 for task in tasks
                 for group in task["attributes"].get("test_manifests", [])
             }
