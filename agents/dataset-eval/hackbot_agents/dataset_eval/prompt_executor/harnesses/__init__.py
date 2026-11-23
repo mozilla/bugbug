@@ -44,6 +44,13 @@ VENDOR_PREFIXES = {
     "openai": ("CODEX_", "OPENAI_"),
     "otari": ("OTARI_",),
 }
+# A run stops once its model makes the same tool call, with the same result,
+# this many times in a row.
+LOOP_LIMIT = 25
+
+
+class Looping(Exception):
+    """The model repeats one tool call to no effect."""
 
 
 @dataclass
@@ -63,6 +70,11 @@ class Run:
     tool_errors: int = 0
     # As the harness itself reports it, when it does.
     cost_usd: float | None = None
+    # Calls awaiting their results, the last call with its result, and how many
+    # times in a row it was made.
+    pending: dict[str, tuple] = field(default_factory=dict)
+    last_call: tuple | None = None
+    repeats: int = 0
 
 
 def record(run: Run, msg) -> None:
@@ -80,6 +92,10 @@ def record(run: Run, msg) -> None:
                 )
                 thinking = ""
             elif isinstance(block, ToolUseBlock):
+                run.pending[block.id] = (
+                    block.name,
+                    json.dumps(block.input, sort_keys=True, default=str),
+                )
                 run.transcript.append(
                     {
                         "role": "tool_call",
@@ -101,6 +117,17 @@ def record(run: Run, msg) -> None:
                 if isinstance(content, list):
                     content = "\n".join(c.get("text", "") for c in content)
                 run.transcript.append({"role": "tool_result", "content": content or ""})
+                if call := run.pending.pop(block.tool_use_id, None):
+                    _count_repeats(run, (*call, content))
+
+
+def _count_repeats(run: Run, call: tuple) -> None:
+    run.repeats = run.repeats + 1 if call == run.last_call else 1
+    run.last_call = call
+    if run.repeats >= LOOP_LIMIT:
+        raise Looping(
+            f"stopped after the same tool call and result {run.repeats} times in a row"
+        )
 
 
 def trace(

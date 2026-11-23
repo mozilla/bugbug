@@ -36,6 +36,7 @@ METRICS = (
     "builds",
     "integrity",
     "timed_out",
+    "looped",
     "test_regressions",
 )
 
@@ -284,6 +285,8 @@ class Runner:
                     if out.get("error_class")
                     else ", timed out"
                     if out.get("timed_out")
+                    else ", looped"
+                    if out.get("looped")
                     else "",
                 )
                 record = {"id": row["id"], "rep": rep}
@@ -296,6 +299,7 @@ class Runner:
                         src, base, row, rep, baselines.get(row["id"]), patch
                     )
                     scores["timed_out"] = float(bool(out.get("timed_out")))
+                    scores["looped"] = float(bool(out.get("looped")))
                     log.info(
                         "%s rep %d: graded in %s: %s",
                         row["id"],

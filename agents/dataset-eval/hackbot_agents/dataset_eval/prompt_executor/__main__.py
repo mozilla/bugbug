@@ -19,7 +19,7 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .harnesses import Run, get_harness
+from .harnesses import Looping, Run, get_harness
 
 # Weave surfaces it as ``attributes.hackbot.harness`` on every call of the run.
 HARNESS_SPAN_ATTRIBUTE = "wandb.attributes.hackbot.harness"
@@ -62,6 +62,8 @@ class PromptExecutorResult(HackbotAgentResult):
     cost_usd: float | None = None
     latency_s: float = 0.0
     timed_out: bool = False
+    # Stopped for repeating one tool call; see ``LOOP_LIMIT``.
+    looped: bool = False
 
 
 async def main(ctx: HackbotContext) -> PromptExecutorResult:
@@ -72,7 +74,7 @@ async def main(ctx: HackbotContext) -> PromptExecutorResult:
     tag_traces(inputs.harness)
     started = time.monotonic()
     run = Run(transcript=[{"role": "user", "content": inputs.prompt}])
-    timed_out = False
+    timed_out = looped = False
     try:
         async with asyncio.timeout(inputs.timeout_s):
             await get_harness(inputs.harness).run(
@@ -80,8 +82,11 @@ async def main(ctx: HackbotContext) -> PromptExecutorResult:
             )
     except TimeoutError:
         timed_out = True
+    except Looping:
+        looped = True
     return PromptExecutorResult(
         timed_out=timed_out,
+        looped=looped,
         num_turns=sum(t["role"] == "assistant" for t in run.transcript),
         message=run.message,
         transcript=run.transcript,

@@ -11,6 +11,8 @@ from hackbot_agents.dataset_eval import dataset, runner, tree, weave_log
 from hackbot_agents.dataset_eval.grading import checks, tests
 from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
 from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
+    LOOP_LIMIT,
+    Looping,
     Run,
     harness_env,
     otari,
@@ -94,6 +96,29 @@ def test_claude_usage_by_model():
     assert _usage(result, []) == {
         "claude-opus-5-5": {"input_tokens": 3, "output_tokens": 4}
     }
+
+
+def test_a_run_stops_when_its_model_repeats_a_call_to_no_effect():
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+
+    def call(run, i, command, result):
+        record(run, AssistantMessage([ToolUseBlock(f"c{i}", "bash", command)], "m"))
+        record(run, UserMessage([ToolResultBlock(f"c{i}", result)]))
+
+    # Polling a log that changes is not a loop.
+    run = Run()
+    for i in range(LOOP_LIMIT + 5):
+        call(run, i, {"command": "tail build.log"}, f"{i}:00 compiling")
+    run = Run()
+    for i in range(LOOP_LIMIT - 1):
+        call(run, i, {"command": "rg x"}, "===")
+    with pytest.raises(Looping):
+        call(run, LOOP_LIMIT, {"command": "rg x"}, "===")
 
 
 def test_harness_env_keeps_only_own_vendor(monkeypatch):

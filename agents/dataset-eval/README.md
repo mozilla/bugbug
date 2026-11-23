@@ -16,7 +16,9 @@ One run is one experiment, in one container ([`runner.py`](hackbot_agents/datase
    baseline. The commit is recorded with the results.
 2. For each example, in turn: reset the tree, run the agent with a fresh HOME and
    TMPDIR and a time limit ([`isolation.py`](hackbot_agents/dataset_eval/isolation.py)),
-   then grade it and log it to Weave.
+   then grade it and log it to Weave. An agent whose model makes the same tool
+   call with the same result `LOOP_LIMIT` times in a row is stopped, and graded
+   like one out of time.
 
 Grading restores the test harness's own files, builds, reruns the row's tests and
 asks a judge, blind to the harness and model, for a 1-5 score. A patch that edits
@@ -80,10 +82,10 @@ directory off the repo.
 ## Metrics
 
 `test_progress` (per test file, the share of the gap to passing that the patch
-closes), `test_regressions`, `builds`, `integrity`, `quality`, each rubric
-criterion, and `cost_usd` as the harness reports it: Claude Code's own, or
-otari's for the open models. Codex reports no cost, so its runs are costed only
-in Weave's Cost column, which Weave prices from the token usage.
+closes), `test_regressions`, `builds`, `integrity`, `timed_out`, `looped`,
+`quality`, each rubric criterion, and `cost_usd` as the harness reports it:
+Claude Code's own, or otari's for the open models. Codex reports none, so its
+cost is what Weave prices its token usage at.
 
 ## Input
 
