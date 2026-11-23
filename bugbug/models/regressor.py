@@ -53,7 +53,8 @@ EVALUATION_MONTHS = 3
 # at the high end of the risk scale than at the low end, so the bands get narrower as the
 # risk increases.
 RISK_BAND_SHARES = (
-    ("l", 0.5),  # Lower than average risk.
+    ("vl", 0.2),  # Very low risk.
+    ("l", 0.3),  # Lower than average risk.
     ("a", 0.3),  # Average risk.
     ("h", 0.15),  # Higher than average risk.
     ("v", 0.05),  # Very high risk.

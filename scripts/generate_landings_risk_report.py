@@ -1021,6 +1021,7 @@ def notification(days: int) -> None:
         cur_team_data["high_risk_changes"] = 0
         cur_team_data["medium_risk_changes"] = 0
         cur_team_data["low_risk_changes"] = 0
+        cur_team_data["very_low_risk_changes"] = 0
         cur_team_data["prev_high_risk_changes"] = 0
         cur_team_data["new_regressions"] = 0
         cur_team_data["fixed_new_regressions"] = 0
@@ -1089,6 +1090,8 @@ def notification(days: int) -> None:
                     cur_team_data["medium_risk_changes"] += 1
                 elif bug["risk_band"] == "l":
                     cur_team_data["low_risk_changes"] += 1
+                elif bug["risk_band"] == "vl":
+                    cur_team_data["very_low_risk_changes"] += 1
 
                 if bug["regression"]:
                     if creation_date > datetime.utcnow() - relativedelta(weeks=1):
@@ -1490,14 +1493,15 @@ table {
             high_risk_changes = cur_team_data["high_risk_changes"]
             # Regression rates observed in each risk band.
             predicted_regressions = round(
-                0.40 * cur_team_data["very_high_risk_changes"]
-                + 0.24
+                0.45 * cur_team_data["very_high_risk_changes"]
+                + 0.23
                 * (
                     cur_team_data["high_risk_changes"]
                     - cur_team_data["very_high_risk_changes"]
                 )
-                + 0.12 * cur_team_data["medium_risk_changes"]
-                + 0.045 * cur_team_data["low_risk_changes"],
+                + 0.11 * cur_team_data["medium_risk_changes"]
+                + 0.047 * cur_team_data["low_risk_changes"]
+                + 0.021 * cur_team_data["very_low_risk_changes"],
                 1,
             )
             prev_high_risk_changes = cur_team_data["prev_high_risk_changes"]
@@ -1715,7 +1719,7 @@ The regression rate (regressions from the past two weeks / changes from this mon
 This week your team committed {high_risk_changes} high risk[^risk] changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
-[^risk]: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
+[^risk]: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 4 high risk changes cause a regression.
 
 Unfixed regressions from the past two weeks:
 

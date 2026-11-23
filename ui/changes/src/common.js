@@ -152,6 +152,7 @@ const VERY_HIGH_RISK_COLOR = "darkred";
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
 const LOW_RISK_COLOR = "green";
+const VERY_LOW_RISK_COLOR = "darkgreen";
 
 let taskclusterLandingsArtifact = (async function () {
   let json = await EXPIRE_CACHE.get("taskclusterLandingsArtifact");
@@ -561,7 +562,9 @@ export async function renderRiskChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, summary) => {
-      if (summary.risk_band == "l") {
+      if (summary.risk_band == "vl") {
+        counterObj.veryLow += 1;
+      } else if (summary.risk_band == "l") {
         counterObj.low += 1;
       } else if (summary.risk_band == "a") {
         counterObj.medium += 1;
@@ -578,8 +581,10 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   let high = [];
   let medium = [];
   let low = [];
+  let veryLow = [];
   for (let date in summaryData) {
     categories.push(date);
+    veryLow.push(summaryData[date].veryLow);
     low.push(summaryData[date].low);
     medium.push(summaryData[date].medium);
     high.push(summaryData[date].high);
@@ -605,9 +610,13 @@ export async function renderRiskChart(chartEl, bugSummaries) {
         name: "Lower",
         data: low,
       },
+      {
+        name: "Very low",
+        data: veryLow,
+      },
     ],
     categories,
-    "Evolution of lower/average/higher/very high risk changes",
+    "Evolution of very low/lower/average/higher/very high risk changes",
     "# of patches"
   );
 }
@@ -2916,7 +2925,11 @@ function addRow(
 
       const risk_text = document.createElement("span");
       risk_text.textContent = `${bugSummary.risk_band} risk`;
-      if (bugSummary.risk_band == "l") {
+      if (bugSummary.risk_band == "vl") {
+        // Very low risk.
+        risk_text.style.color = VERY_LOW_RISK_COLOR;
+        risk_text.textContent = "Very low";
+      } else if (bugSummary.risk_band == "l") {
         // Lower than average risk.
         risk_text.style.color = LOW_RISK_COLOR;
         risk_text.textContent = "Lower";
