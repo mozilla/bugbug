@@ -321,6 +321,36 @@ def get_commits(
     )
 
 
+# How many commits get_last_commit reads from the end of the commits DB before falling back to
+# reading all of them.
+LAST_COMMIT_RECENT_COMMITS = 256
+
+
+def get_last_commit(
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> CommitDict | None:
+    """Return the last commit that get_commits would return, or None if it would return none.
+
+    Only the end of the commits DB is read, unless none of the last commits passes the filters.
+    """
+    filters = {
+        "include_no_bug": include_no_bug,
+        "include_backouts": include_backouts,
+        "include_ignored": include_ignored,
+    }
+
+    recent_commits = db.read_last(COMMITS_DB, LAST_COMMIT_RECENT_COMMITS)
+    last_commit = collections.deque(filter_commits(recent_commits, **filters), maxlen=1)
+    # If fewer commits than requested were read, the whole DB was read.
+    if not last_commit and len(recent_commits) == LAST_COMMIT_RECENT_COMMITS:
+        logger.info("None of the last commits passes the filters, reading all commits")
+        last_commit = collections.deque(get_commits(**filters), maxlen=1)
+
+    return last_commit[0] if last_commit else None
+
+
 def get_revision_id(commit: CommitDict) -> int | None:
     match = PHABRICATOR_REVISION_REGEX.search(commit["desc"])
     if not match:
