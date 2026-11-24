@@ -31,7 +31,7 @@ from app.routers import webhooks
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from hackbot_client import RunStatus, TriggeredRun
+from hackbot_client import Identity, RunStatus, TriggeredRun
 from pydantic import ValidationError
 
 SECRET = "test-github-webhook-secret"
@@ -165,7 +165,7 @@ def _base(action: str, sender: dict | None = None) -> dict:
             "full_name": "mozilla/gecko-dev",
             "owner": {"login": "mozilla"},
         },
-        "sender": sender or {"login": "dev", "type": "User"},
+        "sender": sender or {"id": 42, "login": "dev", "type": "User"},
     }
 
 
@@ -224,7 +224,7 @@ def test_detect_issue_comment_on_pr():
         owner="mozilla",
         repo="gecko-dev",
         pr_number=7,
-        sender={"login": "dev", "type": "User"},
+        sender={"id": 42, "login": "dev", "type": "User"},
         comment=(
             '  <comment comment_id="1001" type="regular">\n'
             "    @hackbot fix\n"
@@ -399,10 +399,14 @@ class _FakeHackbotClient:
     def __init__(self):
         self.calls = []
         self.dedupe_keys = []
+        self.identities = []
         self.delay = 0.0
 
-    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
+    async def trigger_run(
+        self, agent_name, inputs, *, dedupe_key=None, source=None, identity=None
+    ):
         self.calls.append((agent_name, inputs))
+        self.identities.append((source, identity))
         is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
         self.dedupe_keys.append(dedupe_key)
         # After recording: like the real API, the run exists even if the caller
@@ -562,7 +566,12 @@ def test_route_ignores_unauthorized_sender(client, api, authorizer, head_lookups
     resp = _post(client, "issue_comment", _issue_comment())
     assert resp.json() == {"status": "ignored", "reason": "unauthorized user"}
     assert authorizer.checked == [
-        (INSTALLATION_ID, "mozilla", "gecko-dev", {"login": "dev", "type": "User"})
+        (
+            INSTALLATION_ID,
+            "mozilla",
+            "gecko-dev",
+            {"id": 42, "login": "dev", "type": "User"},
+        )
     ]
     # Unauthorized senders cost no further GitHub calls.
     assert head_lookups == []
@@ -635,6 +644,12 @@ def test_route_triggers_run_for_conversation_comment(
         )
     ]
     assert api.dedupe_keys == ["github-issue-comment:1001"]
+    assert api.identities == [
+        (
+            "github",
+            Identity(identity_provider="github", user_id="42", username="dev"),
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -744,7 +759,7 @@ def test_route_surfaces_trigger_failure(client):
     # A failure before the run exists spends no key, so a manual redelivery from
     # the App's settings is processed rather than deduped away.
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
+        async def trigger_run(self, agent_name, inputs, **kwargs):
             raise RuntimeError("api down")
 
     app.dependency_overrides[get_hackbot_client] = lambda: _FailingClient()
