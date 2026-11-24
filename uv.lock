@@ -2569,6 +2569,8 @@ dependencies = [
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "openai-codex" },
     { name = "pydantic-settings" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -2586,6 +2588,8 @@ requires-dist = [
     { name = "openai-codex", specifier = "==0.167.0" },
     { name = "pydantic-settings" },
     { name = "pygobject", marker = "extra == 'a11y'", specifier = ">=3.52" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 provides-extras = ["a11y"]
 

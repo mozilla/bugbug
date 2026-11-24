@@ -16,6 +16,7 @@ from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
     Run,
     harness_env,
     otari,
+    otari_wif,
     record,
     record_usage,
     trace,
@@ -811,6 +812,100 @@ def test_otari_settle_adds_what_the_stream_left_out(monkeypatch):
 
     assert run.usage == {"m": {"input_tokens": 15, "output_tokens": 9}}
     assert run.cost_usd == 2.0
+
+
+def _otari_upstream(seen):
+    """An otari that grants numbered tokens and echoes what it was sent."""
+    import httpx
+
+    def handle(request):
+        if request.url.path == "/api/v1/oauth/token":
+            grant = json.loads(request.content)
+            assert grant["grant_type"] == otari_wif.GRANT_TYPE
+            assert grant["assertion"] == "google-jwt"
+            assert grant["federation_rule_id"] == "fdrl_1"
+            seen.append("exchange")
+            return httpx.Response(
+                200, json={"access_token": f"tok{len(seen)}", "expires_in": 600}
+            )
+        seen.append((request.url.path, request.headers["authorization"]))
+        return httpx.Response(200, stream=httpx.ByteStream(b"data: hi\n\n"))
+
+    return httpx.MockTransport(handle)
+
+
+def test_otari_federation_renews_its_token_and_proxies_with_it(monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(otari_wif, "_identity_token", lambda audience: "google-jwt")
+    clock = [0.0]
+    monkeypatch.setattr(otari_wif.time, "monotonic", lambda: clock[0])
+    seen = []
+    base = "https://otari.test/api"
+
+    async def go():
+        async with httpx.AsyncClient(transport=_otari_upstream(seen)) as upstream:
+            token = otari_wif.AccessToken(upstream, base, "fdrl_1")
+            app = otari_wif.proxy(upstream, base, token)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://proxy"
+            ) as harness:
+                headers = {"Authorization": "Bearer federated", "Otari-Tags": "t"}
+                first = await harness.post("/api/v1/chat/completions", headers=headers)
+                clock[0] = 500
+                await harness.post("/api/v1/chat/completions", headers=headers)
+                clock[0] = 545
+                await harness.post("/api/v1/chat/completions", headers=headers)
+        return first
+
+    first = asyncio.run(go())
+    assert first.text == "data: hi\n\n"
+    assert seen == [
+        "exchange",
+        ("/api/v1/chat/completions", "Bearer tok1"),
+        ("/api/v1/chat/completions", "Bearer tok1"),
+        "exchange",
+        ("/api/v1/chat/completions", "Bearer tok4"),
+    ]
+
+
+def test_otari_federation_serves_the_harnesses_only_with_a_rule(monkeypatch):
+    import httpx
+
+    monkeypatch.delenv(otari_wif.RULE_ID_ENV, raising=False)
+    monkeypatch.setenv("OTARI_BASE_URL", "https://otari.test/api")
+    monkeypatch.setenv("OTARI_API_KEY", "key")
+
+    async def inert():
+        async with otari_wif.serving():
+            return os.environ["OTARI_BASE_URL"]
+
+    assert asyncio.run(inert()) == "https://otari.test/api"
+
+    seen = []
+    client = httpx.AsyncClient
+    monkeypatch.setattr(
+        otari_wif.httpx,
+        "AsyncClient",
+        lambda **kw: client(transport=_otari_upstream(seen), **kw),
+    )
+    monkeypatch.setattr(otari_wif, "_identity_token", lambda audience: "google-jwt")
+    monkeypatch.setenv(otari_wif.RULE_ID_ENV, "fdrl_1")
+
+    async def federated():
+        async with otari_wif.serving():
+            url, key = os.environ["OTARI_BASE_URL"], os.environ["OTARI_API_KEY"]
+            async with client() as harness:
+                response = await harness.get(
+                    f"{url}/v1/models/x", headers={"Authorization": f"Bearer {key}"}
+                )
+        return url, response
+
+    url, response = asyncio.run(federated())
+    assert url.startswith("http://127.0.0.1:") and response.status_code == 200
+    assert seen == ["exchange", ("/api/v1/models/x", "Bearer tok1")]
+    assert os.environ["OTARI_BASE_URL"] == "https://otari.test/api"
+    assert os.environ["OTARI_API_KEY"] == "key"
 
 
 def test_otari_settle_prices_the_stream_without_usage_access(monkeypatch):

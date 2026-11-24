@@ -76,8 +76,9 @@ Two things those files do not tell you:
   API (`RUN_ID`, the results bucket/prefix/policy, one var per input-schema field, and
   `PARENT_ARTIFACTS` for a chained run); static
   Job env fixed at deploy time (`BROKER_URL`, `SOURCE_REPO`, the Anthropic federation ids,
-  `OPENAI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only fallbacks
-  (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `WANDB_API_KEY`, `ARTIFACTS_DIR`). Only the first
+  `OPENAI_FEDERATION_RULE_ID`, `OTARI_FEDERATION_RULE_ID`, `WEAVE_PROJECT`); and local-only
+  fallbacks (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OTARI_API_KEY`, `WANDB_API_KEY`,
+  `ARTIFACTS_DIR`). Only the first
   varies per run.
 
 The listener also honours `DRY_RUN=true`, which logs intended calls without POSTing them.

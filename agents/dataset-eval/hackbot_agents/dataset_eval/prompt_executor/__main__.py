@@ -10,6 +10,7 @@ result in ``summary.json``, traced by the runtime.
 """
 
 import asyncio
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .harnesses import Looping, Run, get_harness
+from .harnesses import Looping, Run, get_harness, otari, otari_wif
 
 # Weave surfaces it as ``attributes.hackbot.harness`` on every call of the run.
 HARNESS_SPAN_ATTRIBUTE = "wandb.attributes.hackbot.harness"
@@ -76,8 +77,14 @@ async def main(ctx: HackbotContext) -> PromptExecutorResult:
     run = Run(transcript=[{"role": "user", "content": inputs.prompt}])
     timed_out = looped = False
     try:
-        async with asyncio.timeout(inputs.timeout_s):
-            await get_harness(inputs.harness).run(
+        harness = get_harness(inputs.harness)
+        auth = (
+            otari_wif.serving()
+            if harness.vendor == otari.PROVIDER
+            else contextlib.nullcontext()
+        )
+        async with auth, asyncio.timeout(inputs.timeout_s):
+            await harness.run(
                 inputs.prompt, inputs.source_repo, inputs.model, inputs.effort, run
             )
     except TimeoutError:
