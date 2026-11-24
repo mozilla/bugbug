@@ -2496,6 +2496,32 @@ def test_get_commits_from_db(monkeypatch):
     assert get(1) == {}
 
 
+def test_get_new_revs(tmp_path):
+    repo_dir = str(tmp_path / "repo")
+    hglib.init(repo_dir)
+
+    with hglib.open(repo_dir) as hg:
+
+        def commit(name, parent=None):
+            if parent is not None:
+                hg.update(parent, clean=True)
+            path = os.path.join(repo_dir, name)
+            with open(path, "w") as f:
+                f.write(name)
+            hg.add([path.encode()])
+            return hg.commit(message=name, user="bugbug")[1]
+
+        base = commit("base")
+        landed = commit("landed")
+        # A commit pulled from try, with a higher revision number than the next autoland one.
+        commit("try", base)
+        tip = commit("tip", landed)
+
+        assert repository.get_new_revs(hg, base.decode(), tip.decode()) == [landed, tip]
+        assert repository.get_new_revs(hg, landed.decode(), tip.decode()) == [tip]
+        assert repository.get_new_revs(hg, tip.decode(), tip.decode()) == []
+
+
 def test_get_revision_id():
     commit = {
         "desc": "My desc",

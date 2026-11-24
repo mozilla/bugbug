@@ -59,19 +59,63 @@ def test_refresh_data_keeps_going_after_a_failure(
     assert calls == ["tasks", "build platforms", "commits"]
 
 
+@responses.activate
 def test_refresh_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    tip = "a" * 40
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/integration/autoland/json-rev/default",
+        json={"node": tip},
+    )
     calls: list[object] = []
     monkeypatch.setattr(
         boot.repository,
         "pull",
         lambda repo_dir, branch, revision: calls.append(("pull", branch, revision)),
     )
-    monkeypatch.setattr(boot, "update_commits", lambda: calls.append("update"))
+    monkeypatch.setattr(
+        boot,
+        "update_commits",
+        lambda autoland_head: calls.append(("update", autoland_head)),
+    )
 
     boot.refresh_commits()
 
     # The latest autoland commits are pulled before being mined.
-    assert calls == [("pull", "integration/autoland", "tip"), "update"]
+    assert calls == [("pull", "integration/autoland", tip), ("update", tip)]
+
+
+def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    unknown, known, merge_parent, new = "1" * 40, "2" * 40, "4" * 40, "3" * 40
+    with open(boot.repository.COMMITS_DB, "w") as f:
+        for node in (merge_parent, known, unknown):
+            f.write(json.dumps({"node": node}) + "\n")
+
+    monkeypatch.setattr(boot.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+
+    # The last commits of the DB which are not in the clone are skipped.
+    def get_new_revs(hg, base, head):
+        assert head == "a" * 40
+        if base == unknown:
+            raise boot.hglib.error.CommandError(
+                [], 255, b"", b"abort: unknown revision"
+            )
+        assert base == known
+        # The other parent of a merge is not an ancestor of the last commit, but it is in the DB.
+        return [merge_parent.encode(), new.encode()]
+
+    mined: list[bytes] = []
+
+    def download_commits(repo_dir, revs):
+        mined.extend(revs)
+        return ()
+
+    monkeypatch.setattr(boot.repository, "get_new_revs", get_new_revs)
+    monkeypatch.setattr(boot.repository, "download_commits", download_commits)
+
+    boot.update_commits("a" * 40)
+
+    assert mined == [new.encode()]
 
 
 def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:

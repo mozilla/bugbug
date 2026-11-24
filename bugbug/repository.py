@@ -402,13 +402,10 @@ def update_commits_index() -> None:
         index.close()
 
 
-def get_commits_from_db(nodes: Iterable[str]) -> dict[str, CommitDict]:
-    """Return the commits among `nodes` which are already in the commits DB, by node.
+def _get_commits_offsets(nodes: Iterable[str]) -> dict[str, int]:
+    """Return the offsets in the commits DB of the commits among `nodes` which are in it.
 
-    These commits can't be mined again (with save=False), as their experience features would be
-    calculated after the ones of the commits pushed after them, which are in the experiences DB.
-    The commits are found through an index of the DB, which is updated first with the commits
-    added to the DB since the last update.
+    The index of the DB is updated first with the commits added to the DB since the last update.
     """
     if not os.path.exists(COMMITS_DB):
         return {}
@@ -416,13 +413,30 @@ def get_commits_from_db(nodes: Iterable[str]) -> dict[str, CommitDict]:
     index = LMDBDict(COMMITS_INDEX_DB)
     try:
         _update_commits_index(index)
-        offsets = {
+        return {
             node: int(bytes(offset))
             for node in nodes
             if (offset := index.get(node.encode("ascii"))) is not None
         }
     finally:
         index.close()
+
+
+def get_nodes_in_db(nodes: Iterable[str]) -> set[str]:
+    """Return the commits among `nodes` which are in the commits DB."""
+    return set(_get_commits_offsets(nodes))
+
+
+def get_commits_from_db(nodes: Iterable[str]) -> dict[str, CommitDict]:
+    """Return the commits among `nodes` which are already in the commits DB, by node.
+
+    These commits can't be mined again (with save=False), as their experience features would be
+    calculated after the ones of the commits pushed after them, which are in the experiences DB.
+    The commits are found through an index of the DB.
+    """
+    offsets = _get_commits_offsets(nodes)
+    if not offsets:
+        return {}
 
     commits: dict[str, CommitDict] = {}
     with open(COMMITS_DB, "rb") as f:
@@ -1157,6 +1171,22 @@ def get_revs(hg, rev_start=0, rev_end="default"):
     )
     x = hg.rawcommand(args)
     return x.splitlines()
+
+
+def get_new_revs(hg: hglib.client, base: str, head: str) -> list[bytes]:
+    """Get the non-merge commits on the default branch which are ancestors of `head`, but not of `base`.
+
+    Unlike the commits after `base` by revision number, these don't include the commits from other
+    repositories pulled in the same clone (e.g. try).
+    """
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="default",
+        rev=f"::{head} - ::{base}",
+    )
+    return hg.rawcommand(args).splitlines()
 
 
 class Experiences:
