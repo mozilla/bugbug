@@ -37,6 +37,9 @@ class _FakeCtx:
         self.prepared_ref = ref
         return self._repo
 
+    def record_target(self, revision_id: int) -> None:
+        self.target = (revision_id, _git(self._repo, "rev-parse", "HEAD").strip())
+
     def record_source_base(self) -> None:
         self.rebased_base = True
 
@@ -358,6 +361,14 @@ async def test_only_the_target_is_left_uncommitted(
     assert (repo / "file.txt").read_text() == f"{contents[target]}\n"
     assert _git(repo, "diff", "HEAD", "--name-only").split() == ["file.txt"]
     assert ctx.rebased_base is True
+    # The recorded target commit holds exactly the target's change.
+    revision_id, commit = ctx.target
+    assert revision_id == target
+    assert _git(repo, "show", f"{commit}:file.txt") == f"{contents[target]}\n"
+    assert (
+        _git(repo, "rev-parse", f"{commit}~1").strip()
+        == _git(repo, "rev-parse", "HEAD").strip()
+    )
 
 
 async def test_each_ancestor_gets_its_own_commit(monkeypatch, tmp_path):

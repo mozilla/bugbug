@@ -347,6 +347,30 @@ def test_publish_changes_skips_try_push_without_action(tmp_path, monkeypatch):
     ).exists()
 
 
+def test_a_revision_stacked_on_the_target_leaves_the_target_out(tmp_path, monkeypatch):
+    # mozilla/bugbug#7655: measured from the source base, the new revision's
+    # diff repeated the target's changes and could not apply on top of it.
+    hb = _hb_with_source(tmp_path, monkeypatch)
+    bases = []
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.build_phabricator_diff",
+        lambda repo, base, repo_url: bases.append(base),
+    )
+    monkeypatch.setattr(
+        "hackbot_runtime.context.changes.base_commit", lambda repo: "targetsha"
+    )
+    hb.record_target(42)
+    hb.actions.record(
+        "phabricator.submit_patch",
+        {"bug_id": 1, "title": "Fix", "parent_revision_id": 42},
+        reasoning="r",
+    )
+
+    hb.publish_changes()
+
+    assert bases == ["targetsha"]
+
+
 def test_publish_changes_skips_phabricator_diff_without_action(tmp_path, monkeypatch):
     hb = _hb_with_source(tmp_path, monkeypatch)
     called = []

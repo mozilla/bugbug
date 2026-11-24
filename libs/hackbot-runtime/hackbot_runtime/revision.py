@@ -107,7 +107,11 @@ async def checkout_revision(
     # Whatever was seeded above is the agent's starting point, not its work.
     ctx.record_source_base()
 
-    _apply(repo, stack.target, should_commit=False)
+    # Commit the target so a revision stacked on it can leave its changes out,
+    # then undo the commit: the agent expects them uncommitted.
+    _apply(repo, stack.target)
+    ctx.record_target(stack.target.revision_id)
+    changes.uncommit_head(repo)
 
 
 async def _resolve_stack(client: PhabricatorClient, revision_id: int) -> Stack:
