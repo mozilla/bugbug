@@ -2443,6 +2443,59 @@ def test_get_last_commit_none(monkeypatch):
     assert repository.get_last_commit() is None
 
 
+def test_get_commits_from_db(monkeypatch):
+    # Small blocks, to read the DB in several of them, with commits spanning two blocks.
+    monkeypatch.setattr(repository, "COMMITS_INDEX_BLOCK_SIZE", 7)
+
+    def commit(i, **kwargs):
+        return {"node": f"{i:040x}", "desc": str(i), **kwargs}
+
+    def write(commits, mode):
+        with open(repository.COMMITS_DB, mode) as f:
+            for c in commits:
+                f.write(json.dumps(c, separators=(",", ":")) + "\n")
+
+    def get(*nums):
+        return repository.get_commits_from_db(f"{i:040x}" for i in nums)
+
+    db_commits = [commit(i) for i in range(5)]
+    write(db_commits, "w")
+
+    assert get(1, 3, 7) == {c["node"]: c for c in (db_commits[1], db_commits[3])}
+
+    # The commits appended to the DB are indexed on the next lookup, also when they don't start
+    # with their node.
+    new_commits = [commit(7), {"desc": "8", "node": f"{8:040x}"}]
+    write(new_commits, "a")
+    assert get(0, 7, 8) == {
+        db_commits[0]["node"]: db_commits[0],
+        new_commits[0]["node"]: new_commits[0],
+        new_commits[1]["node"]: new_commits[1],
+    }
+
+    # A partially written commit is not indexed until it is complete.
+    with open(repository.COMMITS_DB, "a") as f:
+        f.write('{"node":"' + f"{9:040x}")
+    assert get(9) == {}
+    with open(repository.COMMITS_DB, "a") as f:
+        f.write('","desc":"9"}\n')
+    assert get(9) == {f"{9:040x}": {"node": f"{9:040x}", "desc": "9"}}
+
+    # Rewriting the DB (e.g. to refresh the coverage of the commits) invalidates the index, as
+    # the commits can move.
+    def set_commit_coverage(commits):
+        for c in commits:
+            c["desc"] *= 3
+
+    monkeypatch.setattr(repository, "download_coverage_mapping", lambda: None)
+    monkeypatch.setattr(repository, "set_commit_coverage", set_commit_coverage)
+    repository.update_commits()
+    assert get(9) == {f"{9:040x}": {"node": f"{9:040x}", "desc": "999"}}
+
+    os.remove(repository.COMMITS_DB)
+    assert get(1) == {}
+
+
 def test_get_revision_id():
     commit = {
         "desc": "My desc",

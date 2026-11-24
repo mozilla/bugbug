@@ -559,6 +559,10 @@ def boot_worker() -> None:
         try:
             utils.extract_file(f"{repository.COMMITS_DB}.zst")
             logger.info("Commits DB extracted.")
+            # The index of a previous DB would be wrong.
+            repository.delete_commits_index()
+            repository.update_commits_index()
+            logger.info("Commits DB indexed.")
             return True
         except FileNotFoundError:
             logger.info("Commits DB not extracted, but missing models are allowed.")
