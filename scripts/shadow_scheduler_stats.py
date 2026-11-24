@@ -128,13 +128,16 @@ def is_backstop(push: mozci.push.Push) -> bool | None:
 # configs it selected for them, without what the taskgraph adds (e.g. the other
 # groups of the tasks running them).
 PLAIN_BUGBUG_SCHEDULERS = {
+    "bugbug_plain_config_selection_very_low": "very_low",
     "bugbug_plain_config_selection_low": "low",
     "bugbug_plain_config_selection_medium": "medium",
     "bugbug_plain_config_selection_high": "high",
 }
 
 # The thresholds the taskgraph uses for the confidence levels when bugbug doesn't
-# return the ones matching its current models.
+# return the ones matching its current models. There is none for the "very_low"
+# level, which only exists with the thresholds computed when training the models:
+# its scheduler doesn't run on pushes whose reply doesn't have them.
 DEFAULT_CONFIDENCE_THRESHOLDS = {"low": 0.7, "medium": 0.8, "high": 0.9}
 
 
@@ -246,7 +249,10 @@ def plain_bugbug_schedulers(
 
     selections = {}
     for name, level in PLAIN_BUGBUG_SCHEDULERS.items():
-        threshold = thresholds.get(level, DEFAULT_CONFIDENCE_THRESHOLDS[level])
+        threshold = thresholds.get(level, DEFAULT_CONFIDENCE_THRESHOLDS.get(level))
+        if threshold is None:
+            continue
+
         selected: dict[str, set[str]] = {}
         for group, confidence in groups.items():
             if confidence <= threshold:
