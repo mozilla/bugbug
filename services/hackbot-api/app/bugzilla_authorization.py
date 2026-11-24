@@ -21,33 +21,31 @@ class BugzillaAuthorizer:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
         self._authorized_group_name = authorized_group_name
-        self._cache: TTLCache[str, bool] = TTLCache(
+        self._cache: TTLCache[str, str | None] = TTLCache(
             maxsize=cache_maxsize,
             ttl=cache_ttl_seconds,
         )
 
-    async def is_authorized(self, login: str) -> bool:
-        """Return whether a Bugzilla login belongs to the authorized group."""
+    async def is_authorized(self, login: str) -> str | None:
+        """Return the nickname of a login in the authorized group, else None."""
         login = login.lower()
 
-        cached = self._cache.get(login)
-        if cached is not None:
-            return cached
-
-        authorized = await self._is_user_in_group(login, self._authorized_group_name)
-        self._cache[login] = authorized
-        return authorized
+        if login not in self._cache:
+            self._cache[login] = await self._is_user_in_group(
+                login, self._authorized_group_name
+            )
+        return self._cache[login]
 
     # TODO: Move this REST call to a shared Bugzilla client library (#6459).
-    async def _is_user_in_group(self, login: str, group_name: str) -> bool:
-        """Return whether a Bugzilla account exists and belongs to a group."""
+    async def _is_user_in_group(self, login: str, group_name: str) -> str | None:
+        """Return the nickname of a Bugzilla account in a group, else None."""
         async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
             response = await client.get(
                 f"{self._api_url}/user",
                 params={
                     "names": login,
                     "groups": group_name,
-                    "include_fields": "name",
+                    "include_fields": "name,nick",
                     # Report an unknown login in ``faults`` instead of failing
                     # the request, so it maps to "not authorized", not a 500.
                     "permissive": "1",
@@ -55,4 +53,5 @@ class BugzillaAuthorizer:
                 headers={"X-Bugzilla-API-Key": self._api_key},
             )
         response.raise_for_status()
-        return bool(response.json().get("users"))
+        users = response.json().get("users")
+        return users[0]["nick"] if users else None

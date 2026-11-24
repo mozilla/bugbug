@@ -603,9 +603,15 @@ def authorizer():
     return _FakeAuthorizer()
 
 
+class _FakeBugzillaAuthorizer(_FakeAuthorizer):
+    async def is_authorized(self, actor):
+        self.checked.append(actor)
+        return "sparky" if self.allowed else None
+
+
 @pytest.fixture
 def bugzilla_authorizer():
-    return _FakeAuthorizer()
+    return _FakeBugzillaAuthorizer()
 
 
 @pytest.fixture
@@ -904,7 +910,7 @@ def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
             Identity(
                 identity_provider="bugzilla",
                 user_id="560562",
-                username="Greg Mierzwinski [:sparky]",
+                username="sparky",
             ),
         )
     ]

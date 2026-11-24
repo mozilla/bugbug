@@ -228,7 +228,8 @@ async def bugzilla_webhook(
     if detected is None:
         return {"status": "ignored", "reason": "no actionable Hackbot needinfo"}
 
-    if not await authorizer.is_authorized(detected.user_login):
+    nick = await authorizer.is_authorized(detected.user_login)
+    if nick is None:
         log.info(
             "Ignored Bugzilla needinfo webhook for bug %s: %s is not authorized",
             detected.bug_id,
@@ -248,7 +249,7 @@ async def bugzilla_webhook(
         identity=Identity(
             identity_provider="bugzilla",
             user_id=str(detected.user_id),
-            username=detected.user_real_name,
+            username=nick,
         ),
     )
     if not run.is_new:
