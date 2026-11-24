@@ -244,6 +244,12 @@ async def bugzilla_webhook(
             "comment": detected.comment,
         },
         dedupe_key=f"ni{detected.flag_id}",
+        source="bugzilla",
+        identity=Identity(
+            identity_provider="bugzilla",
+            user_id=str(detected.user_id),
+            username=detected.user_real_name,
+        ),
     )
     if not run.is_new:
         log.info(

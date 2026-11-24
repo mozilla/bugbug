@@ -33,7 +33,7 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
-from hackbot_client import RunStatus, TriggeredRun
+from hackbot_client import Identity, RunStatus, TriggeredRun
 from sqlalchemy.dialects import postgresql
 
 SECRET = "test-secret"
@@ -569,9 +569,13 @@ class _FakeHackbotClient:
     def __init__(self):
         self.calls = []
         self.dedupe_keys = []
+        self.identities = []
 
-    async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
+    async def trigger_run(
+        self, agent_name, inputs, *, dedupe_key=None, source=None, identity=None
+    ):
         self.calls.append((agent_name, inputs))
+        self.identities.append((source, identity))
         # Like the API's unique index: a key seen before resolves to the
         # existing run and is not new to this request.
         is_new = dedupe_key is None or dedupe_key not in self.dedupe_keys
@@ -894,6 +898,16 @@ def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
             },
         )
     ]
+    assert fake_api.identities == [
+        (
+            "bugzilla",
+            Identity(
+                identity_provider="bugzilla",
+                user_id="560562",
+                username="Greg Mierzwinski [:sparky]",
+            ),
+        )
+    ]
     assert bugzilla_authorizer.checked == ["gmierzwinski@mozilla.com"]
 
 
@@ -935,7 +949,7 @@ def test_bugzilla_route_keys_retry_same_but_later_event_differently(client):
 
 def test_bugzilla_route_surfaces_failed_dispatch(client):
     class _FailingClient:
-        async def trigger_run(self, agent_name, inputs, *, dedupe_key=None):
+        async def trigger_run(self, agent_name, inputs, **kwargs):
             raise RuntimeError("run creation failed")
 
     app.dependency_overrides[get_hackbot_client] = lambda: _FailingClient()

@@ -13,7 +13,9 @@ class BugzillaNeedinfoEvent:
     bug_id: int
     flag_id: int
     comment: str
+    user_id: int
     user_login: str
+    user_real_name: str | None
 
 
 def detect_needinfo_request(
@@ -85,5 +87,11 @@ def detect_needinfo_request(
         "bug context if none exists."
     )
     return BugzillaNeedinfoEvent(
-        bug_id=bug_id, flag_id=flag_id, comment=comment, user_login=actor_login
+        bug_id=bug_id,
+        flag_id=flag_id,
+        comment=comment,
+        user_id=event["user"]["id"],
+        user_login=actor_login,
+        # BMO sends "" for a user without a real name.
+        user_real_name=event["user"]["real_name"] or None,
     )
