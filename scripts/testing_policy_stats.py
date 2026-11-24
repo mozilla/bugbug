@@ -30,7 +30,11 @@ class TestingPolicyStatsGenerator(object):
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         logger.info("Updating commits DB...")
-        latest_commit = repository.get_last_commit()
+        # Start after the last commit of the DB, not the last filtered one, or the commits after it
+        # that are filtered out (e.g. backouts) would be mined (and added to the DB) again.
+        latest_commit = repository.get_last_commit(
+            include_no_bug=True, include_backouts=True, include_ignored=True
+        )
         assert latest_commit is not None
 
         repository.download_commits(
