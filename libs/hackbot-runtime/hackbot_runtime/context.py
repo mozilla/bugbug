@@ -309,7 +309,7 @@ class HackbotContext(BaseSettings):
         meta_key: str = "changes/changes.json",
         phabricator_diff_key: str = "changes/phabricator_diff.json",
         try_push_key: str = "changes/try_push.json",
-        github_commits_key: str = "changes/github_commits.json",
+        github_commit_key: str = "changes/github_commit.json",
     ) -> str | None:
         """Collect the agent's source-tree changes and publish them as artifacts."""
         if self._source_base is None:
@@ -341,23 +341,14 @@ class HackbotContext(BaseSettings):
                 self.publish_json(phabricator_diff_key, diff_payload)
 
         if recorded_types & github.PATCH_ACTION_TYPES:
-            # From the published base, like the try push: the commits are
-            # recreated on GitHub on top of it, so it has to be a commit the
-            # repository already has.
-            try:
-                github_payload = changes.build_github_commits(
-                    self.repo_path,
-                    self._published_base,
-                    self._config.source.repo_url,
-                )
-            except Exception:
-                # Best-effort, as for the Phabricator diff: without the
-                # artifact the action fails when applied, saying so, rather
-                # than failing an otherwise successful run here.
-                log.warning("Could not build the GitHub commits", exc_info=True)
-                github_payload = None
+            # From the published base, like the try push: the commit is created
+            # on GitHub on top of it, so it has to be a commit the repository
+            # already has.
+            github_payload = changes.build_github_commit(
+                self.repo_path, self._published_base, self._config.source.repo_url
+            )
             if github_payload is not None:
-                self.publish_json(github_commits_key, github_payload)
+                self.publish_json(github_commit_key, github_payload)
 
         if recorded_types & TRY_ACTION_TYPES:
             # From the *published* base, not `_source_base`: Lando has to

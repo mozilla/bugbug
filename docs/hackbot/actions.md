@@ -84,11 +84,13 @@ still exists.
 
 `github.submit_patch` is the GitHub counterpart of `phabricator.submit_patch`, for an agent
 whose `[source].repo_url` is on GitHub. hackbot-api has no checkout to apply a patch in, so
-`publish_changes` also captures each of the run's commits (message, author and changed
-files) as `changes/github_commits.json`. The handler recreates those commits through
-GitHub's Git Data API on a `hackbot/<run_id>` branch of the repository and opens a draft
-pull request against its default branch, with the GitHub App's credentials (so the App
-must be installed on that repository, with `contents: write` and `pull_requests: write`).
+`publish_changes` also captures the run's changes, squashed into one commit as for
+Phabricator, as `changes/github_commit.json`: each changed file with its new contents. If
+that fails, the run fails. The handler creates the commit through GitHub's Git Data API, with
+the pull request's title and body as its message, on a `hackbot/<run_id>` branch of the
+repository. It then opens a draft pull request against the default branch, with the GitHub
+App's credentials (so the App must be installed on that repository, with `contents: write`
+and `pull_requests: write`). The App is the commit's author and committer, and signs it.
 Retrying reuses the branch and any pull request already open from it.
 
 The artifact is written by the agent, so it never decides where hackbot writes. The target

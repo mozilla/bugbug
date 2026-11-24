@@ -13,7 +13,7 @@ import builtins
 from hackbot_runtime.changes import (
     _git,
     _synthetic_commit,
-    build_github_commits,
+    build_github_commit,
     build_phabricator_diff,
     build_try_push,
     has_changes,
@@ -212,53 +212,52 @@ def test_build_try_push_rejects_abbreviated_base(tmp_path):
     assert build_try_push(tmp_path, base[:12]) is None
 
 
-# --- build_github_commits ------------------------------------------------ #
+# --- build_github_commit ------------------------------------------------- #
 
 _REPO_URL = "https://github.com/owner/repo.git"
 
 
-def _changes_by_path(commit):
-    return {change["path"]: change for change in commit["changes"]}
+def _changes_by_path(payload):
+    return {change["path"]: change for change in payload["changes"]}
 
 
-def test_build_github_commits_one_entry_per_commit(tmp_path):
+def test_build_github_commit_squashes_the_runs_commits(tmp_path):
     base = _init_repo(tmp_path)
-    _commit_change(tmp_path, "one\n", message="First\n\nWith a body.")
+    _commit_change(tmp_path, "one\n", message="First")
+    (tmp_path / "added.txt").write_text("added\n")
     _commit_change(tmp_path, "two\n", message="Second")
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
+    payload = build_github_commit(tmp_path, base, _REPO_URL)
 
     assert payload["repo_url"] == _REPO_URL
     assert payload["base_commit"] == base
-    first, second = payload["commits"]
-    assert first["message"] == "First\n\nWith a body."
-    assert second["message"] == "Second"
-    assert first["author"]["name"] == "Test"
-    assert first["author"]["email"] == "test@test.com"
-    assert first["author"]["date"]
-    # Each commit carries the file as it is at that commit, not at HEAD.
-    assert base64.b64decode(first["changes"][0]["content"]) == b"one\n"
-    assert base64.b64decode(second["changes"][0]["content"]) == b"two\n"
-    assert second["changes"][0] == {
-        "path": "file.txt",
-        "mode": "100644",
-        "content": base64.b64encode(b"two\n").decode(),
-    }
+    # One entry per path, with its content at HEAD: the file both commits
+    # changed is uploaded once.
+    assert payload["changes"] == [
+        {
+            "path": "added.txt",
+            "mode": "100644",
+            "content": base64.b64encode(b"added\n").decode(),
+        },
+        {
+            "path": "file.txt",
+            "mode": "100644",
+            "content": base64.b64encode(b"two\n").decode(),
+        },
+    ]
 
 
-def test_build_github_commits_includes_uncommitted_work(tmp_path):
+def test_build_github_commit_includes_uncommitted_work(tmp_path):
     base = _init_repo(tmp_path)
     (tmp_path / "file.txt").write_text("edited\n")
     (tmp_path / "new.txt").write_text("untracked\n")
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
+    payload = build_github_commit(tmp_path, base, _REPO_URL)
 
-    (commit,) = payload["commits"]
-    assert commit["message"] == "Uncommitted agent changes"
-    assert set(_changes_by_path(commit)) == {"file.txt", "new.txt"}
+    assert set(_changes_by_path(payload)) == {"file.txt", "new.txt"}
 
 
-def test_build_github_commits_records_deletions_modes_and_binaries(tmp_path):
+def test_build_github_commit_records_deletions_modes_and_binaries(tmp_path):
     base = _init_repo(tmp_path)
     (tmp_path / "file.txt").unlink()
     script = tmp_path / "dir with space" / "run.sh"
@@ -267,9 +266,9 @@ def test_build_github_commits_records_deletions_modes_and_binaries(tmp_path):
     script.chmod(0o755)
     (tmp_path / "image.bin").write_bytes(b"\x00\xff\x10")
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
+    payload = build_github_commit(tmp_path, base, _REPO_URL)
 
-    changes = _changes_by_path(payload["commits"][0])
+    changes = _changes_by_path(payload)
     assert changes["file.txt"] == {
         "path": "file.txt",
         "mode": "100644",
@@ -279,20 +278,20 @@ def test_build_github_commits_records_deletions_modes_and_binaries(tmp_path):
     assert base64.b64decode(changes["image.bin"]["content"]) == b"\x00\xff\x10"
 
 
-def test_build_github_commits_reports_a_rename_as_delete_and_add(tmp_path):
+def test_build_github_commit_reports_a_rename_as_delete_and_add(tmp_path):
     base = _init_repo(tmp_path)
     _git(tmp_path, "mv", "file.txt", "renamed.txt")
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
+    payload = build_github_commit(tmp_path, base, _REPO_URL)
 
-    changes = _changes_by_path(payload["commits"][0])
+    changes = _changes_by_path(payload)
     assert changes["file.txt"]["deleted"] is True
     assert base64.b64decode(changes["renamed.txt"]["content"]) == (
         b"line1\nline2\nline3\n"
     )
 
 
-def test_build_github_commits_pairs_each_path_with_its_own_entry(tmp_path):
+def test_build_github_commit_pairs_each_path_with_its_own_entry(tmp_path):
     # Paths with spaces, next to plain ones, land on the right header: each
     # path gets its own content and mode, not a neighbour's.
     base = _init_repo(tmp_path)
@@ -303,12 +302,11 @@ def test_build_github_commits_pairs_each_path_with_its_own_entry(tmp_path):
     nested.write_text("#!/bin/sh\n")
     nested.chmod(0o755)
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
+    payload = build_github_commit(tmp_path, base, _REPO_URL)
 
-    (commit,) = payload["commits"]
     assert [
         (c["path"], c["mode"], base64.b64decode(c["content"]))
-        for c in commit["changes"]
+        for c in payload["changes"]
     ] == [
         ("a file.txt", "100644", b"spaced\n"),
         ("plain.txt", "100644", b"plain\n"),
@@ -316,21 +314,21 @@ def test_build_github_commits_pairs_each_path_with_its_own_entry(tmp_path):
     ]
 
 
-def test_build_github_commits_keeps_a_commit_that_changes_no_files(tmp_path):
+def test_build_github_commit_no_changes_returns_none(tmp_path):
+    base = _init_repo(tmp_path)
+
+    assert build_github_commit(tmp_path, base, _REPO_URL) is None
+
+
+def test_build_github_commit_returns_none_when_commits_change_nothing(tmp_path):
+    # Commits that leave the tree as it was at base (here an empty one, and a
+    # change undone) leave nothing to submit.
     base = _init_repo(tmp_path)
     _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "Empty")
+    _commit_change(tmp_path, "changed\n", message="Change")
+    _commit_change(tmp_path, "line1\nline2\nline3\n", message="Undo")
 
-    payload = build_github_commits(tmp_path, base, _REPO_URL)
-
-    (commit,) = payload["commits"]
-    assert commit["message"] == "Empty"
-    assert commit["changes"] == []
-
-
-def test_build_github_commits_no_changes_returns_none(tmp_path):
-    base = _init_repo(tmp_path)
-
-    assert build_github_commits(tmp_path, base, _REPO_URL) is None
+    assert build_github_commit(tmp_path, base, _REPO_URL) is None
 
 
 # --- has_changes ------------------------------------------------------- #

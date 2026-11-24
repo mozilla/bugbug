@@ -2,8 +2,8 @@
 
 Drive the real githubkit client against a fake api.github.com (an
 ``httpx.MockTransport``), so these check the calls the handlers actually make.
-The commits artifact ``github.submit_patch`` reads is built agent-side (see
-hackbot-runtime's test_changes.py ``build_github_commits`` tests).
+The commit artifact ``github.submit_patch`` reads is built agent-side (see
+hackbot-runtime's test_changes.py ``build_github_commit`` tests).
 """
 
 import json
@@ -306,31 +306,11 @@ PR_URL = f"https://github.com/{OWNER}/{REPO}/pull/7"
 _SUBMISSION = {
     "repo_url": f"https://github.com/{OWNER}/{REPO}.git",
     "base_commit": "base",
-    "commits": [
-        {
-            "message": "First\n\nBody.",
-            "author": {
-                "name": "Dev",
-                "email": "dev@example.com",
-                "date": "2026-11-09T10:00:00+00:00",
-            },
-            "changes": [
-                {"path": "a.txt", "mode": "100644", "content": "YQo="},
-                {"path": "old.txt", "mode": "100644", "deleted": True},
-            ],
-        },
-        {
-            "message": "Second",
-            "author": {
-                "name": "Hackbot",
-                "email": "hackbot@mozilla.tld",
-                "date": "2026-11-09T11:00:00+00:00",
-            },
-            "changes": [
-                {"path": "run.sh", "mode": "100755", "content": "IyEK"},
-                {"path": "third_party/lib", "mode": "160000", "sha": "c0ffee"},
-            ],
-        },
+    "changes": [
+        {"path": "a.txt", "mode": "100644", "content": "YQo="},
+        {"path": "old.txt", "mode": "100644", "deleted": True},
+        {"path": "run.sh", "mode": "100755", "content": "IyEK"},
+        {"path": "third_party/lib", "mode": "160000", "sha": "c0ffee"},
     ],
 }
 
@@ -441,7 +421,7 @@ def fake_github(monkeypatch, pem, agent_registry):
 
 def _ctx(submission=_SUBMISSION):
     async def download(key, max_bytes=None):
-        assert key == "changes/github_commits.json"
+        assert key == "changes/github_commit.json"
         if submission is None:
             raise FileNotFoundError(key)
         return json.dumps(submission).encode()
@@ -484,7 +464,7 @@ def test_parse_repo_url(url, expected):
     assert github_handler.parse_repo_url(url) == expected
 
 
-async def test_submit_patch_recreates_the_commits_and_opens_a_draft_pr(fake_github):
+async def test_submit_patch_pushes_one_commit_and_opens_a_draft_pr(fake_github):
     fake = fake_github()
 
     result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx())
@@ -503,46 +483,31 @@ async def test_submit_patch_recreates_the_commits_and_opens_a_draft_pr(fake_gith
         {"content": "YQo=", "encoding": "base64"},
         {"content": "IyEK", "encoding": "base64"},
     ]
-    first_tree, second_tree = fake.calls("POST", f"{repo}/git/trees")
-    assert first_tree == {
-        "base_tree": "basetree",
-        "tree": [
-            {"path": "a.txt", "mode": "100644", "type": "blob", "sha": "blob1"},
-            {"path": "old.txt", "mode": "100644", "type": "blob", "sha": None},
-        ],
-    }
-    # Each commit's tree builds on the one before it.
-    assert second_tree == {
-        "base_tree": "tree2",
-        "tree": [
-            {"path": "run.sh", "mode": "100755", "type": "blob", "sha": "blob4"},
-            {
-                "path": "third_party/lib",
-                "mode": "160000",
-                "type": "commit",
-                "sha": "c0ffee",
-            },
-        ],
-    }
-    first_commit, second_commit = fake.calls("POST", f"{repo}/git/commits")
-    assert first_commit == {
-        "message": "First\n\nBody.",
-        "tree": "tree2",
-        "parents": ["base"],
-        # githubkit writes a UTC offset as "Z"; any other offset is kept.
-        "author": {
-            "name": "Dev",
-            "email": "dev@example.com",
-            "date": "2026-11-09T10:00:00Z",
-        },
-    }
-    assert second_commit["parents"] == ["commit3"]
-    assert second_commit["tree"] == "tree5"
-    # No committer: GitHub commits (and signs) as the App.
-    assert "committer" not in second_commit
-
+    assert fake.calls("POST", f"{repo}/git/trees") == [
+        {
+            "base_tree": "basetree",
+            "tree": [
+                {"path": "a.txt", "mode": "100644", "type": "blob", "sha": "blob1"},
+                {"path": "old.txt", "mode": "100644", "type": "blob", "sha": None},
+                {"path": "run.sh", "mode": "100755", "type": "blob", "sha": "blob2"},
+                {
+                    "path": "third_party/lib",
+                    "mode": "160000",
+                    "type": "commit",
+                    "sha": "c0ffee",
+                },
+            ],
+        }
+    ]
+    assert fake.calls("POST", f"{repo}/git/commits") == [
+        {
+            "message": "Fix the thing\n\nWhat and why.",
+            "tree": "tree3",
+            "parents": ["base"],
+        }
+    ]
     assert fake.calls("POST", f"{repo}/git/refs") == [
-        {"ref": f"refs/heads/{BRANCH}", "sha": "commit6"}
+        {"ref": f"refs/heads/{BRANCH}", "sha": "commit4"}
     ]
     assert fake.calls("POST", f"{repo}/pulls") == [
         {
@@ -553,7 +518,6 @@ async def test_submit_patch_recreates_the_commits_and_opens_a_draft_pr(fake_gith
             "body": "What and why.",
         }
     ]
-    # The token is narrowed to the one repository, with write access.
     (token_request,) = fake.calls(
         "POST", f"/app/installations/{INSTALLATION_ID}/access_tokens"
     )
@@ -564,16 +528,19 @@ async def test_submit_patch_recreates_the_commits_and_opens_a_draft_pr(fake_gith
     }
 
 
-async def test_submit_patch_omits_an_empty_body(fake_github):
+@pytest.mark.parametrize("body", [None, "  "])
+async def test_submit_patch_omits_an_empty_body(fake_github, body):
     fake = fake_github()
 
     result = await github_handler.SubmitPatchHandler().apply(
-        {"title": "Fix", "body": None}, _ctx()
+        {"title": "Fix", "body": body}, _ctx()
     )
 
     assert result.status == "applied", result.error
     (pull_request,) = fake.calls("POST", f"/repos/{OWNER}/{REPO}/pulls")
     assert "body" not in pull_request
+    (commit,) = fake.calls("POST", f"/repos/{OWNER}/{REPO}/git/commits")
+    assert commit["message"] == "Fix"
 
 
 async def test_retry_reuses_the_runs_branch_and_open_pull_request(fake_github):
@@ -587,7 +554,7 @@ async def test_retry_reuses_the_runs_branch_and_open_pull_request(fake_github):
     assert result.result["url"] == PR_URL
     repo = f"/repos/{OWNER}/{REPO}"
     assert fake.calls("PATCH", f"{repo}/git/refs/heads/hackbot/run-1") == [
-        {"sha": "commit6", "force": True}
+        {"sha": "commit4", "force": True}
     ]
     listing = [r for r in fake.requests if r[:2] == ("GET", f"{repo}/pulls")]
     assert len(listing) == 1
@@ -647,26 +614,18 @@ async def test_submit_patch_refuses_a_repository_other_than_the_configured_one(
 
 async def test_submit_patch_refuses_changes_to_workflow_files(fake_github):
     fake = fake_github()
-    commit = {
-        **_SUBMISSION["commits"][0],
+    submission = {
+        **_SUBMISSION,
         "changes": [
             {"path": ".github/CODEOWNERS", "mode": "100644", "content": "YQo="},
             {"path": ".github/workflows/ci.yml", "mode": "100644", "content": "YQo="},
+            {"path": ".github/workflows/old.yml", "mode": "100644", "deleted": True},
         ],
     }
-    deletion = {
-        **_SUBMISSION["commits"][1],
-        "changes": [
-            {"path": ".github/workflows/old.yml", "mode": "100644", "deleted": True}
-        ],
-    }
-    submission = {**_SUBMISSION, "commits": [commit, deletion]}
 
     result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx(submission))
 
     assert result.status == "failed"
-    # Every workflow path is named, deletions included; other .github files
-    # are fine.
     assert result.error.endswith(".github/workflows/ci.yml, .github/workflows/old.yml")
     assert "CODEOWNERS" not in result.error
     assert fake.requests == []
@@ -678,7 +637,7 @@ async def test_submit_patch_fails_without_the_artifact(fake_github):
     result = await github_handler.SubmitPatchHandler().apply(_PARAMS, _ctx(None))
 
     assert result.status == "failed"
-    assert "GitHub commits artifact" in result.error
+    assert "GitHub commit artifact" in result.error
     assert fake.requests == []
 
 

@@ -56,7 +56,7 @@ class AgentSpec:
     # The one GitHub repository ("owner/repo") this agent's `github.submit_patch`
     # actions may open pull requests on; unset, they are refused. It is set here,
     # not taken from the run, because the run's artifact is agent-written. It must
-    # be the repository of the agent's `[source].repo_url`, since its commits are
+    # be the repository of the agent's `[source].repo_url`, since its commit is
     # built on that checkout.
     github_repository: str | None = None
 

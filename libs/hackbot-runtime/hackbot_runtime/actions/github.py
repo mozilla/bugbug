@@ -4,7 +4,7 @@ Mirrors ``actions/phabricator.py``'s shape: the tools record an intended comment
 or change (nothing is sent to GitHub here) and return a short confirmation
 string. See hackbot-api's ``app/action_handlers/github_handler.py`` for the
 apply side, which posts the comments, or pushes a branch carrying the run's
-commits and opens a pull request.
+changes and opens a pull request.
 """
 
 from typing import Annotated, Any
@@ -25,7 +25,7 @@ ADD_INLINE_COMMENTS_ACTION_TYPE = "github.add_inline_comments"
 SUBMIT_PATCH_ACTION_TYPE = "github.submit_patch"
 
 # Actions that deliver the working directory's changes to GitHub, gating the
-# commits artifact built in ``context.publish_changes``. The GitHub counterpart
+# commit artifact built in ``context.publish_changes``. The GitHub counterpart
 # of ``phabricator.PATCH_ACTION_TYPES``: kept separate so a GitHub submission
 # does not also build a Phabricator diff, and vice versa.
 PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE})
@@ -192,10 +192,11 @@ async def submit_patch(
     branch, as a draft.
 
     You do not supply a patch file. Your final code changes in the working
-    directory (and any commits you made) are pushed as the pull request's
-    commits, so make and verify all your edits first, then call this once you
-    are done. Calling it records the submission as a proposed action for review;
-    nothing is sent to GitHub during the run.
+    directory (and any commits you made) are squashed into the pull request's
+    one commit, with its title and description as the message, so make and
+    verify all your edits first, then call this once you are done. Calling it
+    records the submission as a proposed action for review; nothing is sent to
+    GitHub during the run.
 
     Later actions can reference its `url`.
     """

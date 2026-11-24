@@ -8,17 +8,17 @@ Comments on pull requests need nothing but ``pull_requests: write``: enough to
 comment on a pull request, not to touch its code (or to comment on a plain
 issue, which needs ``issues: write``).
 
-``github.submit_patch`` pushes the run's commits and opens a pull request, from
-the payload built agent-side in ``hackbot_runtime.changes.build_github_commits``.
-This service has no checkout (or git binary), so the commits are recreated
-through GitHub's Git Data API: a blob per changed file, a tree per commit on top
-of its parent's, then the commit itself. Commits made this way are attributed to
-their original author and committed (and signed) by the GitHub App. The artifact
-is written by the agent, so nothing in it decides where hackbot writes. The pull
-request goes to the repository set as the agent's ``github_repository`` in
-``AGENT_REGISTRY``, which must have the GitHub App installed. A submission whose
-artifact names another repository, or that changes workflow files, is refused
-before any credentials are minted.
+``github.submit_patch`` pushes the run's changes as one commit and opens a pull
+request, from the payload built agent-side in
+``hackbot_runtime.changes.build_github_commit``. This service has no checkout (or
+git binary), so the commit is created through GitHub's Git Data API: a blob per
+changed file, a tree on top of the base's, then the commit itself, authored,
+committed and signed by the GitHub App. The artifact is written by the agent, so
+nothing in it decides where hackbot writes. The pull request goes to the
+repository set as the agent's ``github_repository`` in ``AGENT_REGISTRY``, which
+must have the GitHub App installed. A submission whose artifact names another
+repository, or that changes workflow files, is refused before any credentials
+are minted.
 """
 
 import json
@@ -200,9 +200,8 @@ def _review_comment(comment: dict[str, Any]) -> dict[str, Any]:
 
 # --- github.submit_patch ---------------------------------------------------
 
-_COMMITS_ARTIFACT_KEY = "changes/github_commits.json"
+_COMMIT_ARTIFACT_KEY = "changes/github_commit.json"
 
-# The forms a ``[source].repo_url`` on GitHub takes.
 _GITHUB_REPO_URL_RE = re.compile(
     r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
     r"(?P<owner>[A-Za-z0-9-]+)/(?P<repo>[A-Za-z0-9._-]+?)(?:\.git)?/?$"
@@ -224,23 +223,20 @@ def parse_repo_url(repo_url: str) -> tuple[str, str] | None:
     return match["owner"], match["repo"]
 
 
-def _workflow_paths(commits: Iterable[dict[str, Any]]) -> list[str]:
-    """The paths under ``.github/workflows`` that ``commits`` change, sorted."""
+def _workflow_paths(changes: Iterable[dict[str, Any]]) -> list[str]:
+    """The paths under ``.github/workflows`` among ``changes``, sorted."""
     return sorted(
-        {
-            change["path"]
-            for commit in commits
-            for change in commit["changes"]
-            if change["path"] == _WORKFLOWS_DIR
-            or change["path"].startswith(f"{_WORKFLOWS_DIR}/")
-        }
+        change["path"]
+        for change in changes
+        if change["path"] == _WORKFLOWS_DIR
+        or change["path"].startswith(f"{_WORKFLOWS_DIR}/")
     )
 
 
 def branch_name(run_id: str) -> str:
     """The branch a run's pull request is opened from.
 
-    One per run: every submission in a run carries the same commits (there is
+    One per run: every submission in a run carries the same commit (there is
     one changes artifact per run), so a second one, or a retry, reuses it.
     """
     return f"hackbot/{run_id}"
@@ -264,40 +260,33 @@ async def _tree_entry(
     return {"path": change["path"], "mode": mode, "type": entry_type, "sha": sha}
 
 
-async def _push_commits(
-    github: GitHub, owner: str, repo: str, submission: dict[str, Any]
+async def _push_commit(
+    github: GitHub, owner: str, repo: str, submission: dict[str, Any], message: str
 ) -> str:
-    """Recreate the run's commits on top of its base; return the new head sha.
+    """Create the run's commit on top of its base; return its sha.
 
     Requests are made one at a time, as GitHub asks of content-creating calls to
     stay clear of its secondary rate limits.
     """
-    parent = submission["base_commit"]
-    base_commit = await github.rest.git.async_get_commit(owner, repo, parent)
-    tree = base_commit.json()["tree"]["sha"]
-
-    for commit in submission["commits"]:
-        entries = [
-            await _tree_entry(github, owner, repo, change)
-            for change in commit["changes"]
-        ]
-        if entries:
-            new_tree = await github.rest.git.async_create_tree(
-                owner, repo, data={"base_tree": tree, "tree": entries}
-            )
-            tree = new_tree.json()["sha"]
-        new_commit = await github.rest.git.async_create_commit(
-            owner,
-            repo,
-            data={
-                "message": commit["message"],
-                "tree": tree,
-                "parents": [parent],
-                "author": commit["author"],
-            },
-        )
-        parent = new_commit.json()["sha"]
-    return parent
+    base = submission["base_commit"]
+    base_commit = await github.rest.git.async_get_commit(owner, repo, base)
+    entries = [
+        await _tree_entry(github, owner, repo, change)
+        for change in submission["changes"]
+    ]
+    tree = await github.rest.git.async_create_tree(
+        owner,
+        repo,
+        data={"base_tree": base_commit.json()["tree"]["sha"], "tree": entries},
+    )
+    # Without an author or committer, GitHub makes the App both and signs the
+    # commit.
+    commit = await github.rest.git.async_create_commit(
+        owner,
+        repo,
+        data={"message": message, "tree": tree.json()["sha"], "parents": [base]},
+    )
+    return commit.json()["sha"]
 
 
 async def _point_branch(
@@ -357,7 +346,7 @@ async def _open_pull_request(
 
 
 class SubmitPatchHandler:
-    """Applies ``github.submit_patch``: the run's commits become a pull request.
+    """Applies ``github.submit_patch``: the run's changes become a pull request.
 
     The branch is pushed to the agent's configured ``github_repository`` itself,
     not a fork, and the pull request targets its default branch. Retrying after
@@ -367,18 +356,18 @@ class SubmitPatchHandler:
 
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         try:
-            raw = await ctx.download_artifact(_COMMITS_ARTIFACT_KEY)
+            raw = await ctx.download_artifact(_COMMIT_ARTIFACT_KEY)
             submission = json.loads(raw)
         except Exception as exc:
             log.exception(
-                "Failed to load GitHub commits artifact for run %s", ctx.run_id
+                "Failed to load GitHub commit artifact for run %s", ctx.run_id
             )
             return ActionResult.failed(
-                f"Could not load the GitHub commits artifact for this run: {exc}"
+                f"Could not load the GitHub commit artifact for this run: {exc}"
             )
 
         # The target comes from trusted configuration. The artifact's repo_url
-        # only has to agree with it, since the commits were built on that
+        # only has to agree with it, since the commit was built on that
         # checkout.
         spec = AGENT_REGISTRY.get(ctx.agent)
         configured = spec.github_repository if spec else None
@@ -398,24 +387,27 @@ class SubmitPatchHandler:
         # GitHub owner and repository names are case-insensitive.
         if "/".join(parsed).lower() != configured.lower():
             return ActionResult.failed(
-                f"The run's commits are for {repo_url!r}, but agent {ctx.agent!r} "
+                f"The run's changes are for {repo_url!r}, but agent {ctx.agent!r} "
                 f"may only open pull requests on {configured}"
             )
-        if not submission["commits"]:
-            return ActionResult.failed("This run has no commits to submit")
-        workflow_paths = _workflow_paths(submission["commits"])
+        if not submission["changes"]:
+            return ActionResult.failed("This run has no changes to submit")
+        workflow_paths = _workflow_paths(submission["changes"])
         if workflow_paths:
             return ActionResult.failed(
                 f"The run changes files under {_WORKFLOWS_DIR}/, which hackbot does "
                 f"not submit: {', '.join(workflow_paths)}"
             )
         branch = branch_name(ctx.run_id)
+        title = params["title"].strip()
+        body = (params.get("body") or "").strip() or None
+        message = f"{title}\n\n{body}" if body else title
 
         try:
             github = await _client_for(owner, repo, READ_WRITE_PERMISSIONS)
             repository = await github.rest.repos.async_get(owner, repo)
             default_branch = repository.json()["default_branch"]
-            head = await _push_commits(github, owner, repo, submission)
+            head = await _push_commit(github, owner, repo, submission, message)
             await _point_branch(github, owner, repo, branch, head)
             pull_request = await _open_pull_request(
                 github,
@@ -423,8 +415,8 @@ class SubmitPatchHandler:
                 repo,
                 branch=branch,
                 base=default_branch,
-                title=params["title"].strip(),
-                body=params.get("body"),
+                title=title,
+                body=body,
             )
         except Exception as exc:
             log.exception(
@@ -438,8 +430,6 @@ class SubmitPatchHandler:
         return ActionResult.ok(
             {
                 "pull_request_number": pull_request["number"],
-                # `url` is the field a `{{actions.<action_id>.url}}` placeholder
-                # reads, so it is the page a human would want.
                 "url": pull_request["html_url"],
                 "repository": f"{owner}/{repo}",
                 "branch": branch,

@@ -380,47 +380,27 @@ def _github_file_changes(repo: Path, parent: str, commit: str) -> list[dict]:
     return entries
 
 
-def build_github_commits(repo: Path, base: str, repo_url: str) -> dict | None:
-    """Build the artifact for pushing the agent's commits to GitHub.
+def build_github_commit(repo: Path, base: str, repo_url: str) -> dict | None:
+    """Build the artifact for pushing the agent's changes to GitHub.
 
     hackbot-api has no git checkout (or git binary) to ``git am`` the run's
-    patch into, so this captures each commit in ``base..HEAD`` in the shape
-    GitHub's Git Data API takes: the full message, the author, and the files it
-    changes with their new contents. The apply-side handler recreates the same
-    commits on top of ``base`` from that alone.
+    patch into, so this captures ``base..HEAD`` squashed into one commit, as
+    for Phabricator, in the shape GitHub's Git Data API takes: the files it
+    changes, with their new contents. The apply-side handler creates that
+    commit on top of ``base`` from this alone.
 
     ``base`` must be a commit the GitHub repository already has (the published
-    base, as for a try push), since the recreated commits are parented on it.
-    Returns ``None`` when there are no commits to push.
+    base, as for a try push), since the new commit is parented on it. Returns
+    ``None`` when the tree is unchanged from ``base``.
     """
     # Normally already done by `collect`; repeated here (a no-op on a clean
     # tree) so this does not drop uncommitted work if called on its own.
     commit_all(repo, WIP_MESSAGE)
 
-    # First parent only: each commit is replayed as the diff against the one
-    # before it, so a merge the agent made is flattened rather than lost.
-    revisions = _git(
-        repo, "rev-list", "--reverse", "--first-parent", f"{base}..HEAD"
-    ).split()
-    if not revisions:
+    file_changes = _github_file_changes(repo, base, "HEAD")
+    if not file_changes:
         return None
-
-    fmt = _FIELD_SEP.join(["%an", "%ae", "%aI", "%B"])
-    commits = []
-    parent = base
-    for revision in revisions:
-        out = _git(repo, "show", "-s", f"--format={fmt}", revision)
-        name, email, date, message = out.split(_FIELD_SEP, 3)
-        commits.append(
-            {
-                "message": message.rstrip("\n"),
-                "author": {"name": name, "email": email, "date": date},
-                "changes": _github_file_changes(repo, parent, revision),
-            }
-        )
-        parent = revision
-
-    return {"repo_url": repo_url, "base_commit": base, "commits": commits}
+    return {"repo_url": repo_url, "base_commit": base, "changes": file_changes}
 
 
 def collect(
