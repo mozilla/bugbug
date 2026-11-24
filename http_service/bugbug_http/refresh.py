@@ -8,7 +8,8 @@
 
 Workers can run for weeks, while the tasks of the task graph and the files built on each platform
 change (e.g. platform migrations), and new commits land (used by the features of the test selection
-models). This runs next to the worker, in the same container and directory: it rewrites the worker's
+models), and tasks get renamed (whose labels the replies give for the selected configs, so they are
+refreshed more often). This runs next to the worker, in the same container and directory: it rewrites the worker's
 files (atomically) and databases (LMDB, whose readers see consistent snapshots), and jobs read them
 when they run.
 """
@@ -21,6 +22,7 @@ from bugbug_http import boot
 from bugbug_http.sentry import setup_sentry
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"))
@@ -30,9 +32,19 @@ def main() -> None:
     # Mining commits uses all the CPUs: don't slow the jobs down.
     os.nice(10)
 
+    # The test tasks among which configs are selected are updated much more often than the rest,
+    # so that the selected configs run on tasks renamed since the latest backstop push.
+    next_refresh = time.monotonic() + boot.REFRESH_INTERVAL
     while True:
-        time.sleep(boot.REFRESH_INTERVAL)
-        boot.refresh_data()
+        time.sleep(boot.CONFIG_SELECTION_TASKS_REFRESH_INTERVAL)
+        if time.monotonic() >= next_refresh:
+            boot.refresh_data()
+            next_refresh = time.monotonic() + boot.REFRESH_INTERVAL
+        else:
+            try:
+                boot.refresh_config_selection_tasks()
+            except Exception:
+                logger.exception("Failed to refresh the config selection tasks")
 
 
 if __name__ == "__main__":

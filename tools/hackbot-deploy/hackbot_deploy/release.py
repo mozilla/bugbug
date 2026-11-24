@@ -19,6 +19,9 @@ _DEV_BRANCH = re.compile(
     r"dev/(?P<kind>agents|services)/(?P<name>[a-z0-9][a-z0-9-]*)(/.+)?"
 )
 
+# dev/agents/all releases every agent, so no agent can be called that.
+ALL = "all"
+
 
 @dataclass(frozen=True)
 class Planned:
@@ -72,17 +75,25 @@ def plan(
 ) -> list[Planned]:
     """Decide what to release into ``env``.
 
-    dev releases what the branch names, always. Elsewhere, a push releases
-    what changed version among ``names`` (default: every agent with a
-    [deploy] table); a build started by hand releases them regardless.
+    dev releases what the branch names (every agent for dev/agents/all),
+    always. Elsewhere, a push releases what changed version among ``names``
+    (default: every agent with a [deploy] table); a build started by hand
+    releases them regardless.
     """
+    every_agent = [
+        f"{deploy.AGENTS}/{agent}"
+        for agent in sorted(manifest.load_configs(root / deploy.AGENTS))
+    ]
     if env.name == "dev":
-        candidates, force = [from_branch(branch)], True
+        named = from_branch(branch)
+        if named == f"{deploy.SERVICES}/{ALL}":
+            raise deploy.DeployError(
+                "dev/services/all isn't supported: push each service's own branch"
+            )
+        candidates = every_agent if named == f"{deploy.AGENTS}/{ALL}" else [named]
+        force = True
     else:
-        candidates = names or [
-            f"{deploy.AGENTS}/{agent}"
-            for agent in sorted(manifest.load_configs(root / deploy.AGENTS))
-        ]
+        candidates = names or every_agent
         force = by_hand(pusher)
 
     planned = []

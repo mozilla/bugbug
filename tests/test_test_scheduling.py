@@ -4,15 +4,17 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import json
 import math
 from datetime import datetime
 from typing import Any, Iterator
 
 import hglib
+import orjson
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
-from bugbug import repository, test_scheduling
+from bugbug import db, repository, test_scheduling
 from bugbug.repository import CommitDict
 from bugbug.test_scheduling import (
     ConfigGroup,
@@ -196,6 +198,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
     update_touched_together_gen.send(Revision("commit4"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 2
+    test_scheduling.close_touched_together_db()
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 2
     assert test_scheduling.get_touched_together("dom", "dom/tests/manifest1.ini") == 2
     assert test_scheduling.get_touched_together("dom", "dom/tests") == 2
@@ -341,6 +344,82 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
         test_scheduling.get_touched_together("layout", "dom/tests/manifest1.ini") == 1
     )
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 1
+
+
+def test_touched_together_recent(monkeypatch: MonkeyPatch) -> None:
+    test_scheduling.touched_together = None
+
+    repository.path_to_component = {
+        "dom/file1.cpp": "Core::DOM",
+        "dom/tests/manifest1.ini": "Core::DOM",
+    }
+
+    def make_commit(node: str) -> CommitDict:
+        return (
+            repository.Commit(
+                node=node,
+                author="author1",
+                desc=node,
+                pushdate=datetime(2019, 1, 1),
+                bug_id=123,
+                backsout=[],
+                backedoutby="",
+                author_email="author1@mozilla.org",
+                reviewers=["reviewer1"],
+            )
+            .set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {})
+            .to_dict()
+        )
+
+    def run(*end_revisions: str) -> None:
+        gen = test_scheduling.update_touched_together()
+        next(gen)
+        for end_revision in end_revisions:
+            gen.send(Revision(end_revision))
+        with contextlib.suppress(StopIteration):
+            gen.send(None)
+
+    def count() -> int:
+        result = test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests")
+        test_scheduling.close_touched_together_db()
+        return result
+
+    def add_commits(start: int, end: int) -> None:
+        db.append(
+            repository.COMMITS_DB,
+            [make_commit(f"commit{i}") for i in range(start, end + 1)],
+        )
+
+    def fail_get_commits():
+        raise AssertionError("The whole commits DB should not be read")
+        yield
+
+    monkeypatch.setattr(test_scheduling, "TOUCHED_TOGETHER_RECENT_COMMITS", 4)
+    monkeypatch.setattr(test_scheduling, "TOUCHED_TOGETHER_RECENT_MARGIN", 1)
+
+    db.write(repository.COMMITS_DB, [])
+    add_commits(1, 2)
+    run("commit2")
+    assert count() == 2
+
+    # The last analyzed commit (commit2) is among the last 4 commits, after the margin: only
+    # those are read. A revision before it, in the margin, is found as already analyzed.
+    add_commits(3, 4)
+    with monkeypatch.context() as m:
+        m.setattr(repository, "get_commits", fail_get_commits)
+        run("commit1", "commit4")
+    assert count() == 4
+
+    # The last analyzed commit (commit4) isn't among the last 4 commits: all are read.
+    add_commits(5, 8)
+    run("commit8")
+    assert count() == 8
+
+    # The last analyzed commit (commit8) is among the last 4 commits, but in the margin: all are
+    # read.
+    add_commits(9, 11)
+    run("commit11")
+    assert count() == 11
 
 
 def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
@@ -1711,9 +1790,7 @@ def test_get_config_select_regressions() -> None:
         (["rev3"], None, [("test-windows11-64-24h2/opt-*", G)], [], []),
     ]
 
-    regressions, recent_configs = test_scheduling.get_config_select_regressions(
-        lambda: iter(pushes), recent_pushes=2
-    )
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     culprit, later = regressions
     assert culprit == test_scheduling.ConfigSelectRegression(
@@ -1723,8 +1800,6 @@ def test_get_config_select_regressions() -> None:
     assert later == test_scheduling.ConfigSelectRegression(
         1, (Revision("rev1"),), G, frozenset({ANDROID}), frozenset({ANDROID, MAC})
     )
-    # The configs that ran in the last two pushes.
-    assert recent_configs == {LINUX, "test-windows11-64-24h2/opt-*"}
 
 
 def test_get_config_select_regressions_failure_after_later_pass() -> None:
@@ -1747,7 +1822,7 @@ def test_get_config_select_regressions_failure_after_later_pass() -> None:
         (["rev4"], None, [], [], []),
     ]
 
-    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     assert regressions[0] == test_scheduling.ConfigSelectRegression(
         0, (Revision("rev0"),), G, frozenset({WIN}), frozenset({WIN, LINUX})
@@ -1767,7 +1842,7 @@ def test_get_config_select_regressions_ignored_configs_only() -> None:
         (["rev1"], None, [(VERIFY, G)], [(VERIFY, G)], []),
     ]
 
-    regressions, _ = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
+    regressions = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
 
     assert regressions == [
         test_scheduling.ConfigSelectRegression(
@@ -1790,9 +1865,7 @@ def test_get_config_select_regressions_window_is_capped(monkeypatch) -> None:
         (["rev4"], None, [], [], []),
     ]
 
-    (regression,), _ = test_scheduling.get_config_select_regressions(
-        lambda: iter(pushes)
-    )
+    (regression,) = test_scheduling.get_config_select_regressions(lambda: iter(pushes))
     assert regression.observed == frozenset({A, B})
 
 
@@ -1856,3 +1929,32 @@ def test_config_dimensions(config: str, dimensions: dict[str, str]) -> None:
 )
 def test_normalize_group(group: str, expected: str) -> None:
     assert test_scheduling.normalize_group(group) == expected
+
+
+def test_get_full_graph_tasks() -> None:
+    graph = {
+        label: {"label": label, "attributes": {"test_manifests": manifests}}
+        for label, manifests in (
+            ("test-linux2404-64/opt-mochitest-plain-1", ["dom/a.toml"]),
+            ("test-linux2404-64/opt-mochitest-plain-2", ["dom/b.toml"]),
+            ("build-linux64/opt", []),
+        )
+    }
+    labels = {"test-linux2404-64/opt-mochitest-plain-1", "build-linux64/opt"}
+    expected = {label: graph[label] for label in labels}
+    # The definitions are found in the text, as the full task graph is compact JSON.
+    assert test_scheduling.get_full_graph_tasks(orjson.dumps(graph), labels) == expected
+    # Otherwise, the whole graph is parsed.
+    assert (
+        test_scheduling.get_full_graph_tasks(
+            json.dumps(graph, indent=2).encode(), labels
+        )
+        == expected
+    )
+    # Tasks which aren't in the graph are left out.
+    assert (
+        test_scheduling.get_full_graph_tasks(
+            orjson.dumps(graph), {"test-unknown/opt-x-1"}
+        )
+        == {}
+    )

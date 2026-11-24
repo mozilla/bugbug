@@ -31,7 +31,7 @@ For a **Phabricator** source (a revision id):
    `git apply --3way <diff-file>`
 4. Resolve any conflicts and commit the fixed patch. A raw diff carries no
    commit message, so do not write one yourself: read the revision's title and
-   summary with `get_phabricator_revision` and commit under those, ending the
+   summary with `get_revision` and commit under those, ending the
    message with a `Differential Revision: <the revision's URI>` line.
 
 If no base commit is listed, Phabricator never recorded one. Try the apply
@@ -45,10 +45,9 @@ Resolve conflicts while preserving the _intent_ of the original patch while
 fitting the code as it exists on the target branch:
 
 - When the intent is not obvious from the diff alone, consult the originating
-  bug (`get_bugzilla_bug`) and the Phabricator revision (`get_phabricator_revision`)
-  through the bugbug MCP. Read both before resolving a non-trivial conflict.
-- Use `read_fx_doc_section` when you need Firefox architecture or workflow
-  context.
+  bug (`get_bugs`, `get_bug_comments`) and the Phabricator revision
+  (`get_revision`, `get_revision_comments`). Read both before resolving a
+  non-trivial conflict.
 - Never drop the patch's functional change to make a conflict "go away", and
   never invent behavior the patch did not have. If a hunk simply does not apply
   because the surrounding feature is absent on the branch, that is a real signal
@@ -59,6 +58,10 @@ fitting the code as it exists on the target branch:
 You work like a local Claude Code session: `Read`/`Grep`/`Glob`/`Edit`/`Write`,
 `Bash` for git, and `Task` sub-agents for parallel investigation. On top of the
 built-ins, the following Mozilla MCP servers are wired in:
+
+- **bugzilla** — read bugs, their comments, history and attachments. Use it to
+  understand what the originating bug was fixing.
+- **phabricator** — read a revision's title, summary, reviewers and comments.
 
 - **searchfox** — search mozilla-central by identifier, text, or definition, and
   read blame. Use it to understand how the code the patch touches evolved on the

@@ -17,7 +17,16 @@ from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
 
-from .conftest import MOCK_KNOWN_TASKS, MockModelCache
+from .conftest import MOCK_CONFIG_SELECTION_TASKS, MOCK_KNOWN_TASKS, MockModelCache
+
+
+def task_labels(group: str, configs: list[str]) -> list[str]:
+    """The labels of the mock tasks running the group on the configs."""
+    return sorted(
+        label
+        for label, task in MOCK_CONFIG_SELECTION_TASKS.items()
+        if task["config"] in configs and group in task["manifests"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -113,8 +122,9 @@ def test_simple_schedule(
     assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
-    assert {k: set(v) for k, v in result["config_groups"].items()} == {
-        k: set(v) for k, v in config_groups.items()
+    # The taskgraph is given the labels of the tasks of the selected configs.
+    assert result["config_groups"] == {
+        group: task_labels(group, configs) for group, configs in config_groups.items()
     }
 
 
@@ -567,8 +577,59 @@ def test_schedule_config_selection_by_level(
         ({"test-group2": group2_confidence}, ["test-linux1804-64/opt-*"]),
     ]
     assert result["config_groups"] == {
-        "test-group1": ["test-linux1804-64/opt-*"],
-        "test-group2": ["test-windows10/opt-*"],
+        "test-group1": ["test-linux1804-64/opt-mochitest"],
+        "test-group2": ["test-windows10/opt-mochitest"],
+    }
+
+
+def test_schedule_config_groups_with_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify({}, {"test-group1": 0.99})
+
+    # A task renamed since the backstop push the other tasks come from.
+    with open("config_selection_tasks.json", "w") as f:
+        json.dump(
+            {
+                "backstop": "backstop-rev",
+                "tasks": MOCK_CONFIG_SELECTION_TASKS,
+                "new_tasks": {
+                    "test-linux1804-64/opt-mochitest-renamed": "test-linux1804-64/opt-*"
+                },
+                "ignored": [],
+                "unresolved": {},
+                "processed": [],
+                "not_backstops": [],
+            },
+            f,
+        )
+    monkeypatch.setattr(
+        models,
+        "select_configs",
+        lambda groups, modified_paths, very_likely_groups, used_configs=(): {
+            group: ["test-linux1804-64/opt-*"] for group in groups
+        },
+    )
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["config_groups"] == {
+        "test-group1": [
+            "test-linux1804-64/opt-mochitest",
+            "test-linux1804-64/opt-mochitest-renamed",
+        ]
     }
 
 

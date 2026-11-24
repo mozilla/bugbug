@@ -104,7 +104,8 @@ class UpliftResult(HackbotAgentResult):
 
 async def run_uplift(
     *,
-    bugbug_mcp_server: McpServerConfig,
+    bugzilla_mcp_server: McpServerConfig,
+    phabricator_mcp_server: McpServerConfig,
     broker_url: str,
     source_repo: Path,
     target_branch: str,
@@ -153,7 +154,7 @@ async def run_uplift(
     options = build_options(
         source_repo=source_repo,
         scratch_out=scratch_out,
-        mcp_servers=build_mcp_servers(bugbug_mcp_server),
+        mcp_servers=build_mcp_servers(bugzilla_mcp_server, phabricator_mcp_server),
         model=model,
         effort=effort,
         max_turns=max_turns,
@@ -212,15 +213,18 @@ def describe_requested(
 
 
 def build_mcp_servers(
-    bugbug_mcp_server: McpServerConfig,
+    bugzilla_mcp_server: McpServerConfig,
+    phabricator_mcp_server: McpServerConfig,
 ) -> dict[str, McpServerConfig]:
-    """The bugbug server, plus in-process Searchfox and HGMO lookups.
+    """The broker's Bugzilla and Phabricator tools, plus in-process Searchfox and HGMO.
 
-    No Firefox build tools: resolving a conflict is a source-level judgment,
-    and a build would need the toolchain image `build-repair` carries.
+    The broker holds the API keys and talks to this environment's Bugzilla and
+    Phabricator. No Firefox build tools: resolving a conflict is a source-level
+    judgment, and a build would need the toolchain image `build-repair` carries.
     """
     return {
-        "bugbug": bugbug_mcp_server,
+        "bugzilla": bugzilla_mcp_server,
+        "phabricator": phabricator_mcp_server,
         "searchfox": build_sdk_server(
             "searchfox",
             SearchfoxContext(client=AsyncSearchfoxClient()),
@@ -323,8 +327,8 @@ def render_bug_block(bug_id: int | None) -> str:
         return ""
     return (
         f"## Originating bug\n\n"
-        f"These patches belong to bug {bug_id}. Consult it with `get_bugzilla_bug` "
-        f"when a conflict's intent is unclear."
+        f"These patches belong to bug {bug_id}. Consult it with `get_bugs` and "
+        f"`get_bug_comments` when a conflict's intent is unclear."
     )
 
 

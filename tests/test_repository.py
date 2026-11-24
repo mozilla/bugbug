@@ -3,11 +3,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import glob
 import json
 import os
 import pickle
 import re
 import shutil
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from logging import INFO, basicConfig, getLogger
@@ -46,9 +49,41 @@ def fake_hg_repo(tmpdir):
     hg.close()
 
 
-def copy_pushlog_database(remote, local):
-    shutil.copyfile(
-        os.path.join(remote, ".hg/pushlog2.db"), os.path.join(local, ".hg/pushlog2.db")
+def get_changetracker(repo_dir):
+    """The database where mozext records the pushes of the changesets of a repository."""
+    # Import it from the version-control-tools checkout used by Mercurial.
+    mozext_path = subprocess.run(
+        [hglib.HGPATH, "config", "extensions.mozext"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    sys.path.insert(
+        0,
+        os.path.join(
+            os.path.dirname(os.path.dirname(mozext_path)), "pylib", "mozautomation"
+        ),
+    )
+    from mozautomation.changetracker import ChangeTracker
+
+    return ChangeTracker(os.path.join(repo_dir, ".hg", "changetracker.db"))
+
+
+def push(hg, local, remote):
+    """Push the outgoing changesets, and record the push like mozext does when pulling.
+
+    mozext only retrieves pushes when pulling from hg.mozilla.org.
+    """
+    nodes = [
+        bytes.fromhex(rev[1].decode("ascii"))
+        for rev in hg.outgoing(path=bytes(remote, "ascii"))
+    ]
+    hg.push(dest=bytes(remote, "ascii"))
+
+    changetracker = get_changetracker(local)
+    last_push_id = changetracker.last_push_id("autoland") or 0
+    changetracker.add_pushes(
+        "autoland", [(last_push_id + 1, "milla@mozilla.org", int(time.time()), nodes)]
     )
 
 
@@ -133,6 +168,21 @@ def test_clone(fake_hg_repo):
     # Assert that we do have the file from the remote repository, since we cloned
     # and updated the working dir.
     assert os.path.exists(os.path.join(f"{tmp_repo_dir}2", "file1"))
+
+
+def test_clone_changetracker_db(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    repository.clone("ciao", url=remote)
+
+    # mozext records the pushes in the changetracker.db of each repository, so it is only in the
+    # share and not in the pooled store, to download the pushlog only once.
+    assert os.path.exists(os.path.join("ciao", ".hg", "changetracker.db"))
+    assert not glob.glob(os.path.join("ciao-shared", "*", ".hg", "changetracker.db"))
 
 
 def test_get_revs(fake_hg_repo):
@@ -267,8 +317,7 @@ def test_refresh_backouts_and_ignored(fake_hg_repo):
     add_file(hg, local, ".hg-annotate-ignore-revs", f"{revision2}\n")
     revision4 = commit(hg, "Bug 456 - Ignore the previous commit in annotate. r=moz")
 
-    hg.push(dest=bytes(remote, "ascii"))
-    copy_pushlog_database(remote, local)
+    push(hg, local, remote)
 
     now = str(datetime.utcnow())
     old = str(datetime.utcnow() - relativedelta(years=2))
@@ -315,7 +364,7 @@ def test_hg_log(fake_hg_repo):
     revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
 
     first_push_date = datetime.utcnow()
-    hg.push(dest=bytes(remote, "ascii"))
+    push(hg, local, remote)
 
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
     revision2 = commit(hg, "Bug 123 - Prova. r=moz,rev2")
@@ -344,12 +393,10 @@ def test_hg_log(fake_hg_repo):
     time.sleep(1)
 
     second_push_date = datetime.utcnow()
-    hg.push(dest=bytes(remote, "ascii"))
+    push(hg, local, remote)
 
     add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
     revision6 = commit(hg)
-
-    copy_pushlog_database(remote, local)
 
     revs = repository.get_revs(hg)
 
@@ -663,8 +710,7 @@ def test_download_commits(fake_hg_repo):
 
     add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
     revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
-    hg.push(dest=bytes(remote, "ascii"))
-    copy_pushlog_database(remote, local)
+    push(hg, local, remote)
 
     responses.add(
         responses.HEAD,
@@ -695,8 +741,7 @@ def test_download_commits(fake_hg_repo):
 
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
     revision2 = commit(hg, "Bug 123 - Prova. r=moz,rev2")
-    hg.push(dest=bytes(remote, "ascii"))
-    copy_pushlog_database(remote, local)
+    push(hg, local, remote)
 
     coverage_mapping = {
         revision1: None,
@@ -725,8 +770,7 @@ def test_download_commits(fake_hg_repo):
 
     add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
     revision3 = commit(hg, "Bug 456 - Prova. r=moz")
-    hg.push(dest=bytes(remote, "ascii"))
-    copy_pushlog_database(remote, local)
+    push(hg, local, remote)
 
     commits = repository.download_commits(local, rev_start=revision3)
     assert len(commits) == 1
@@ -2346,6 +2390,57 @@ def test_get_commits():
     }
     assert len(retrieved_commits) == 10
     assert included_commits.issubset({c["node"] for c in retrieved_commits})
+
+
+@pytest.mark.parametrize("recent_commits", [1, 3, 5, 6, 10, 100])
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {},
+        {"include_no_bug": True},
+        {"include_backouts": True},
+        {"include_ignored": True, "include_backouts": True, "include_no_bug": True},
+    ],
+)
+def test_get_last_commit(monkeypatch, recent_commits, filters):
+    # The last 5 of the 10 mock commits are filtered out by default.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", recent_commits)
+
+    expected = list(repository.get_commits(**filters))[-1]
+    assert repository.get_last_commit(**filters) == expected
+
+
+def test_get_last_commit_reads_only_the_end(monkeypatch):
+    expected = list(repository.get_commits())[-1]
+
+    # The last allowed commit is the 6th from the end.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 6)
+
+    def get_commits(*args, **kwargs):
+        raise AssertionError("All the commits were read")
+
+    monkeypatch.setattr(repository, "get_commits", get_commits)
+
+    assert repository.get_last_commit() == expected
+
+
+def test_get_last_commit_none(monkeypatch):
+    ignored_commits = [
+        commit
+        for commit in repository.get_commits(
+            include_ignored=True, include_backouts=True, include_no_bug=True
+        )
+        if commit["ignored"]
+    ]
+    with open(repository.COMMITS_DB, "w") as f:
+        for commit in ignored_commits:
+            f.write(json.dumps(commit) + "\n")
+
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 2)
+    assert repository.get_last_commit() is None
+
+    os.remove(repository.COMMITS_DB)
+    assert repository.get_last_commit() is None
 
 
 def test_get_revision_id():

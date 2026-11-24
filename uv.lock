@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -25,6 +25,7 @@ members = [
     "hackbot-agent-dataset-eval",
     "hackbot-agent-frontend-triage",
     "hackbot-agent-gecko-triage",
+    "hackbot-agent-perf-triage",
     "hackbot-agent-test-plan-generator",
     "hackbot-agent-test-repair",
     "hackbot-agent-test-repair-fix",
@@ -749,7 +750,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8,<3.12.0" },
     { name = "mercurial", specifier = "~=7.2" },
     { name = "microannotate", specifier = "~=0.0.24" },
-    { name = "mozci", specifier = "~=2.6.1" },
+    { name = "mozci", specifier = "~=2.6.2" },
     { name = "numpy", specifier = ">=2.4.3,<2.6.0" },
     { name = "optuna", marker = "extra == 'perf-simulation'", specifier = ">=5.0.0" },
     { name = "orjson", specifier = ">=3.11.7,<3.14.0" },
@@ -819,6 +820,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "kombu" },
     { name = "marshmallow" },
+    { name = "pyyaml" },
     { name = "rq" },
     { name = "rq-dashboard" },
     { name = "sentry-sdk", extra = ["flask"] },
@@ -842,6 +844,7 @@ requires-dist = [
     { name = "gunicorn", specifier = ">=25.1,<26.3" },
     { name = "kombu", specifier = ">=5.6.2,<5.8.0" },
     { name = "marshmallow", specifier = ">=3.18.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rq", specifier = ">=2.7,<2.13" },
     { name = "rq-dashboard", specifier = ">=0.8.6,<0.10.0" },
     { name = "sentry-sdk", extras = ["flask"], specifier = ">=2.60.0" },
@@ -2610,7 +2613,6 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-gecko-triage"
-version = "0.1.0"
 source = { editable = "agents/gecko-triage" }
 dependencies = [
     { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
@@ -2641,6 +2643,39 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "starlette", specifier = ">=0.36.0" },
     { name = "uvicorn", specifier = ">=0.27.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "hackbot-agent-perf-triage"
+source = { editable = "agents/perf-triage" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "mcp" },
+    { name = "performance-triage-calculator" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "performance-triage-calculator", git = "https://github.com/mozilla/performance-triage-calculator?rev=53c8dcf4ab84750d6d9a423f90823b4e5275bfaa" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
 ]
 provides-extras = ["dev"]
 
@@ -2710,7 +2745,8 @@ requires-dist = [
 name = "hackbot-agent-uplift-resolve"
 source = { editable = "agents/uplift-resolve" }
 dependencies = [
-    { name = "agent-tools", extra = ["searchfox", "vcs"] },
+    { name = "agent-tools", extra = ["bugzilla", "searchfox", "vcs"] },
+    { name = "bugsy" },
     { name = "claude-agent-sdk" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "mcp" },
@@ -2729,7 +2765,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-tools", extras = ["searchfox", "vcs"], editable = "libs/agent-tools" },
+    { name = "agent-tools", extras = ["bugzilla", "searchfox", "vcs"], editable = "libs/agent-tools" },
+    { name = "bugsy" },
     { name = "claude-agent-sdk", specifier = ">=0.1.30" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "mcp", specifier = ">=1.0.0" },
@@ -3043,8 +3080,8 @@ name = "httpcore2"
 version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
+    { name = "h11", marker = "sys_platform != 'emscripten'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/61/afa9d6b7452f9eca73f73d45324eb0bb52f098fd5e6049bf6b8263be9b4e/httpcore2-2.16.0.tar.gz", hash = "sha256:c72cd0413563b17e1cd8354677dff887466f8ec2551679759e93126534428643", size = 69886, upload-time = "2026-10-21T07:09:45.31Z" }
 wheels = [
@@ -4240,7 +4277,7 @@ wheels = [
 
 [[package]]
 name = "mozci"
-version = "2.6.1"
+version = "2.6.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appdirs" },
@@ -4260,9 +4297,9 @@ dependencies = [
     { name = "validx" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/42/62f56cc6ff579273dec15b0221aa530f3f07b4f889232f1a64cf5a743060/mozci-2.6.1.tar.gz", hash = "sha256:6ce3a8943da95d52d0676ca5227ccc9e7e93b702e02925f8b0de24683c3cc572", size = 77978, upload-time = "2026-11-17T23:11:25.427Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/a0/a0aaf48cdf4c54109affd48c1fc948a65b959dc894faa390bf1e0e8d64b8/mozci-2.6.2.tar.gz", hash = "sha256:5321c7cc122c1f05a197fc81462b9197c4fa135162ec32c8ec1a2ca01aece72c", size = 78657, upload-time = "2026-11-23T16:08:53.364Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/d8/c8b5b1bf06fc347517b2cd712a5017a57f9605053eedaa0f9b6fadcd2299/mozci-2.6.1-py3-none-any.whl", hash = "sha256:b52a902f212c2b1e5dd340d4fd219d47c484ec0fb037a8ba49753e75af6eef5b", size = 92184, upload-time = "2026-11-17T23:11:27.021Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/58/5f8426c05b257236281b106bb601932529e7dc67902ab5bb83c55afa7a72/mozci-2.6.2-py3-none-any.whl", hash = "sha256:09f1f7863f958be5646505d589898fe6715b61e02d6579207c066c8ae696d33f", size = 92851, upload-time = "2026-11-23T16:08:54.742Z" },
 ]
 
 [[package]]
@@ -4966,6 +5003,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/34/a4/5cec1112009f0439a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/8b/28c4eaec9d6b036a52cb44720408f26b1a143ca9bce76cc19e8f5de00ab4/pdfminer_six-20260107-py3-none-any.whl", hash = "sha256:366585ba97e80dffa8f00cebe303d2f381884d8637af4ce422f1df3ef38111a9", size = 6592252, upload-time = "2026-01-07T13:29:10.742Z" },
 ]
+
+[[package]]
+name = "performance-triage-calculator"
+version = "0.1.0"
+source = { git = "https://github.com/mozilla/performance-triage-calculator?rev=53c8dcf4ab84750d6d9a423f90823b4e5275bfaa#53c8dcf4ab84750d6d9a423f90823b4e5275bfaa" }
 
 [[package]]
 name = "phabricator-client"
@@ -6323,8 +6365,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform == 'linux'" },
+    { name = "jeepney", marker = "sys_platform == 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -6908,14 +6950,14 @@ resolution-markers = [
     "(platform_machine != 'x86_64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
+    { name = "filelock", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "fsspec", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "jinja2", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "networkx", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "nvidia-nccl-cu13", marker = "sys_platform == 'never'" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "setuptools", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "sympy", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/04/ff26bb464e61f83e0176deca01e72fffa779190bbb476011e89c45791589/torch-2.15.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:0d2b2d9674fa0b9b3f50e83231aa6545a0b19e437a52f0af939a224faaa45515", size = 138575002, upload-time = "2026-10-28T15:17:58.526Z" },
@@ -6933,13 +6975,13 @@ resolution-markers = [
     "sys_platform == 'linux'",
 ]
 dependencies = [
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "fsspec", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "jinja2", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "networkx", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "setuptools", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "sympy", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.15.0%2Bcpu-cp314-cp314-linux_s390x.whl", hash = "sha256:ef810702df4dd70fe1b8ebee9e7394c6491f779841571a71433829e44927eaa5", upload-time = "2026-10-28T13:19:19Z" },

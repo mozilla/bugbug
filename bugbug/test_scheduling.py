@@ -8,6 +8,7 @@ import collections
 import dataclasses
 import glob
 import itertools
+import json
 import logging
 import math
 import os
@@ -78,6 +79,12 @@ db.register(
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
 PAST_FAILURES_GROUP_DB = "past_failures_group.lmdb.tar.zst"
 TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
+# The number of commits at the end of the commits DB among which the last commit analyzed for the
+# touched together DB is looked for, and how many of them before it are read too (see
+# _get_commits_from). The window allows the DB to be updated quickly with up to about two weeks of
+# commits.
+TOUCHED_TOGETHER_RECENT_COMMITS = 10000
+TOUCHED_TOGETHER_RECENT_MARGIN = 2000
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
@@ -185,6 +192,37 @@ def normalize_group(group: str) -> str:
 
     # Manifests included by another manifest are reported as "manifest:parent".
     return group.split(":")[0]
+
+
+def get_full_graph_tasks(content: bytes, labels: set[str]) -> dict[str, dict]:
+    """The definitions of some tasks from a decision task's full-task-graph.json, by label.
+
+    The full task graph is hundreds of MB, and much more once parsed, so only the definitions of
+    the given tasks are parsed, where they are in the text. If one isn't found this way (e.g. if
+    the format of the file changed), the whole graph is parsed.
+    """
+    text = content.decode()
+    decoder = json.JSONDecoder()
+    tasks: dict[str, dict] = {}
+    for label in labels:
+        key = f"{json.dumps(label)}:{{"
+        start = text.find(key)
+        while start != -1:
+            try:
+                task, _ = decoder.raw_decode(text, start + len(key) - 1)
+            except ValueError:
+                task = None
+            if isinstance(task, dict) and task.get("label") == label:
+                tasks[label] = task
+                break
+            start = text.find(key, start + 1)
+
+    missing = labels - tasks.keys()
+    if missing:
+        del text
+        graph = orjson.loads(content)
+        tasks.update({label: graph[label] for label in missing if label in graph})
+    return tasks
 
 
 def rename_task(task: str) -> str:
@@ -402,8 +440,7 @@ def _configs_by_group(config_groups: Iterable[Runnable]) -> dict[Group, set[str]
 
 def get_config_select_regressions(
     push_data_factory: Callable[[], Iterable[PushResult]],
-    recent_pushes: int = 1000,
-) -> tuple[list[ConfigSelectRegression], set[str]]:
+) -> list[ConfigSelectRegression]:
     """The regressions of config/group push data, with the configs they failed on and passed on.
 
     A config the regressed group ran on without failing passed, both on the culprit push and on the
@@ -412,9 +449,6 @@ def get_config_select_regressions(
     run after the culprit failed and the failure was attributed to a later push (e.g. because the config
     didn't run on the culprit): with no run in between, the attribution can't tell the pushes apart, so
     the config didn't verifiably pass. A failure after a pass doesn't matter (as in get_non_run_negatives).
-
-    Also returns the configs that ran in the last `recent_pushes` pushes, used to name the configs of
-    the tasks in the current task graph (see testconfigselect.live_candidates).
     """
     rev_index: dict[Revision, int] = {}
     culprits: list[
@@ -427,7 +461,6 @@ def get_config_select_regressions(
         ]
     ] = []
     failures_at: dict[int, dict[Group, set[str]]] = {}
-    num_pushes = 0
     for index, push in enumerate(push_data_factory()):
         (
             revisions,
@@ -436,7 +469,6 @@ def get_config_select_regressions(
             possible_regressions,
             likely_regressions,
         ) = push
-        num_pushes += 1
         for revision in revisions:
             rev_index[revision] = index
         if possible_regressions or likely_regressions:
@@ -470,16 +502,13 @@ def get_config_select_regressions(
 
     # The first push of the window each config ran the group on.
     later_runs: dict[tuple[int, Group], dict[str, int]] = collections.defaultdict(dict)
-    recent: set[str] = set()
     for index, push in enumerate(push_data_factory()):
         groups_needed = needed.get(index)
-        if groups_needed is None and index < num_pushes - recent_pushes:
+        if groups_needed is None:
             continue
 
         for group, configs in _configs_by_group(push[2]).items():
-            if index >= num_pushes - recent_pushes:
-                recent |= configs
-            for culprit in groups_needed.get(group, ()) if groups_needed else ():
+            for culprit in groups_needed.get(group, ()):
                 for config in configs:
                     later_runs[(culprit, group)].setdefault(config, index)
 
@@ -505,7 +534,7 @@ def get_config_select_regressions(
                 )
             )
 
-    return regressions, recent
+    return regressions
 
 
 def get_push_data(
@@ -1056,6 +1085,45 @@ def get_cochange_pmi(source_dirs: Iterable[str], runnable_dirs: Iterable[str]) -
     return best
 
 
+def _get_commits_from(
+    last_analyzed: bytes | memoryview | None,
+) -> Iterable[repository.CommitDict]:
+    """The commits of the commits DB from where the touched together DB needs to be updated.
+
+    They are filtered like repository.get_commits does. When the last analyzed commit is among the last TOUCHED_TOGETHER_RECENT_COMMITS commits, the
+    commits start TOUCHED_TOGETHER_RECENT_MARGIN commits before it, so that the revisions sent to
+    update_touched_together which are slightly before it (as commits can be in a different order
+    in mozilla-central and autoland) are found. Otherwise, all the commits are read, which is much
+    slower as the commits DB is very large.
+    """
+    if last_analyzed is not None:
+        last_analyzed = bytes(last_analyzed)
+        lines = db.read_last_lines(
+            repository.COMMITS_DB, TOUCHED_TOGETHER_RECENT_COMMITS
+        )
+        # Only the commit with the node is deserialized (if the serialization changed, the commit
+        # wouldn't be found, and all the commits would be read).
+        needle = b'"node":"' + last_analyzed + b'"'
+        position = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if needle in line
+                and orjson.loads(line)["node"] == last_analyzed.decode()
+            ),
+            None,
+        )
+        if position is not None and position >= TOUCHED_TOGETHER_RECENT_MARGIN:
+            del lines[: position - TOUCHED_TOGETHER_RECENT_MARGIN]
+            return repository.filter_commits(orjson.loads(line) for line in lines)
+
+        logger.info(
+            "The last analyzed commit is not among the last commits, reading all commits"
+        )
+
+    return repository.get_commits()
+
+
 def update_touched_together(
     runnable_dirs: Collection[str] = (),
 ) -> Generator[None, Revision | None, None]:
@@ -1075,7 +1143,8 @@ def update_touched_together(
 
     end_revision = yield
 
-    for commit in repository.get_commits():
+    commits = _get_commits_from(last_analyzed)
+    for commit in commits:
         seen.add(commit["node"])
 
         if can_start:
