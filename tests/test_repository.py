@@ -2392,6 +2392,57 @@ def test_get_commits():
     assert included_commits.issubset({c["node"] for c in retrieved_commits})
 
 
+@pytest.mark.parametrize("recent_commits", [1, 3, 5, 6, 10, 100])
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {},
+        {"include_no_bug": True},
+        {"include_backouts": True},
+        {"include_ignored": True, "include_backouts": True, "include_no_bug": True},
+    ],
+)
+def test_get_last_commit(monkeypatch, recent_commits, filters):
+    # The last 5 of the 10 mock commits are filtered out by default.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", recent_commits)
+
+    expected = list(repository.get_commits(**filters))[-1]
+    assert repository.get_last_commit(**filters) == expected
+
+
+def test_get_last_commit_reads_only_the_end(monkeypatch):
+    expected = list(repository.get_commits())[-1]
+
+    # The last allowed commit is the 6th from the end.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 6)
+
+    def get_commits(*args, **kwargs):
+        raise AssertionError("All the commits were read")
+
+    monkeypatch.setattr(repository, "get_commits", get_commits)
+
+    assert repository.get_last_commit() == expected
+
+
+def test_get_last_commit_none(monkeypatch):
+    ignored_commits = [
+        commit
+        for commit in repository.get_commits(
+            include_ignored=True, include_backouts=True, include_no_bug=True
+        )
+        if commit["ignored"]
+    ]
+    with open(repository.COMMITS_DB, "w") as f:
+        for commit in ignored_commits:
+            f.write(json.dumps(commit) + "\n")
+
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 2)
+    assert repository.get_last_commit() is None
+
+    os.remove(repository.COMMITS_DB)
+    assert repository.get_last_commit() is None
+
+
 def test_get_revision_id():
     commit = {
         "desc": "My desc",

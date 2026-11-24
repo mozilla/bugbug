@@ -30,7 +30,8 @@ class TestingPolicyStatsGenerator(object):
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         logger.info("Updating commits DB...")
-        latest_commit = collections.deque(repository.get_commits(), maxlen=1).pop()
+        latest_commit = repository.get_last_commit()
+        assert latest_commit is not None
 
         repository.download_commits(
             repo_dir,

@@ -9,7 +9,6 @@ import os
 import pickle
 import re
 import subprocess
-from collections import deque
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import cast
@@ -250,7 +249,8 @@ class CommitClassifier(object):
 
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
-        latest_commit = deque(repository.get_commits(), maxlen=1).pop()
+        latest_commit = repository.get_last_commit()
+        assert latest_commit is not None
 
         repository.download_commits(
             self.repo_dir,

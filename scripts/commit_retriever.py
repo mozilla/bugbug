@@ -29,9 +29,10 @@ class Retriever(object):
         else:
             db.download(repository.COMMITS_DB, support_files_too=True)
 
-            rev_start = 0
-            for commit in repository.get_commits():
-                rev_start = f"children({commit['node']})"
+            last_commit = repository.get_last_commit()
+            rev_start = (
+                f"children({last_commit['node']})" if last_commit is not None else 0
+            )
 
         with hglib.open(self.repo_dir) as hg:
             revs = repository.get_revs(hg, rev_start)
