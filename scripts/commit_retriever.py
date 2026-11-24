@@ -29,7 +29,11 @@ class Retriever(object):
         else:
             db.download(repository.COMMITS_DB, support_files_too=True)
 
-            last_commit = repository.get_last_commit()
+            # Start after the last commit of the DB, not the last filtered one, or the commits after it
+            # that are filtered out (e.g. backouts) would be mined (and added to the DB) again.
+            last_commit = repository.get_last_commit(
+                include_no_bug=True, include_backouts=True, include_ignored=True
+            )
             rev_start = (
                 f"children({last_commit['node']})" if last_commit is not None else 0
             )
