@@ -937,14 +937,7 @@ def _analyze_patch(
     """
     from bugbug_http import REPO_DIR
 
-    all_commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=branch,
-        save=False,
-        include_no_bug=True,
-        include_backouts=True,
-    )
+    all_commits = _get_commits(revs, branch, include_no_bug=True, include_backouts=True)
     commits = [commit for commit in all_commits if not commit["backsout"]]
 
     # On backouts, select the tasks and manifests which failed recently, as they
