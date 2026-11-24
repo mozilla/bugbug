@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from hackbot_client import HackbotClient
+from hackbot_client import HackbotClient, Identity
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, Json, validate_call
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
@@ -37,7 +37,8 @@ class SlackUser(BaseModel):
     https://docs.slack.dev/reference/objects/user-object/
     """
 
-    id: str | None = None
+    id: str
+    username: str
 
 
 class BlockActionsPayload(BaseModel):
@@ -46,7 +47,7 @@ class BlockActionsPayload(BaseModel):
     https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
     """
 
-    user: SlackUser | None = None
+    user: SlackUser
     message: dict
 
 
@@ -127,7 +128,7 @@ async def start_agent_run_callback(
     should be fixed with https://github.com/mozilla/bugbug/issues/6468.
     """
     client: HackbotClient = context["hackbot_client"]
-    user = body.user.id if body.user else None
+    user = body.user.id
     value = action.value
 
     if value.apply_run_id:
@@ -151,7 +152,15 @@ async def start_agent_run_callback(
             return
 
     run = await client.trigger_run(
-        value.agent_name, value.inputs, dedupe_key=value.dedupe_key
+        value.agent_name,
+        value.inputs,
+        dedupe_key=value.dedupe_key,
+        source="slack",
+        identity=Identity(
+            identity_provider="slack",
+            user_id=body.user.id,
+            username=body.user.username,
+        ),
     )
 
     triggered_by = user if run.is_new else None
