@@ -12,7 +12,8 @@ export function middleware(req: NextRequest) {
 
   // For data routes, reply with JSON so client fetches see a clean 401 rather
   // than following a redirect to the login HTML page.
-  if (req.nextUrl.pathname.startsWith("/api/")) {
+  const isArtifact = req.nextUrl.pathname.includes("/artifacts/");
+  if (req.nextUrl.pathname.startsWith("/api/") && !isArtifact) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
