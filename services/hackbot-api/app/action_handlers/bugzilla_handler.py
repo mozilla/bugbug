@@ -104,6 +104,32 @@ class AddCommentHandler:
         return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
 
 
+class RequestInfoHandler:
+    """Post a comment and ``needinfo?`` its ``requestee`` in one ``PUT /bug/{id}``.
+
+    One transaction, so the flag is attached to the comment that asks the question.
+    Deliberately not in ``_MERGEABLE_TYPES``: an agent applies this on a different
+    policy from its other comments (frontend-triage posts it even when the rest of the
+    run is held), so it must not be folded into one of them.
+    """
+
+    async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
+        bug_id = params["bug_id"]
+        body: dict[str, Any] = {
+            "comment": _comment_body(params),
+            "comment_tags": [ctx.agent],
+            "flags": [
+                {"name": "needinfo", "status": "?", "requestee": params["requestee"]}
+            ],
+        }
+        try:
+            _request("PUT", f"bug/{bug_id}", body)
+        except Exception as exc:
+            log.exception("Failed to request info on bug %s", bug_id)
+            return ActionResult.failed(str(exc))
+        return ActionResult.ok({"bug_id": bug_id, "url": _bug_url(bug_id)})
+
+
 class AddAttachmentHandler:
     async def apply(self, params: dict[str, Any], ctx: ApplyContext) -> ActionResult:
         bug_id = params["bug_id"]

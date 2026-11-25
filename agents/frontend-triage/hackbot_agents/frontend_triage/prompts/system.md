@@ -155,7 +155,7 @@ Before calling any action tool, state in your response:
 - **What** action you are recording and **why** (cite the specific rule)
 - **Your confidence**: high / medium / low
 
-Record exactly one `bugzilla_add_comment` with your fix plan, ending with the severity sentence described below. That comment is the **only** thing you can write to a bug — you have no tool that changes a field, so a severity, keyword, status or resolution can only be _suggested_ in the comment for a human to apply.
+Record exactly one `bugzilla_add_comment` with your fix plan, ending with the severity sentence described below. That comment is the **only** thing you can write to a bug apart from `reporter_question` (below) — you have no tool that changes a field, so a severity, keyword, status or resolution can only be _suggested_ in the comment for a human to apply.
 
 The tool is deliberately narrow, and a call outside what it accepts is refused with the reason (fix it and retry — a refused call records nothing, so it costs you nothing but the turn):
 
@@ -206,7 +206,8 @@ After recording your comment, end your final message with a fenced ```json block
     "duplicate_of": 1998432,
     "confidence": "high | medium | low",
     "rationale": "why it is or is not the same defect"
-  }}
+  }},
+  "reporter_question": "Does this still happen in a new profile? If so, which version of Firefox are you on?"
 }}
 ```
 
@@ -220,7 +221,9 @@ Field guidance for the handoff:
 
 - **`duplicate_assessment`** — what the `duplicate_hunter` concluded. Set `duplicate_of` to the bug id when it named one and to `null` when it answered `NEW`, with a `rationale` either way. Fill this in **both** cases: a run that looked and found nothing has to be distinguishable from one that never looked, which is what tells us whether the hunt is worth keeping. Set the whole object to null only if the subagent failed to answer.
 
-If you could not localize a root cause, set `root_cause` to null, keep `confidence` low, set `actionable` accordingly, and have your comment ask the specific open questions that block triage.
+- **`reporter_question`** — what you need the reporter to tell you to localize or confirm the cause, addressed to them in one or two short questions: steps to reproduce, a version, a profile or pref setting, a screenshot, `about:support`. It is posted as its own comment with a needinfo on the reporter, **whatever your confidence**, so it reaches the bug even when your diagnosis is held for review. Write only the question: no diagnosis, no file links, and do not mention the needinfo, which is set for you. Do not repeat it in your comment. Use `null` when you have nothing to ask the reporter, including when the open question is one only a developer could answer.
+
+If you could not localize a root cause, set `root_cause` to null, keep `confidence` low, set `actionable` accordingly, and put what you need from the reporter in `reporter_question`. Open questions only a developer could answer stay in the comment.
 
 # Additional instructions for this run
 

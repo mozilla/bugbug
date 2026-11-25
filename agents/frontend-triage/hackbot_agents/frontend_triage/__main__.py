@@ -3,7 +3,7 @@ import sys
 from hackbot_runtime import HackbotContext, run_async
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .agent import FrontendTriageResult, run_frontend_triage
+from .agent import FrontendTriageResult, record_reporter_question, run_frontend_triage
 from .notify import record_notification
 from .preflight import attached_fix, fetch_bug
 
@@ -77,6 +77,8 @@ async def main(ctx: HackbotContext) -> FrontendTriageResult:
         verbose=True,
         actions_recorder=ctx.actions,
     )
+
+    record_reporter_question(ctx.actions, result, bug_fields.get("creator"))
 
     # Recorded last, so it applies after the Bugzilla writes it reports. Only a run
     # in a component with a channel records anything -- see notify.py.
