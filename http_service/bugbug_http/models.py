@@ -9,6 +9,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from time import monotonic
 from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
 
@@ -866,6 +867,18 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     )
 
 
+class _StepTimer:
+    """Log how long each step took, to find out which ones are slow."""
+
+    def __init__(self) -> None:
+        self.start = monotonic()
+
+    def done(self, step: str) -> None:
+        now = monotonic()
+        LOGGER.info("%s took %.2f s", step, now - self.start)
+        self.start = now
+
+
 def _analyze_patch(
     revs: list[bytes], branch: str | None, treeherder_project: str | None = None
 ) -> dict:
@@ -878,6 +891,8 @@ def _analyze_patch(
     """
     from bugbug_http import REPO_DIR
 
+    timer = _StepTimer()
+
     all_commits = repository.download_commits(
         REPO_DIR,
         revs=revs,
@@ -887,6 +902,7 @@ def _analyze_patch(
         include_backouts=True,
     )
     commits = [commit for commit in all_commits if not commit["backsout"]]
+    timer.done("Mining the commits")
 
     # On backouts, select the tasks and manifests which failed recently, as they
     # might have been caused by the backed-out commits.
@@ -910,6 +926,7 @@ def _analyze_patch(
                 len(backout_tasks),
                 len(backout_groups),
             )
+        timer.done("Retrieving the recent failures")
 
     if not commits and not backout_tasks and not backout_groups:
         return {
@@ -928,6 +945,7 @@ def _analyze_patch(
 
     testlabelselect_model = MODEL_CACHE.get("testlabelselect")
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+    timer.done("Loading the models")
 
     # The confidence thresholds computed when training the models for the low/medium/high levels
     # used by the taskgraph, as the scale of the confidences depends on the models.
@@ -955,10 +973,12 @@ def _analyze_patch(
         if commits
         else {}
     )
+    timer.done("Selecting the tasks")
     for task in test_scheduling.find_tasks_for_paths(
         REPO_DIR, known_tasks, modified_paths, head_rev
     ):
         tasks[task] = 1.0
+    timer.done("Finding the tasks for the modified paths")
     for task in backout_tasks:
         tasks[task] = 1.0
 
@@ -981,6 +1001,7 @@ def _analyze_patch(
         )
         | backout_tasks
     )
+    timer.done("Reducing the task configurations")
 
     groups = (
         testgroupselect_model.select_tests(
@@ -989,6 +1010,7 @@ def _analyze_patch(
         if commits
         else {}
     )
+    timer.done("Selecting the manifests")
     # Config selection weighs groups by their probability of regressing, not by their confidence.
     risks = testgroupselect_model.calibrated_probabilities(groups)
     # The manifests including the modified tests, and the groups selected with at least the group
@@ -1006,6 +1028,7 @@ def _analyze_patch(
         groups[group] = 1.0
         risks[group] = 1.0
         very_likely_groups.add(group)
+    timer.done("Finding the manifests for the modified paths")
     for group in backout_groups:
         groups[group] = 1.0
 
@@ -1037,6 +1060,7 @@ def _analyze_patch(
     # their configuration.
     for group in backout_groups:
         config_groups[group] = ["*"]
+    timer.done("Selecting the configurations of the manifests")
 
     data = {
         "tasks": tasks,
