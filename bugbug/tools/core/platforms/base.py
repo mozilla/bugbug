@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import cached_property
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from unidiff import Hunk, PatchedFile, PatchSet
 
@@ -47,6 +47,24 @@ class Patch(ABC):
     def stack_base_patch(self) -> Patch:
         """Return the patch whose base precedes the entire stack."""
         return self
+
+    @property
+    def stack_ancestors(self) -> Sequence[Patch]:
+        """Return the patches applied before this one, oldest first.
+
+        Raises `ValueError` when the stack cannot be determined.
+        """
+        return []
+
+    @property
+    def stack_descendants(self) -> Sequence[Patch]:
+        """Return the patches that build on this one, nearest first."""
+        return []
+
+    @property
+    def display_id(self) -> str:
+        """Return a short, human-readable identifier for the patch."""
+        return self.patch_id
 
     @property
     @abstractmethod

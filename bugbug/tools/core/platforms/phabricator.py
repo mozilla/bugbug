@@ -6,7 +6,7 @@
 """Phabricator platform implementation for code review."""
 
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from logging import getLogger
@@ -887,6 +887,41 @@ class PhabricatorPatch(Patch):
     @property
     def stack_base_patch(self) -> PhabricatorPatch:
         return self._stack_patches[0]
+
+    @property
+    def stack_ancestors(self) -> list[PhabricatorPatch]:
+        return self._stack_patches[:-1]
+
+    @cached_property
+    def stack_descendants(self) -> list[PhabricatorPatch]:
+        """Return the revisions that depend on this one, nearest first.
+
+        Unlike the ancestry, descendants may branch, so every revision that
+        transitively depends on this one is returned.
+        """
+        stack_graph = self.stack_graph
+        children: defaultdict[str, list[str]] = defaultdict(list)
+        for phid, deps in stack_graph.items():
+            for dep in deps:
+                children[dep].append(phid)
+
+        current_phid = self._revision_metadata["phid"]
+        ordered_phids = []
+        seen = {current_phid}
+        queue = deque(children[current_phid])
+        while queue:
+            phid = queue.popleft()
+            if phid in seen:
+                continue
+            seen.add(phid)
+            ordered_phids.append(phid)
+            queue.extend(children[phid])
+
+        return [self.__class__(revision_phid=phid) for phid in ordered_phids]
+
+    @property
+    def display_id(self) -> str:
+        return f"D{self.revision_id}"
 
     @cached_property
     def _all_comments(self) -> list:

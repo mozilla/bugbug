@@ -193,6 +193,9 @@ async def search_text(
 ) -> str:
     """Search for text or patterns across the codebase.
 
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
+
     Args:
         query: Text or regular expression to search for.
         path_filter: Optional path prefix, e.g. 'dom/media'.
@@ -242,6 +245,9 @@ async def get_field_layout(
 ) -> str:
     """Show the memory layout of a C++ class or struct, including field offsets and sizes.
 
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
+
     Args:
         class_name: Fully-qualified class name, e.g. 'mozilla::dom::AudioContext'.
 
@@ -266,6 +272,9 @@ async def get_blame(
     lines: list[int],
 ) -> str:
     """Get the commit that last modified each of the given lines in a file.
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Args:
         file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.cpp'.
@@ -299,6 +308,9 @@ async def check_can_gc(
     symbol: str,
 ) -> str:
     """Check whether a C++ function can trigger garbage collection in SpiderMonkey.
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Accepts partial names (e.g. 'CreateGain') or fully-qualified names
     (e.g. 'mozilla::dom::AudioContext::CreateGain').
@@ -338,6 +350,9 @@ async def find_definition(
 ) -> str:
     """Find the definition of a function, method, class, or struct.
 
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
+
     Accepts partial names (e.g. 'AudioNode') or fully-qualified names
     (e.g. 'mozilla::dom::AudioNode' or 'AudioNode::Connect').
 
@@ -371,6 +386,9 @@ async def search_identifier(
     limit: int = 50,
 ) -> str:
     """Search for an exact identifier across the codebase.
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Args:
         identifier: Identifier to search for.
@@ -416,6 +434,9 @@ async def calls_from(
 ) -> str:
     """Find functions called by the given symbol (outgoing calls).
 
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
+
     Args:
         symbol: Fully-qualified function or method name, e.g. 'mozilla::dom::AudioNode::Connect'.
         depth: Levels of calls to traverse (default 2).
@@ -443,6 +464,9 @@ async def calls_to(
     depth: int = 2,
 ) -> str:
     """Find functions that call the given symbol (incoming calls).
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Args:
         symbol: Fully-qualified function or method name, e.g. 'mozilla::dom::AudioNode::Connect'.
@@ -472,6 +496,9 @@ async def calls_between(
     depth: int = 2,
 ) -> str:
     """Find call paths between two symbols or classes.
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Args:
         symbol_a: First fully-qualified symbol or class name, e.g. 'mozilla::dom::AudioContext'.
@@ -512,6 +539,9 @@ async def get_function_at_line(
     line: int,
 ) -> str:
     """Get the source of the innermost function enclosing a given line.
+
+    Results come from mozilla-central, without this patch or its stack. Use
+    `expand_context` to read a file as the patch stack leaves it.
 
     Useful when you know a line number and want the full function body without
     having to know the function name.
