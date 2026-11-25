@@ -51,6 +51,26 @@ def upgrade() -> None:
         "fk_runs_account_id_accounts", "runs", "accounts", ["account_id"], ["id"]
     )
 
+    # Only UI runs know who triggered them: the email in requested_by, which
+    # becomes a google account.
+    op.execute(
+        """
+        INSERT INTO accounts (identity_provider, external_id, username)
+        SELECT DISTINCT 'google', lower(trim(requested_by)), lower(trim(requested_by))
+        FROM runs
+        WHERE trim(requested_by) <> ''
+        """
+    )
+    op.execute(
+        """
+        UPDATE runs
+        SET account_id = accounts.id, source = 'ui'
+        FROM accounts
+        WHERE accounts.identity_provider = 'google'
+          AND accounts.external_id = lower(trim(runs.requested_by))
+        """
+    )
+
 
 def downgrade() -> None:
     """Downgrade schema."""
