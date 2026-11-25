@@ -34,21 +34,40 @@ def fit_isotonic_breakpoints(
 
 
 class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
-    def __init__(self, base_clf):
+    def __init__(self, base_clf, method="isotonic"):
+        """Calibrate base_clf on a held-out 20% of the training set.
+
+        method is "isotonic" (by default) or "sigmoid" (Platt scaling): isotonic calibration
+        is a step function, so it maps many scores to the same probability and loses part
+        of the ranking; sigmoid calibration is strictly monotonic, so it keeps it.
+        """
         self.base_clf = base_clf
+        self.method = method
         self.calibrated_clf = CalibratedClassifierCV(
-            base_clf, cv="prefit", method="isotonic"
+            base_clf, cv="prefit", method=method
         )
 
-    def fit(self, X_train, y_train, sample_weight=None):
+    def fit(self, X_train, y_train, sample_weight=None, calibration_weight=None):
+        """Fit base_clf with sample_weight and calibrate it with calibration_weight.
+
+        calibration_weight defaults to sample_weight. When sample_weight balances the
+        classes, pass weights which don't, so the probabilities match the observed rates.
+        """
         if sample_weight is None:
             sample_weight = np.ones(len(y_train))
+        if calibration_weight is None:
+            calibration_weight = sample_weight
 
-        X_train, X_val, y_train, y_val, w_train, w_val = train_test_split(
-            X_train, y_train, sample_weight, test_size=0.2, random_state=42
+        X_train, X_val, y_train, y_val, w_train, _, _, c_val = train_test_split(
+            X_train,
+            y_train,
+            sample_weight,
+            calibration_weight,
+            test_size=0.2,
+            random_state=42,
         )
         self.base_clf.fit(X_train, y_train, sample_weight=w_train)
-        self.calibrated_clf.fit(X_val, y_val, sample_weight=w_val)
+        self.calibrated_clf.fit(X_val, y_val, sample_weight=c_val)
 
     def predict(self, X):
         return self.calibrated_clf.predict(X)

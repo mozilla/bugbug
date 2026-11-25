@@ -3,9 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import itertools
 import logging
 from datetime import datetime
+from typing import Iterable, Sequence
 
 import dateutil.parser
 import numpy as np
@@ -51,7 +53,8 @@ EVALUATION_MONTHS = 3
 # at the high end of the risk scale than at the low end, so the bands get narrower as the
 # risk increases.
 RISK_BAND_SHARES = (
-    ("l", 0.5),  # Lower than average risk.
+    ("vl", 0.2),  # Very low risk.
+    ("l", 0.3),  # Lower than average risk.
     ("a", 0.3),  # Average risk.
     ("h", 0.15),  # Higher than average risk.
     ("v", 0.05),  # Very high risk.
@@ -61,7 +64,7 @@ RISK_BAND_SHARES = (
 def compute_risk_bands(risks: np.ndarray) -> list[tuple[str, float, float]]:
     """Split the risk scale into contiguous bands holding the RISK_BAND_SHARES of risks.
 
-    Calibrated risks take few distinct values, so a plain quantile could fall in a large
+    Calibrated risks can take few distinct values, so a plain quantile could fall in a large
     group of tied risks and leave a band almost empty. Instead, each threshold is the
     distinct risk value whose share of risks at or below it is closest to the target.
     A risk equal to a threshold belongs to the lower band.
@@ -102,6 +105,42 @@ def log_risk_bands(
             mask.sum(),
             is_regressor[mask].mean() if mask.any() else 0.0,
         )
+
+
+# The bug fields used by the features. The product rarely changes, and the creation time
+# never does, so their current values are those the bugs had when their patches landed.
+BUG_FIELDS = ("product", "creation_time")
+
+
+def get_bug_fields(bug_ids: set[int]) -> dict[int, dict]:
+    """Read the bug fields used by the features from the bugs DB."""
+    return {
+        bug["id"]: {field: bug[field] for field in BUG_FIELDS}
+        for bug in bugzilla.get_bugs()
+        if bug["id"] in bug_ids
+    }
+
+
+def fetch_bug_fields(bug_ids: Iterable[int | None]) -> dict[int, dict]:
+    """Fetch the bug fields used by the features from Bugzilla.
+
+    Bugs which can't be fetched (e.g. private ones) are left out, so they have no bug features.
+    """
+    ids = [bug_id for bug_id in bug_ids if bug_id]
+    if not ids:
+        return {}
+
+    try:
+        bugs = bugzilla.get_fields(ids, ("id",) + BUG_FIELDS)
+    except Exception:
+        logger.warning("Could not fetch bugs %s from Bugzilla", ids, exc_info=True)
+        return {}
+
+    return {
+        bug_id: {field: bug[field] for field in BUG_FIELDS}
+        for bug_id, bug in bugs.items()
+        if all(field in bug for field in BUG_FIELDS)
+    }
 
 
 class RegressorModel(CommitModel):
@@ -160,6 +199,13 @@ class RegressorModel(CommitModel):
             commit_features.FunctionsTouchedSize(),
             commit_features.SourceCodeFileMetrics(),
             commit_features.SourceCodeMetricsDiff(),
+            commit_features.StackSize(),
+            commit_features.StackSpread(),
+            commit_features.StackTests(),
+            commit_features.StackPartPosition(),
+            commit_features.BugLandingHistory(),
+            commit_features.BugProduct(),
+            commit_features.BugAgeAtLanding(),
         ]
 
         cleanup_functions = [
@@ -206,7 +252,9 @@ class RegressorModel(CommitModel):
             n_jobs=utils.get_physical_cpu_count(),
         )
         if calibration:
-            estimator = IsotonicRegressionCalibrator(estimator)
+            # Sigmoid calibration keeps the ranking of the classifier (isotonic calibration
+            # ties many patches, which costs ~1 point of average precision at bug level).
+            estimator = IsotonicRegressionCalibrator(estimator, method="sigmoid")
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
         self.clf = Pipeline(
@@ -217,26 +265,90 @@ class RegressorModel(CommitModel):
         )
         self.train_bug_ids: list[int] = []
 
+    @staticmethod
+    def add_stack_and_bug_info(
+        commits: Sequence[repository.CommitDict],
+        bugs: dict[int, dict],
+        stack: Sequence[repository.CommitDict] | None = None,
+        stack_index: commit_features.StackInfoIndex | None = None,
+    ) -> None:
+        """Attach the stack, bug landing history and bug fields used by the features.
+
+        By default, the stack of each commit is made of the commits of the same bug landed in
+        the same push, among the commits DB and the given commits (which might not be in the DB
+        yet); pass stack for patches under review. The landing histories come from the commits
+        DB, or from stack_index if given (e.g. a cached index of all bugs). bugs maps bug IDs to
+        the BUG_FIELDS of the bugs (bugs which are missing, e.g. private ones, have no bug
+        features).
+        """
+        if stack_index is None:
+            bug_ids = set(commit["bug_id"] for commit in commits if commit["bug_id"])
+            stack_index = commit_features.StackInfoIndex(
+                repository.get_commits(), bug_ids
+            )
+
+        same_push: dict[tuple, list[repository.CommitDict]] = collections.defaultdict(
+            list
+        )
+        for commit in commits:
+            same_push[(commit["bug_id"], commit["pushdate"])].append(commit)
+
+        for commit in commits:
+            stack_index.attach(
+                commit, stack, same_push[(commit["bug_id"], commit["pushdate"])]
+            )
+            commit["bug"] = bugs.get(commit["bug_id"], {})
+
     def items_gen(self, classes):
+        bug_ids = set(
+            commit["bug_id"]
+            for commit in repository.get_commits()
+            if commit["node"] in classes and commit["bug_id"]
+        )
+        stack_index = commit_features.StackInfoIndex(repository.get_commits(), bug_ids)
+        bugs = get_bug_fields(bug_ids)
+
         # Remember the bug of each item, to weight training samples by bug (see get_sample_weights).
         self.train_bug_ids = []
         for commit, label in super().items_gen(classes):
+            # Same as add_stack_and_bug_info, without collecting the commits first.
+            stack_index.attach(commit)
+            commit["bug"] = bugs.get(commit["bug_id"], {})
             self.train_bug_ids.append(commit["bug_id"])
             yield commit, label
 
-    def get_sample_weights(self, X, y):
+    def get_bug_weights(self, X):
         # Labels are per bug (a commit is a regressor if its bug caused a regression), and
         # predictions are evaluated per bug, so bugs with many commits would otherwise dominate
-        # training: each bug gets the same total weight, split among its commits. The classes
-        # are balanced with weights too (instead of undersampling, which would not keep the
-        # weights aligned with the samples).
+        # training: each bug gets the same total weight, split among its commits.
         bug_ids = np.array(self.train_bug_ids)[np.asarray(X.index)]
         _, inverse, counts = np.unique(bug_ids, return_inverse=True, return_counts=True)
-        sample_weight = 1.0 / counts[inverse]
+        return 1.0 / counts[inverse]
+
+    def get_sample_weights(self, X, y):
+        # The classes are balanced with weights too (instead of undersampling, which would not
+        # keep the weights aligned with the samples).
+        sample_weight = self.get_bug_weights(X)
         for label in np.unique(y):
             mask = y == label
             sample_weight[mask] *= len(y) / (2 * sample_weight[mask].sum())
         return sample_weight
+
+    def fit_classifier(self, X, y):
+        if not isinstance(
+            self.clf.named_steps["estimator"], IsotonicRegressionCalibrator
+        ):
+            super().fit_classifier(X, y)
+            return
+
+        # The calibration doesn't balance the classes, so the risks are the regression rates
+        # of bugs (and not of a set of bugs half of which caused regressions).
+        self.clf.fit(
+            X,
+            y,
+            estimator__sample_weight=self.get_sample_weights(X, y),
+            estimator__calibration_weight=self.get_bug_weights(X),
+        )
 
     def get_labels(self):
         classes = {}
@@ -343,6 +455,11 @@ class RegressorModel(CommitModel):
                 continue
 
             commits.append(commit_data)
+
+        self.add_stack_and_bug_info(
+            commits,
+            get_bug_fields(set(commit["bug_id"] for commit in commits)),
+        )
 
         logger.info("%d commits in the evaluation set", len(commits))
         bugs_num = len(set(commit["bug_id"] for commit in commits))

@@ -253,3 +253,50 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         assert result["risk_band"] is None
     assert _get_result(nodes["scored"], "try")["prob"] == [0.25, 0.75]
     assert _get_result(nodes["merge"], "try") == {"available": False}
+
+
+def test_classify_commits_regressor_stack_info(monkeypatch) -> None:
+    node = "5" * 40
+    monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        models.repository,
+        "download_commits",
+        lambda repo_dir, revs, **kwargs: (
+            {"node": node, "bug_id": 42, "backsout": [], "ignored": False},
+        ),
+    )
+    monkeypatch.setattr(models.os.path, "getmtime", lambda path: 1.0)
+    index = object()
+    monkeypatch.setattr(models, "get_landings_index", lambda mtime: index)
+
+    import bugbug.models.regressor
+
+    monkeypatch.setattr(
+        bugbug.models.regressor,
+        "fetch_bug_fields",
+        lambda bug_ids: {
+            bug_id: {"product": "Core", "creation_time": "2024-01-01T00:00:00Z"}
+            for bug_id in bug_ids
+        },
+    )
+
+    calls = []
+
+    class MockStackRegressorModel(MockRegressorModel):
+        def add_stack_and_bug_info(self, commits, bugs, stack_index):
+            calls.append((list(commits), bugs, stack_index))
+            for commit in commits:
+                commit["bug"] = bugs[commit["bug_id"]]
+
+    model = MockStackRegressorModel()
+    monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: model)
+
+    assert models.classify_commits("regressor", "try", [node]) == "OK"
+
+    assert len(calls) == 1
+    commits, bugs, stack_index = calls[0]
+    assert [commit["node"] for commit in commits] == [node]
+    assert bugs == {42: {"product": "Core", "creation_time": "2024-01-01T00:00:00Z"}}
+    assert stack_index is index
+    # The commits are classified after the stack and bug info are attached.
+    assert model.classified[0]["bug"]["product"] == "Core"

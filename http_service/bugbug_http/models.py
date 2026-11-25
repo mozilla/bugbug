@@ -19,7 +19,15 @@ import zstandard
 from redis import Redis
 from urllib3.util.retry import Retry
 
-from bugbug import bugzilla, build_platforms, db, repository, test_scheduling, utils
+from bugbug import (
+    bugzilla,
+    build_platforms,
+    commit_features,
+    db,
+    repository,
+    test_scheduling,
+    utils,
+)
 from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.models import testconfigselect, testselect
@@ -521,6 +529,12 @@ def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
     return None
 
 
+@lru_cache(maxsize=1)
+def get_landings_index(commits_db_mtime: float) -> commit_features.StackInfoIndex:
+    """Index the landing histories of all bugs, rebuilt when the commits DB changes."""
+    return commit_features.StackInfoIndex(repository.get_commits(), stacks=False)
+
+
 def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     """Classify commits with a commit model, and store the result of each in Redis.
 
@@ -569,6 +583,16 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
 
     results: dict[str, dict] = {}
     if to_score:
+        if hasattr(model, "add_stack_and_bug_info"):
+            # The regressor model uses the stack of the commits and their bugs.
+            from bugbug.models.regressor import fetch_bug_fields
+
+            model.add_stack_and_bug_info(
+                to_score,
+                fetch_bug_fields(commit["bug_id"] for commit in to_score),
+                stack_index=get_landings_index(os.path.getmtime(repository.COMMITS_DB)),
+            )
+
         probs = model.classify(to_score, probabilities=True)
         indexes = probs.argmax(axis=-1)
         classes = model.le.inverse_transform(indexes)

@@ -27,7 +27,7 @@ from scipy.stats import spearmanr
 
 from bugbug import db, repository, test_scheduling
 from bugbug.model import Model, get_transformer_pipeline
-from bugbug.models.regressor import RegressorModel
+from bugbug.models.regressor import RegressorModel, fetch_bug_fields
 from bugbug.models.testfailure import TestFailureModel
 from bugbug.utils import (
     download_check_etag,
@@ -619,11 +619,21 @@ class CommitClassifier(object):
             self.classify_test_select(commits, runnable_jobs_path)
 
     def classify_regressor(self, commits: tuple[repository.CommitDict, ...]) -> None:
+        commit = commits[-1]
+        if self.model_name == "regressor":
+            # The stack being analyzed is made of the commits of the same bug.
+            stack = [c for c in commits if c["bug_id"] == commit["bug_id"]]
+            RegressorModel.add_stack_and_bug_info(
+                [commit],
+                fetch_bug_fields([commit["bug_id"]]),
+                stack=stack,
+            )
+
         # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
         # the current commit from the "clean" (or "dirty") commits.
         probs, importance = self.model.classify(
-            commits[-1],
+            commit,
             probabilities=True,
             importances=True,
             background_dataset=lambda v: self.X[self.y != v],
