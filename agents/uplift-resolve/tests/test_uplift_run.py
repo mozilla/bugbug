@@ -103,7 +103,7 @@ async def test_run_uplift_reports_what_the_session_resolved(
         "reproducible, since a branch name moves."
     )
     assert [entry.source for entry in result.requested_sources] == [
-        {"kind": "git", "commit": "a" * 40}
+        {"kind": "git", "commit": "a" * 40, "revision_id": None}
     ], "The result should record which sources were requested, not just how many."
     assert (result.num_turns, result.total_cost_usd) == (4, 0.25), (
         "The session's run metadata should reach the result."

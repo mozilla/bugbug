@@ -245,6 +245,13 @@ class GitUpliftSource(BaseModel):
         pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
     )
 
+    # The Phabricator revision the commit landed from, so the agent can name it
+    # by its D-number rather than by its position in the stack.
+    revision_id: int | None = Field(
+        default=None,
+        description="Phabricator revision id (the D-number) the commit landed from.",
+    )
+
 
 class PhabricatorUpliftSource(BaseModel):
     """A patch to uplift, identified by a Phabricator revision.

@@ -20,7 +20,8 @@ For a **Git** source (a commit SHA):
 
 1. The commit and its parent are already local, so cherry-pick can three-way
    merge.
-2. `git cherry-pick -x <commit>`
+2. `git cherry-pick <commit>`. Leave out `-x`: its "(cherry picked from commit ...)"
+   line would end up in the uplift's commit message.
 3. If it conflicts, resolve the conflicts and commit the fixed patch.
 
 For a **Phabricator** source (a revision id):
@@ -112,6 +113,12 @@ this shape:
   "unresolved": ["path/to/file: why it could not be resolved"]
 }
 ```
+
+In `summary`, `conflicts`, `unresolved` and `summary.md`, refer to each source by
+the name its work item leads with: its revision's D-number (e.g. "D4342"), or
+its short commit hash when it has no revision. Never call sources "patch 1",
+"patch 2" and so on: reviewers read the report on the revisions themselves, where
+those numbers mean nothing.
 
 Set `resolved` to `false` if any source could not be applied or any conflict was
 left unresolved, and list those in `unresolved`. Before you finish, check that
