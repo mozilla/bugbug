@@ -1,7 +1,7 @@
 """Tests for Weave tracing setup and agent-name derivation."""
 
 import pytest
-from hackbot_runtime import tracing, wandb_wif
+from hackbot_runtime import tracing, wif
 from opentelemetry.sdk.trace import TracerProvider
 from weave.conversation.agent_context import resolve_agent_name as weave_agent_name
 
@@ -15,7 +15,12 @@ def _entrypoint_at(path: str):
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
-    for var in ("WANDB_API_KEY", wandb_wif.TOKEN_FILE_ENV, "WEAVE_PROJECT"):
+    for var in (
+        "WANDB_API_KEY",
+        "WANDB_FEDERATION_AUDIENCE",
+        "WANDB_IDENTITY_TOKEN_FILE",
+        "WEAVE_PROJECT",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -37,7 +42,7 @@ def test_init_weave_is_inert_without_credentials(monkeypatch):
     monkeypatch.setattr(
         weave, "init", lambda *a, **k: pytest.fail("weave.init should not be called")
     )
-    assert tracing._init_weave() is False
+    assert tracing._init_weave(wif.WandbWifSettings.from_env()) is False
 
 
 def test_init_weave_enabled_by_api_key(monkeypatch):
@@ -50,21 +55,21 @@ def test_init_weave_enabled_by_api_key(monkeypatch):
     monkeypatch.setenv("WANDB_API_KEY", "dummy")
     monkeypatch.setenv("WEAVE_PROJECT", "team/prod")
 
-    assert tracing._init_weave() is True
+    assert tracing._init_weave(wif.WandbWifSettings.from_env()) is True
     assert calls == {"project": "team/prod"}
 
 
-def test_init_weave_enabled_by_wif_token_file(monkeypatch):
-    """Federation leaves no API key -- the identity token file enables tracing."""
+def test_init_weave_enabled_by_wif(monkeypatch):
+    """Federation leaves no API key -- having it enabled is enough for tracing."""
     import weave
 
     calls = {}
     monkeypatch.setattr(
         weave, "init", lambda project, **kw: calls.update(project=project)
     )
-    monkeypatch.setenv(wandb_wif.TOKEN_FILE_ENV, "/run/wandb-identity-token")
+    monkeypatch.setenv("WANDB_FEDERATION_AUDIENCE", "https://wandb.example/aud")
 
-    assert tracing._init_weave() is True
+    assert tracing._init_weave(wif.WandbWifSettings.from_env()) is True
     assert calls == {"project": tracing.DEFAULT_WEAVE_PROJECT}
 
 
@@ -75,7 +80,7 @@ def test_trace_agent_is_noop_without_credentials():
 
 
 def test_trace_agent_labels_spans_when_enabled(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda _config: True)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
     with tracing.trace_agent(entry, "run-1"):
@@ -84,7 +89,7 @@ def test_trace_agent_labels_spans_when_enabled(monkeypatch):
 
 
 def test_trace_agent_tags_spans_with_run_id(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda _config: True)
     provider = TracerProvider()
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
@@ -99,7 +104,7 @@ def test_trace_agent_tags_spans_with_run_id(monkeypatch):
 
 
 def test_trace_agent_skips_tagging_without_sdk_provider(monkeypatch):
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda _config: True)
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: object())
     entry = _entrypoint_at("/app/hackbot_agents/build_repair/__main__.py")
 
@@ -121,7 +126,7 @@ def exporter(monkeypatch):
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     monkeypatch.setattr(conversation.otel_trace, "get_tracer", provider.get_tracer)
     monkeypatch.setattr(tracing.otel_trace, "get_tracer_provider", lambda: provider)
-    monkeypatch.setattr(tracing, "_init_weave", lambda: True)
+    monkeypatch.setattr(tracing, "_init_weave", lambda _config: True)
     return exporter
 
 
@@ -226,7 +231,10 @@ def test_trace_agent_records_usage_missing_from_main_thread(exporter):
         ),
     ]
 
-    with tracing.trace_agent(BUG_FIX, "run-1"), Conversation() as conv:
+    with (
+        tracing.trace_agent(BUG_FIX, "run-1"),
+        Conversation() as conv,
+    ):
         for messages in (first_turn, second_turn):
             with conv.start_turn(agent_name="bug-fix") as turn:
                 state = otel_integration._TurnState(conversation=conv, turn=turn)
