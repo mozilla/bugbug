@@ -199,6 +199,8 @@ tasks:
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
                     cd ../hackbot-pulse-listener &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    cd ../hackbot-mcp &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_mcp --cov-append tests/ &&
                     cd ../mcp &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --with pytest-mock==3.15.1 pytest --cov=bugbug_mcp --cov-append tests/ &&
                     cd ../.. &&
