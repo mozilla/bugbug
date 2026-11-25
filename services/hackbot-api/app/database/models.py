@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -15,6 +16,8 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from app.schemas import IdentityProvider, Source
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -31,7 +34,9 @@ class Run(Base):
     inputs: Mapped[dict] = mapped_column(JSONB, nullable=False)
     requested_by: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     requested_via: Mapped[str | None] = mapped_column(String, nullable=True)
-    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    source: Mapped[Source | None] = mapped_column(
+        Enum(Source, name="source"), nullable=True
+    )
     account_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("accounts.id"), nullable=True
     )
@@ -108,7 +113,9 @@ class Account(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    identity_provider: Mapped[str] = mapped_column(String, nullable=False)
+    identity_provider: Mapped[IdentityProvider] = mapped_column(
+        Enum(IdentityProvider, name="identity_provider"), nullable=False
+    )
     external_id: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

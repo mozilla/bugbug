@@ -17,13 +17,18 @@ down_revision: Union[str, Sequence[str], None] = "d4e7b2a9c1f3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+identity_provider = sa.Enum(
+    "google", "bugzilla", "phabricator", "github", "slack", name="identity_provider"
+)
+source = sa.Enum("ui", "bugzilla", "phabricator", "github", "slack", name="source")
+
 
 def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
         "accounts",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("identity_provider", sa.String(), nullable=False),
+        sa.Column("identity_provider", identity_provider, nullable=False),
         sa.Column("external_id", sa.String(), nullable=False),
         sa.Column("username", sa.String(), nullable=True),
         sa.Column(
@@ -45,7 +50,9 @@ def upgrade() -> None:
             name="uq_accounts_identity_provider_external_id",
         ),
     )
-    op.add_column("runs", sa.Column("source", sa.String(), nullable=True))
+    # Unlike create_table, add_column does not create the enum type.
+    source.create(op.get_bind())
+    op.add_column("runs", sa.Column("source", source, nullable=True))
     op.add_column("runs", sa.Column("account_id", sa.Integer(), nullable=True))
     op.create_foreign_key(
         "fk_runs_account_id_accounts", "runs", "accounts", ["account_id"], ["id"]
@@ -56,7 +63,10 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO accounts (identity_provider, external_id, username)
-        SELECT DISTINCT 'google', lower(trim(requested_by)), lower(trim(requested_by))
+        SELECT DISTINCT
+            'google'::identity_provider,
+            lower(trim(requested_by)),
+            lower(trim(requested_by))
         FROM runs
         WHERE trim(requested_by) <> ''
         """
@@ -78,3 +88,5 @@ def downgrade() -> None:
     op.drop_column("runs", "account_id")
     op.drop_column("runs", "source")
     op.drop_table("accounts")
+    source.drop(op.get_bind())
+    identity_provider.drop(op.get_bind())

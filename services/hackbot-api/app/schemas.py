@@ -14,6 +14,26 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class Source(str, Enum):
+    """Where a run was triggered from."""
+
+    ui = "ui"
+    bugzilla = "bugzilla"
+    phabricator = "phabricator"
+    github = "github"
+    slack = "slack"
+
+
+class IdentityProvider(str, Enum):
+    """The service an account's identity belongs to."""
+
+    google = "google"
+    bugzilla = "bugzilla"
+    phabricator = "phabricator"
+    github = "github"
+    slack = "slack"
+
+
 class AgentInputs(BaseModel):
     """Run-level inputs shared by every agent."""
 
