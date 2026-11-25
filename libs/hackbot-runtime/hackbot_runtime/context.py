@@ -253,8 +253,8 @@ class HackbotContext(BaseSettings):
         """A writable path for the agent's run log; published by the runtime.
 
         The parent dir is created on first access (so a ``Reporter`` can open the
-        file straight away). Agents that never write a log just leave it absent,
-        and :meth:`publish_log` becomes a no-op.
+        file straight away). ``run``/``run_async`` also write the runtime's and
+        agents' log records to it, so source checkout and setup show up there.
         """
         return Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-")) / "agent.log"
 

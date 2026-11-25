@@ -4,7 +4,8 @@ import logging
 import os
 import sys
 import traceback
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import NoReturn
 
@@ -66,6 +67,33 @@ def _configure_logging() -> None:
             stream=sys.stderr,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
+
+
+@contextmanager
+def _log_to_agent_log(ctx: HackbotContext) -> Iterator[None]:
+    """Also write runtime and agent log records to the published agent log.
+
+    Source checkout, snapshot restore and setup happen before the agent's
+    transcript starts, and otherwise reach only the container's stderr.
+    """
+    handler = logging.FileHandler(ctx.log_path, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s.%(msecs)03d %(name)s %(levelname)s %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    )
+    loggers = [
+        logging.getLogger(name) for name in ("hackbot_runtime", "hackbot_agents")
+    ]
+    for logger in loggers:
+        logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        for logger in loggers:
+            logger.removeHandler(handler)
+        handler.close()
 
 
 def _ok_payload(ctx: HackbotContext, findings: dict) -> dict:
@@ -209,17 +237,19 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
         raise SystemExit(2)
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
-    try:
-        _configure_auth()
-        if ctx.parent_run_id:
-            ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
-            outcome: object = entrypoint(ctx)
-    except Exception as exc:
-        log.exception("Agent raised an exception")
-        outcome = exc
+    with _log_to_agent_log(ctx):
+        try:
+            _configure_auth()
+            if ctx.parent_run_id:
+                ctx.fetch_parent_artifacts()
+            with trace_agent(entrypoint, ctx.run_id):
+                outcome: object = entrypoint(ctx)
+        except Exception as exc:
+            log.exception("Agent raised an exception")
+            outcome = exc
+        exit_code = _finish(ctx, outcome)
 
-    raise SystemExit(_finish(ctx, outcome))
+    raise SystemExit(exit_code)
 
 
 def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
@@ -230,14 +260,16 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
         raise SystemExit(2)
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
-    try:
-        _configure_auth()
-        if ctx.parent_run_id:
-            ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
-            outcome: object = asyncio.run(entrypoint(ctx))
-    except Exception as exc:
-        log.exception("Agent raised an exception")
-        outcome = exc
+    with _log_to_agent_log(ctx):
+        try:
+            _configure_auth()
+            if ctx.parent_run_id:
+                ctx.fetch_parent_artifacts()
+            with trace_agent(entrypoint, ctx.run_id):
+                outcome: object = asyncio.run(entrypoint(ctx))
+        except Exception as exc:
+            log.exception("Agent raised an exception")
+            outcome = exc
+        exit_code = _finish(ctx, outcome)
 
-    raise SystemExit(_finish(ctx, outcome))
+    raise SystemExit(exit_code)

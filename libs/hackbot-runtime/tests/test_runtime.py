@@ -1,6 +1,7 @@
 """Tests for summary persistence when no uploader is configured."""
 
 import json
+import logging
 
 import pytest
 import sentry_sdk
@@ -257,6 +258,22 @@ def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):
     summary = json.loads((tmp_path / "t" / "summary.json").read_text())
     assert summary["status"] == "error"
     assert "nope" in summary["error"]
+
+
+def test_run_async_writes_runtime_logs_to_the_agent_log(tmp_path, monkeypatch, caplog):
+    _run_env(tmp_path, monkeypatch)
+    caplog.set_level(logging.INFO)  # what _configure_logging sets in a container
+
+    async def main(ctx):
+        logging.getLogger("hackbot_runtime.source").info("snapshot checkout complete")
+        return HackbotAgentResult(num_turns=1)
+
+    with pytest.raises(SystemExit):
+        run_async(main)
+
+    published = (tmp_path / "t" / "logs" / "agent.log").read_text()
+    assert "hackbot_runtime.source INFO snapshot checkout complete" in published
+    assert not logging.getLogger("hackbot_runtime").handlers
 
 
 def test_a_run_without_a_parent_fetches_nothing(tmp_path, monkeypatch):
