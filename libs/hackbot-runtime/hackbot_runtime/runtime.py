@@ -35,6 +35,11 @@ _CONFIG_NAME = "hackbot.toml"
 _SUMMARY_NAME = "summary.json"
 _AGENT_LOG_KEY = "logs/agent.log"
 
+# Logged when a run starts. A logging sink matches this text to mark the run
+# as running (agent-run-starts in webservices-infra's hackbot events.tf), so
+# changing it breaks that sink.
+RUN_STARTED_MARKER = "hackbot run started"
+
 
 def _configure_auth() -> None:
     """Set up the model-provider and observability credentials before the run.
@@ -208,6 +213,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
     if ctx is None:
         raise SystemExit(2)
     sentry_sdk.set_tag("run_id", ctx.run_id)
+    log.info("%s (run_id=%s)", RUN_STARTED_MARKER, ctx.run_id)
 
     try:
         _configure_auth()
@@ -229,6 +235,7 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
     if ctx is None:
         raise SystemExit(2)
     sentry_sdk.set_tag("run_id", ctx.run_id)
+    log.info("%s (run_id=%s)", RUN_STARTED_MARKER, ctx.run_id)
 
     try:
         _configure_auth()

@@ -259,6 +259,19 @@ def test_run_async_exits_nonzero_when_agent_raises(tmp_path, monkeypatch):
     assert "nope" in summary["error"]
 
 
+def test_run_async_logs_run_started_marker(tmp_path, monkeypatch, caplog):
+    # A logging sink matches this text to mark the run running.
+    _run_env(tmp_path, monkeypatch)
+
+    async def main(ctx):
+        return HackbotAgentResult(num_turns=1)
+
+    with caplog.at_level("INFO", logger="hackbot_runtime"), pytest.raises(SystemExit):
+        run_async(main)
+
+    assert "hackbot run started (run_id=t)" in caplog.messages
+
+
 def test_a_run_without_a_parent_fetches_nothing(tmp_path, monkeypatch):
     _run_env(tmp_path, monkeypatch)
     monkeypatch.delenv("PARENT_RUN_ID", raising=False)

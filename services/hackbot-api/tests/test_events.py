@@ -1,7 +1,8 @@
-"""Tests for the internal event routes (agent-run-finished, apply-run-actions).
+"""Tests for the internal event routes (agent-run-started/finished, apply-run-actions).
 
 Covers the Pub/Sub push envelope decode and extracting the execution name from
-a Cloud Run Jobs `system_event` completion LogEntry (routed via a logging sink).
+a Cloud Run Jobs `system_event` completion LogEntry or a container log's start
+marker (each routed via a logging sink).
 """
 
 import base64
@@ -54,6 +55,24 @@ def test_execution_name_from_completion_log_success_and_failure():
             _execution_name_from_completion_log(_completion_log(status))
             == "projects/p/locations/l/jobs/j/executions/e"
         )
+
+
+def _start_log() -> dict:
+    """A Cloud Run Jobs container LogEntry carrying hackbot-runtime's start marker."""
+    return {
+        "textPayload": "2026-11-11 18:33:41,271 - hackbot_runtime - INFO - "
+        "hackbot run started (run_id=r)",
+        "labels": {"run.googleapis.com/execution_name": "e"},
+        "resource": {
+            "type": "cloud_run_job",
+            "labels": {"job_name": "hackbot-agent-bug-fix"},
+        },
+    }
+
+
+def test_execution_name_from_start_log():
+    # Container logs only carry the execution short-name, in a label.
+    assert _execution_name_from_completion_log(_start_log()) == "e"
 
 
 def test_execution_name_falls_back_to_response_metadata_name():

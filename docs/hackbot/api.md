@@ -129,6 +129,26 @@ only has to identify _which_ run finished — `finalize_run` re-queries the auth
 execution status rather than trusting the payload. Correlation is on `execution_name`, with
 a suffix match as a fallback so a v1/v2 resource-name prefix mismatch doesn't break it.
 
+Start is detected in a similar way, so a run shows `running` while the execution is
+active. Cloud Run's only `system_event` audit log for an execution is written when it
+completes, so hackbot-runtime logs a fixed line (`hackbot run started`) at the start of
+every run, and the sink matches that instead:
+
+```
+Agent container starts
+  → hackbot-runtime logs `hackbot run started`
+  → Cloud Logging sink on the job's container logs
+  → Pub/Sub push
+  → POST /internal/events/agent-run-started
+  → finalize_run
+```
+
+Container logs carry only the execution's short name, which the suffix match handles.
+
+Both routes share one handler. `finalize_run` moves a `pending` run to `running` if the
+execution is still active. If the start event arrives after the execution has ended, the
+route finalizes the run and notifies the requester, and the later finish event does nothing.
+
 `finalize_run` is idempotent via `finalized_at`, because push delivery is at-least-once. It
 reads `summary.json`, lists the artifacts, sets the terminal state, and publishes
 `run.completed`.
