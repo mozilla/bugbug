@@ -569,6 +569,30 @@ def format_external_content(content_items: list[ExternalContentItem]) -> str:
     )
 
 
+async def resolve_external_context_for_review(
+    patch,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+    extra_context_toml: str | None = None,
+    content_overrides: dict[str, str] | None = None,
+) -> tuple[str, list[dict]]:
+    """Resolve the context repository and load matching review context."""
+    if review_context_repo is None:
+        repo_ref = await patch.github_repo_ref()
+        if repo_ref:
+            review_context_repo, inferred_branch = repo_ref
+            review_context_branch = review_context_branch or inferred_branch
+    if not review_context_repo:
+        return "", []
+    return await load_external_context_for_review(
+        patch,
+        review_context_repo,
+        review_context_branch=review_context_branch or "main",
+        extra_context_toml=extra_context_toml,
+        content_overrides=content_overrides,
+    )
+
+
 async def load_external_context_for_review(
     patch,
     review_context_repo: str,
