@@ -5,6 +5,7 @@ import os
 import pytest
 from google.auth.exceptions import GoogleAuthError
 from hackbot_runtime import openai_wif
+from hackbot_runtime.config import OpenaiWifSettings
 from hackbot_runtime.providers import ProviderError
 
 
@@ -20,19 +21,19 @@ def _reset_module_state():
 @pytest.fixture
 def _no_federation_env(monkeypatch):
     for var in (
-        openai_wif.RULE_ID_ENV,
-        openai_wif.AUDIENCE_ENV,
-        openai_wif.TOKEN_FILE_ENV,
-        openai_wif.REFRESH_INTERVAL_ENV,
+        OpenaiWifSettings.RULE_ID_ENV,
+        OpenaiWifSettings.AUDIENCE_ENV,
+        OpenaiWifSettings.TOKEN_FILE_ENV,
+        OpenaiWifSettings.REFRESH_INTERVAL_ENV,
         "OPENAI_API_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
 
 
 def test_is_enabled_follows_rule_id(monkeypatch):
-    monkeypatch.delenv(openai_wif.RULE_ID_ENV, raising=False)
+    monkeypatch.delenv(OpenaiWifSettings.RULE_ID_ENV, raising=False)
     assert openai_wif.is_enabled() is False
-    monkeypatch.setenv(openai_wif.RULE_ID_ENV, "idpm_abc")
+    monkeypatch.setenv(OpenaiWifSettings.RULE_ID_ENV, "idpm_abc")
     assert openai_wif.is_enabled() is True
 
 
@@ -48,13 +49,13 @@ def test_configure_is_inert_without_federation(_no_federation_env, monkeypatch):
 
     assert openai_wif.configure() is False
     assert called is False
-    assert openai_wif.TOKEN_FILE_ENV not in os.environ
+    assert OpenaiWifSettings.TOKEN_FILE_ENV not in os.environ
 
 
 def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tmp_path):
     token_file = tmp_path / "identity-token"
-    monkeypatch.setenv(openai_wif.RULE_ID_ENV, "idpm_abc")
-    monkeypatch.setenv(openai_wif.TOKEN_FILE_ENV, str(token_file))
+    monkeypatch.setenv(OpenaiWifSettings.RULE_ID_ENV, "idpm_abc")
+    monkeypatch.setenv(OpenaiWifSettings.TOKEN_FILE_ENV, str(token_file))
     captured = {}
 
     def _fetch(audience):
@@ -66,13 +67,13 @@ def test_configure_writes_token_and_sets_env(_no_federation_env, monkeypatch, tm
     assert openai_wif.configure() is True
 
     assert token_file.read_text() == "google.jwt.token"
-    assert os.environ[openai_wif.TOKEN_FILE_ENV] == str(token_file)
-    assert captured["audience"] == openai_wif.OPENAI_AUDIENCE
+    assert os.environ[OpenaiWifSettings.TOKEN_FILE_ENV] == str(token_file)
+    assert captured["audience"] == OpenaiWifSettings.OPENAI_AUDIENCE
 
 
 def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
-    monkeypatch.setenv(openai_wif.RULE_ID_ENV, "idpm_abc")
-    monkeypatch.setenv(openai_wif.TOKEN_FILE_ENV, str(tmp_path / "tok"))
+    monkeypatch.setenv(OpenaiWifSettings.RULE_ID_ENV, "idpm_abc")
+    monkeypatch.setenv(OpenaiWifSettings.TOKEN_FILE_ENV, str(tmp_path / "tok"))
 
     calls = 0
 
@@ -90,12 +91,12 @@ def test_configure_is_idempotent(_no_federation_env, monkeypatch, tmp_path):
 
 
 def test_configure_defaults_token_path_when_unset(_no_federation_env, monkeypatch):
-    monkeypatch.setenv(openai_wif.RULE_ID_ENV, "idpm_abc")
+    monkeypatch.setenv(OpenaiWifSettings.RULE_ID_ENV, "idpm_abc")
     monkeypatch.setattr(openai_wif, "fetch_gcp_identity_token", lambda *a, **k: "tok")
 
     assert openai_wif.configure() is True
 
-    path = os.environ[openai_wif.TOKEN_FILE_ENV]
+    path = os.environ[OpenaiWifSettings.TOKEN_FILE_ENV]
     assert "openai-wif-" in path
     assert os.path.isabs(path)
     assert os.path.exists(path)
@@ -116,7 +117,7 @@ def test_fetch_uses_google_auth_with_audience(monkeypatch):
     token = openai_wif.fetch_gcp_identity_token()
 
     assert token == "signed.jwt.value"
-    assert captured["audience"] == openai_wif.OPENAI_AUDIENCE
+    assert captured["audience"] == OpenaiWifSettings.OPENAI_AUDIENCE
     assert captured["request"] is not None
 
 
@@ -140,18 +141,18 @@ def test_fetch_rejects_empty(monkeypatch):
 @pytest.mark.parametrize(
     "raw, expected",
     [
-        (None, openai_wif.DEFAULT_REFRESH_INTERVAL),
+        (None, OpenaiWifSettings.DEFAULT_REFRESH_INTERVAL),
         ("900", 900),
-        ("not-a-number", openai_wif.DEFAULT_REFRESH_INTERVAL),
-        ("0", openai_wif.DEFAULT_REFRESH_INTERVAL),
-        ("-5", openai_wif.DEFAULT_REFRESH_INTERVAL),
+        ("not-a-number", OpenaiWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("0", OpenaiWifSettings.DEFAULT_REFRESH_INTERVAL),
+        ("-5", OpenaiWifSettings.DEFAULT_REFRESH_INTERVAL),
     ],
 )
 def test_refresh_interval_parsing(monkeypatch, raw, expected):
     if raw is None:
-        monkeypatch.delenv(openai_wif.REFRESH_INTERVAL_ENV, raising=False)
+        monkeypatch.delenv(OpenaiWifSettings.REFRESH_INTERVAL_ENV, raising=False)
     else:
-        monkeypatch.setenv(openai_wif.REFRESH_INTERVAL_ENV, raw)
+        monkeypatch.setenv(OpenaiWifSettings.REFRESH_INTERVAL_ENV, raw)
     assert openai_wif._refresh_interval() == expected
 
 

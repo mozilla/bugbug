@@ -35,6 +35,7 @@ import google.auth.transport.requests
 import google.oauth2.id_token
 from google.auth.exceptions import GoogleAuthError
 
+from hackbot_runtime.config import WandbAuthSettings, WandbWifSettings
 from hackbot_runtime.providers import ProviderError
 
 log = logging.getLogger("hackbot_runtime.wandb_wif")
@@ -58,7 +59,7 @@ _refresher: _TokenFileRefresher | None = None
 
 def is_enabled() -> bool:
     """True when the deploy provisioned a federation audience (WIF mode)."""
-    return bool(os.environ.get(AUDIENCE_ENV))
+    return bool(WandbWifSettings().audience)
 
 
 def fetch_gcp_identity_token(audience: str) -> str:
@@ -84,36 +85,29 @@ def fetch_gcp_identity_token(audience: str) -> str:
 
 
 def _refresh_interval() -> float:
-    raw = os.environ.get(REFRESH_INTERVAL_ENV)
+    settings = WandbWifSettings()
+    raw = settings.refresh_interval
     if not raw:
-        return DEFAULT_REFRESH_INTERVAL
+        return WandbWifSettings.DEFAULT_REFRESH_INTERVAL
     try:
         value = float(raw)
     except ValueError:
         log.warning(
             "%s=%r is not a number; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            WandbWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            WandbWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return WandbWifSettings.DEFAULT_REFRESH_INTERVAL
     if value <= 0:
         log.warning(
             "%s=%s is not positive; falling back to %ss",
-            REFRESH_INTERVAL_ENV,
+            WandbWifSettings.REFRESH_INTERVAL_ENV,
             raw,
-            DEFAULT_REFRESH_INTERVAL,
+            WandbWifSettings.DEFAULT_REFRESH_INTERVAL,
         )
-        return DEFAULT_REFRESH_INTERVAL
+        return WandbWifSettings.DEFAULT_REFRESH_INTERVAL
     return value
-
-
-def _default_token_path() -> Path:
-    """A private, process-owned path for the identity token file.
-
-    ``mkdtemp`` gives a 0700 directory so the bearer token isn't world-readable.
-    """
-    return Path(tempfile.mkdtemp(prefix="wandb-wif-")) / "identity-token"
 
 
 class _TokenFileRefresher:
@@ -178,7 +172,8 @@ def configure() -> bool:
     if _refresher is not None:
         return True
 
-    if os.environ.get("WANDB_API_KEY"):
+    auth_settings = WandbAuthSettings()
+    if auth_settings.api_key:
         log.error(
             "WANDB_API_KEY is set while Workload Identity Federation is configured; "
             "the API key takes precedence and shadows WIF. Unset it if you intend "
@@ -186,12 +181,13 @@ def configure() -> bool:
         )
         return False
 
-    audience = os.environ[AUDIENCE_ENV]
-    token_file = Path(os.environ.get(TOKEN_FILE_ENV) or _default_token_path())
+    wif_settings = WandbWifSettings()
+    audience = wif_settings.audience
+    token_file = wif_settings.token_file
     interval = _refresh_interval()
     refresher = _TokenFileRefresher(token_file, interval, audience)
     refresher.start()
-    os.environ[TOKEN_FILE_ENV] = str(token_file)
+    os.environ[WandbWifSettings.TOKEN_FILE_ENV] = str(token_file)
     _refresher = refresher
     log.info(
         "W&B auth: GCP Workload Identity Federation "

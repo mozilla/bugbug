@@ -6,8 +6,11 @@ protocol leaves room to add others (Vertex, OpenAI, ...) without changing the
 agent-facing surface.
 """
 
-import os
 from typing import Protocol, runtime_checkable
+
+from pydantic import ValidationError
+
+from hackbot_runtime.config import AnthropicAuthSettings
 
 
 class ProviderError(RuntimeError):
@@ -37,10 +40,17 @@ class AnthropicAuth:
 
     @property
     def api_key(self) -> str:
-        key = os.environ.get(self.env_var)
+        try:
+            key = AnthropicAuthSettings().api_key
+        except ValidationError as exc:
+            raise ProviderError(
+                f"{self.env_var} is not configured correctly; the runtime "
+                "cannot provide Anthropic credentials to this agent."
+            ) from exc
+
         if not key:
             raise ProviderError(
-                f"{self.env_var} is not set; the runtime cannot provide "
+                f"{self.env_var} is empty; the runtime cannot provide "
                 "Anthropic credentials to this agent."
             )
         return key
