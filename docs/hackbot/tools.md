@@ -128,6 +128,15 @@ locally against the checkout.
 full tree, much less incrementally. An agent that only needs to confirm a localized fix
 compiles should pass `target` to build one directory instead of the whole tree.
 
+### Bootstrap and CI builds
+
+Set `ctx.firefox.bootstrap_before_build = True` to run `mach bootstrap` once before
+the first build. Bug-fix does this. An explicit `bootstrap_firefox` call also counts.
+
+To build as a Linux CI task did, call
+`await ctx.firefox.configure_ci_build(linux_build_env(task_id))` before building.
+It downloads the task's toolchains and uses its mozconfig.
+
 ## Adding a tool
 
 1. Write the handler in the right domain module, `@tool`-decorated, `ctx` first, returning
