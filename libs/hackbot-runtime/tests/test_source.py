@@ -146,8 +146,7 @@ def _redirect_github(monkeypatch, remote: Path) -> None:
 def _snapshot(tmp_path: Path, remote: Path) -> bytes:
     """A .git tar of a full clone of ``remote``, as the daily snapshot Job makes.
 
-    Its origin is a path that no longer exists, so a restore must fetch from the
-    requested URL instead.
+    Its origin is GITHUB_URL, as the Job clones from GitHub.
     """
     clone = tmp_path / "snapshot-clone"
     subprocess.run(
@@ -155,7 +154,7 @@ def _snapshot(tmp_path: Path, remote: Path) -> bytes:
         check=True,
     )
     subprocess.run(
-        ["git", "-C", str(clone), "remote", "set-url", "origin", "/gone"], check=True
+        ["git", "-C", str(clone), "remote", "set-url", "origin", GITHUB_URL], check=True
     )
     tar = subprocess.run(
         ["tar", "-c", "-C", str(clone), ".git"], check=True, capture_output=True

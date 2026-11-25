@@ -32,7 +32,7 @@ def _download(bucket: str, name: str, out: BinaryIO) -> None:
 
 
 def _check_out_snapshot(
-    source_repo: Path, bucket: str, name: str, repo_url: str, fetch_target: str
+    source_repo: Path, bucket: str, name: str, fetch_target: str
 ) -> None:
     log.info("restoring %s from gs://%s/%s", source_repo, bucket, name)
     source_repo.mkdir(parents=True, exist_ok=True)
@@ -51,7 +51,6 @@ def _check_out_snapshot(
     # Name the unpacked repository, so a tar without .git fails here instead of
     # git finding an enclosing repository. Relative to -C, so relative paths work.
     git_dir = ("--git-dir=.git", "--work-tree=.")
-    _git(source_repo, *git_dir, "remote", "set-url", "origin", repo_url)
     _git(source_repo, *git_dir, "fetch", "origin", fetch_target)
     _git(source_repo, *git_dir, "checkout", "-q", "-f", "FETCH_HEAD")
     log.info("snapshot checkout complete")
@@ -71,7 +70,7 @@ def _restore_snapshot(source_repo: Path, repo_url: str, fetch_target: str) -> bo
         return False
     name = f"github/{match[1]}.tar"
     try:
-        _check_out_snapshot(source_repo, bucket, name, repo_url, fetch_target)
+        _check_out_snapshot(source_repo, bucket, name, fetch_target)
     except Exception:
         # Any failure (download, checksum, tar, git) is recoverable by cloning.
         log.warning("snapshot restore failed; cloning instead", exc_info=True)
