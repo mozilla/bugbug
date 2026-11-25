@@ -108,6 +108,8 @@ FIREFOX_GIT_REPO=/path/to/firefox DATASET=<dataset>:latest JUDGE_RUBRIC=<rubric>
 `.env` needs `ANTHROPIC_API_KEY` and `WANDB_API_KEY` (and `CODEX_API_KEY` for the
 `codex` harness, and `OTARI_API_KEY`, with the `usage:read` scope, and
 `OTARI_BASE_URL`, e.g. `https://api.otari.ai/api`, for the open-model harnesses).
+Deployed, `OTARI_FEDERATION_RULE_ID` replaces `OTARI_API_KEY`: the job authenticates
+to otari as its service account ([`otari_wif.py`](hackbot_agents/dataset_eval/prompt_executor/harnesses/otari_wif.py)).
 The local
 Firefox clone is mounted read-only and lends its objects to the tree, so nothing
 is cloned; the run uses its checked-out HEAD, or `SOURCE_REF`.

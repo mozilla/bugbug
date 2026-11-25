@@ -60,6 +60,12 @@ which exposes the token through `OPENAI_IDENTITY_TOKEN_FILE`. The token's audien
 to `https://api.openai.com/v1` and can be overridden with `OPENAI_WIF_AUDIENCE`. Here
 WIF has precedence over an `OPENAI_API_KEY`, so a leftover key only logs a warning.
 
+otari, the gateway `dataset-eval`'s open-model harnesses use, federates the same way when
+`OTARI_FEDERATION_RULE_ID` is set. Those harnesses read a static key once, so they reach
+otari through a local proxy that exchanges the identity token and puts a fresh access token
+on every request
+([otari_wif.py](../../agents/dataset-eval/hackbot_agents/dataset_eval/prompt_executor/harnesses/otari_wif.py)).
+
 ## The signed upload policy
 
 The agent Job has **no GCP write identity**. Its only write capability is a V4 signed GCS
