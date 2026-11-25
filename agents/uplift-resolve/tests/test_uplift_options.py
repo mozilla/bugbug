@@ -119,3 +119,14 @@ def test_check_result_falls_back_to_subtype():
 def test_check_result_passes_on_success():
     ok = SimpleNamespace(is_error=False, result="done", subtype="success")
     check_result(ok, "beta")  # Should not raise.
+
+
+def test_options_keep_slow_commands_in_the_foreground():
+    options = make_options()
+
+    assert options.env["BASH_DEFAULT_TIMEOUT_MS"] == str(10 * 60 * 1000), (
+        "Bash commands should get ten minutes before Claude Code backgrounds them."
+    )
+    assert options.env["BASH_MAX_TIMEOUT_MS"] == str(30 * 60 * 1000), (
+        "The agent should be able to ask for up to thirty minutes."
+    )

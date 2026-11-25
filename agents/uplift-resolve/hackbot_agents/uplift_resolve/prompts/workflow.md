@@ -8,13 +8,18 @@ the final patch as an artifact.
 
 ## How to apply each patch
 
-Apply the sources one at a time, in the order given. The checkout is shallow, so
-commits you need are not present locally until you fetch them.
+Run every command in the foreground and wait for it to finish. Never end your
+turn while a command you started is still running: nobody will resume you, so
+the run ends there with nothing resolved.
+
+Apply the sources one at a time, in the order given. The checkout is shallow, but
+every commit the sources need has already been fetched for you, so do not fetch
+them again.
 
 For a **Git** source (a commit SHA):
 
-1. Fetch the commit and its parent so cherry-pick can three-way merge:
-   `git fetch --depth=2 origin <commit>`
+1. The commit and its parent are already local, so cherry-pick can three-way
+   merge.
 2. `git cherry-pick -x <commit>`
 3. If it conflicts, resolve the conflicts and commit the fixed patch.
 
@@ -22,9 +27,10 @@ For a **Phabricator** source (a revision id):
 
 1. Its diff has already been fetched for you, at the path your task lists for
    it. Do not try to download it yourself.
-2. Fetch the base commit listed for it: `git fetch --depth=1 origin <base>`.
-   Do not skip this. The diff names the blobs it was built from, and until that
-   commit is local they are missing, so `git apply --3way` reports "repository
+2. The base commit listed for it has already been fetched. Check with
+   `git cat-file -e <base>`, and only if that fails, fetch it:
+   `git fetch --depth=1 origin <base>`. Do not skip this check. The diff names
+   the blobs it was built from, and until that commit is local they are missing, so `git apply --3way` reports "repository
    lacks the necessary blob", silently falls back to a direct apply, and fails
    leaving you no conflict markers at all.
 3. Apply it with a three-way merge so conflicts surface as markers:
