@@ -691,7 +691,6 @@ dependencies = [
     { name = "weave" },
     { name = "whatthepatch" },
     { name = "xgboost" },
-    { name = "zstandard" },
 ]
 
 [package.optional-dependencies]
@@ -782,7 +781,6 @@ requires-dist = [
     { name = "weave", specifier = ">=0.53.12" },
     { name = "whatthepatch", specifier = "~=1.0.7" },
     { name = "xgboost", specifier = ">=3.2,<3.5" },
-    { name = "zstandard", specifier = "~=0.25.0" },
 ]
 provides-extras = ["nlp", "nn", "perf-regression-predictor", "perf-simulation"]
 

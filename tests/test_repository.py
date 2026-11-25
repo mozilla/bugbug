@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+from compression import zstd
 from datetime import datetime, timezone
 from logging import INFO, basicConfig, getLogger
 
@@ -19,7 +20,6 @@ import hglib
 import pytest
 import responses
 import rs_parsepatch
-import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import commit_features, repository, rust_code_analysis_server
@@ -519,8 +519,6 @@ def test_hg_log(fake_hg_repo):
 
 
 def test_download_coverage_mapping() -> None:
-    cctx = zstandard.ZstdCompressor()
-
     responses.add(
         responses.HEAD,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
@@ -532,7 +530,7 @@ def test_download_coverage_mapping() -> None:
         responses.GET,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
         status=200,
-        body=cctx.compress(json.dumps({}).encode("ascii")),
+        body=zstd.compress(json.dumps({}).encode("ascii")),
     )
 
     repository.download_coverage_mapping()
@@ -549,7 +547,7 @@ def test_download_coverage_mapping() -> None:
         responses.GET,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
         status=200,
-        body=cctx.compress(
+        body=zstd.compress(
             json.dumps(
                 {
                     "revision1": {
@@ -719,11 +717,10 @@ def test_download_commits(fake_hg_repo):
         headers={"ETag": "123"},
     )
 
-    cctx = zstandard.ZstdCompressor()
     coverage_mapping = {revision1: None}
 
     def request_callback(request):
-        return 200, {}, cctx.compress(json.dumps(coverage_mapping).encode("ascii"))
+        return 200, {}, zstd.compress(json.dumps(coverage_mapping).encode("ascii"))
 
     responses.add_callback(
         responses.GET,

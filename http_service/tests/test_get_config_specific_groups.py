@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from compression import zstd
 from typing import Callable
 
 import orjson
-import zstandard
 
 from bugbug_http import models
 
@@ -23,5 +23,5 @@ def test_get_config_specific_groups(
         "bugbug:job_result:get_config_specific_groups:test-linux1804-64/opt-*"
     )
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result == [{"name": "test-group1"}]

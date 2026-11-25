@@ -10,6 +10,7 @@ import os
 import pickle
 import re
 from collections import defaultdict
+from compression import zstd
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -19,7 +20,6 @@ import orjson
 import py.path
 import pytest
 import responses
-import zstandard
 from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
 from rq.utils import import_attribute
@@ -152,8 +152,7 @@ def add_result():
 
     def inner(key, data, change_time=None):
         result_key = f"bugbug:job_result:{key}"
-        cctx = zstandard.ZstdCompressor(level=10)
-        app.redis_conn.set(result_key, cctx.compress(orjson.dumps(data)))
+        app.redis_conn.set(result_key, zstd.compress(orjson.dumps(data), level=10))
 
     return inner
 
@@ -282,8 +281,6 @@ def mock_data(tmp_path):
 
 @pytest.fixture
 def mock_coverage_mapping_artifact() -> None:
-    cctx = zstandard.ZstdCompressor()
-
     responses.add(
         responses.HEAD,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
@@ -295,7 +292,7 @@ def mock_coverage_mapping_artifact() -> None:
         responses.GET,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
         status=200,
-        body=cctx.compress(json.dumps({}).encode("ascii")),
+        body=zstd.compress(json.dumps({}).encode("ascii")),
     )
 
     repository.download_coverage_mapping()

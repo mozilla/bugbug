@@ -4,13 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+from compression import zstd
 from datetime import timedelta
 
 import numpy as np
 import orjson
 import pytest
 import requests
-import zstandard
 
 from bugbug.perf.calibration import Calibration
 from bugbug_http import models
@@ -188,7 +188,7 @@ def test_worker_scores_each_commit(monkeypatch) -> None:
     )
     stored = models.redis.get(job.result_key)
     assert stored is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(stored))
+    result = orjson.loads(zstd.decompress(stored))
     assert result["branch"] == "integration/autoland"
     assert result["rev"] == "abc123def456"
     # Top-level risk score is the max across commits.
@@ -240,9 +240,9 @@ def test_worker_applies_the_published_calibration(monkeypatch) -> None:
     job = JobInfo(
         models.classify_perf_regression, "integration/autoland", "abc123def456"
     )
-    result = orjson.loads(
-        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
-    )
+    stored = models.redis.get(job.result_key)
+    assert stored is not None
+    result = orjson.loads(zstd.decompress(stored))
     # A raw 0.7 lies between the breakpoints 0.1 and 0.8, so it interpolates
     # to about 0.173; the push-level score follows the calibrated commits.
     commit = result["commits"][0]
@@ -377,9 +377,9 @@ def test_worker_skips_ignored_commits_with_reason(monkeypatch) -> None:
     job = JobInfo(
         models.classify_perf_regression, "integration/autoland", "abc123def456"
     )
-    result = orjson.loads(
-        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
-    )
+    stored = models.redis.get(job.result_key)
+    assert stored is not None
+    result = orjson.loads(zstd.decompress(stored))
     # Ignored commits keep their place in the push, carry a reason and no score,
     # and do not take part in the push-level risk score.
     assert result["risk_score"] == 0.7
@@ -436,9 +436,9 @@ def test_worker_reports_fully_ignored_push_without_score(monkeypatch) -> None:
     job = JobInfo(
         models.classify_perf_regression, "integration/autoland", "abc123def456"
     )
-    result = orjson.loads(
-        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
-    )
+    stored = models.redis.get(job.result_key)
+    assert stored is not None
+    result = orjson.loads(zstd.decompress(stored))
     assert result["risk_score"] is None
     assert result["extra_data"]["commit_count"] == 2
     assert result["extra_data"]["ignored_commit_count"] == 2

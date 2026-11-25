@@ -9,11 +9,13 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
 import subprocess
 import tarfile
 import urllib.parse
 from collections import deque
+from compression import zstd
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import cache
@@ -29,7 +31,6 @@ import psutil
 import requests
 import taskcluster
 import tenacity
-import zstandard
 from requests.packages.urllib3.util.retry import Retry
 
 from bugbug import get_bugbug_version
@@ -296,11 +297,13 @@ def zstd_compress(path: str) -> None:
         subprocess.run(["zstdmt", "-f", path], check=True)
     except FileNotFoundError as error:
         logger.warning(
-            "%s. Falling back to zstandard API, which could be slower.", error
+            "%s. Falling back to compression.zstd API, which could be slower.", error
         )
-        cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f, open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
+        with (
+            open(path, "rb") as input_f,
+            zstd.ZstdFile(f"{path}.zst", "wb") as output_f,
+        ):
+            shutil.copyfileobj(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
@@ -311,28 +314,31 @@ def zstd_decompress(path: str) -> None:
         subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
     except FileNotFoundError as error:
         logger.warning(
-            "%s. Falling back to zstandard API, which could be slower.", error
+            "%s. Falling back to compression.zstd API, which could be slower.", error
         )
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{path}.zst", "rb") as input_f, open(path, "wb") as output_f:
-            dctx.copy_stream(input_f, output_f)
+        with (
+            zstd.ZstdFile(f"{path}.zst", "rb") as input_f,
+            open(path, "wb") as output_f,
+        ):
+            shutil.copyfileobj(input_f, output_f)
 
 
 @contextmanager
 def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
-        cctx = zstandard.ZstdCompressor(threads=-1)
+        # Use one worker per CPU, if libzstd was built with multithreading support.
+        _, max_workers = zstd.CompressionParameter.nb_workers.bounds()
+        options: dict[int, int] = {
+            zstd.CompressionParameter.nb_workers: min(os.cpu_count() or 1, max_workers)
+        }
         with (
-            open(path, "wb") as output_file,
-            cctx.stream_writer(output_file) as compressor,
+            zstd.ZstdFile(path, "wb", options=options) as compressor,
             tarfile.open(mode="w|", fileobj=compressor) as tar,
         ):
             yield tar
     elif mode == "r":
-        dctx = zstandard.ZstdDecompressor()
         with (
-            open(path, "rb") as input_file,
-            dctx.stream_reader(input_file) as reader,
+            zstd.ZstdFile(path, "rb") as reader,
             tarfile.open(mode="r|", fileobj=reader) as tar,
         ):
             yield tar
@@ -351,7 +357,7 @@ def create_tar_zst(path: str) -> None:
         subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
     except subprocess.CalledProcessError as error:
         logger.warning(
-            "%s. Falling back to zstandard API, which could be slower.", error
+            "%s. Falling back to compression.zstd API, which could be slower.", error
         )
         with open_tar_zst(path, "w") as tar:
             tar.add(inner_path)
@@ -365,7 +371,7 @@ def extract_tar_zst(path: str) -> None:
         subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
     except subprocess.CalledProcessError as error:
         logger.warning(
-            "%s. Falling back to zstandard API, which could be slower.", error
+            "%s. Falling back to compression.zstd API, which could be slower.", error
         )
         with open_tar_zst(path, "r") as tar:
             tar.extractall()

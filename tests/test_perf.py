@@ -4,12 +4,12 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import json
+from compression import zstd
 from datetime import datetime, timezone
 
 import pytest
 import requests
 import responses
-import zstandard
 from libmozdata.bugzilla import Bugzilla
 
 from bugbug import db, repository
@@ -1898,7 +1898,7 @@ ALERTS_VERSION_URL = ALERTS_URL.replace(".zst", ".version")
 def _publish_alerts(version, records=()):
     """Serve a published alerts snapshot from the Taskcluster index."""
     responses.add(responses.GET, ALERTS_VERSION_URL, body=str(version))
-    body = zstandard.ZstdCompressor().compress(
+    body = zstd.compress(
         "".join(json.dumps(record) + "\n" for record in records).encode()
     )
     responses.add(responses.HEAD, ALERTS_URL, headers={"ETag": "etag"})
