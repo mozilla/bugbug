@@ -22,6 +22,9 @@ DATABASES = {}
 
 logger = logging.getLogger(__name__)
 
+# The size of the blocks read from the end of a DB by read_last.
+READ_LAST_BLOCK_SIZE = 1024 * 1024
+
 
 class LastModifiedNotAvailable(Exception):
     pass
@@ -237,6 +240,44 @@ def read(path):
 
     with _db_open(path, "rb") as store:
         yield from store.read()
+
+
+def read_last_lines(path: str, count: int) -> list[bytes]:
+    """Read the last `count` serialized elements of an uncompressed JSON DB, from the oldest.
+
+    Only the end of the file is read, so it is fast also with very large DBs. The elements aren't
+    deserialized, so that callers can skip some of them cheaply.
+    """
+    assert path in DATABASES
+    assert str(path).endswith(".json"), "Only uncompressed JSON DBs are supported"
+
+    if not os.path.exists(path) or count <= 0:
+        return []
+
+    with open(path, "rb") as f:
+        pos = f.seek(0, os.SEEK_END)
+        blocks: list[bytes] = []
+        newlines = 0
+        # One more newline than elements is needed to be sure the oldest one is complete (unless
+        # the start of the file is reached).
+        while pos > 0 and newlines <= count:
+            read_size = min(READ_LAST_BLOCK_SIZE, pos)
+            pos -= read_size
+            f.seek(pos)
+            block = f.read(read_size)
+            blocks.append(block)
+            newlines += block.count(b"\n")
+
+    lines = b"".join(reversed(blocks)).splitlines()
+    if pos > 0:
+        # The first line can be partial.
+        lines = lines[1:]
+    return [line for line in lines[-count:] if line]
+
+
+def read_last(path: str, count: int) -> list:
+    """Read the last `count` elements of an uncompressed JSON DB, from the oldest (see read_last_lines)."""
+    return [orjson.loads(line) for line in read_last_lines(path, count)]
 
 
 def size(path):

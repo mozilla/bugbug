@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -41,7 +41,7 @@ RUN --mount=type=bind,source=services/mcp/scripts/llms-txt.py,target=scripts/llm
     /opt/venv/bin/python scripts/llms-txt.py
 
 # Runtime stage
-FROM python:3.14-slim AS base
+FROM python:3.15-slim AS base
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=resource-generator /app/static/llms.txt /app/static/llms.txt

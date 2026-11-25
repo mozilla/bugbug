@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import collections
 import concurrent.futures
 import contextlib
 import json
@@ -17,9 +16,8 @@ import orjson
 import requests
 import tenacity
 import yaml
-from tqdm import tqdm
 
-from bugbug import build_platforms, repository, test_scheduling, utils
+from bugbug import build_platforms, db, repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
 logger = logging.getLogger(__name__)
@@ -56,34 +54,6 @@ def _without_chunk(label: str) -> str:
     return re.sub(r"-\d+$", "", label)
 
 
-def _set_test_variants(rev: str) -> None:
-    """Make mozci name the configurations of the tasks of a push with the push's test variants.
-
-    mozci memoizes the test variants of mozilla-central for the lifetime of the process (the refresh
-    runs for weeks), and a variant added on autoland isn't on mozilla-central until it's merged.
-    The variants are the ones of the push's taskcluster/test_configs/variants.yml, parsed like mozci
-    does; if they can't be retrieved, mozci retrieves the current ones of mozilla-central again.
-    """
-    # mozci.data needs to be imported before mozci.task to avoid a circular import.
-    import mozci.data  # noqa: F401
-    from mozci import task as mozci_task
-
-    mozci_task.fetch_test_variant_yaml.clear()
-    try:
-        r = requests.get(
-            f"https://hg.mozilla.org/integration/autoland/raw-file/{rev}/taskcluster/test_configs/variants.yml",
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        variants = yaml.load(r.text, yaml.BaseLoader)
-        mozci_task.fetch_test_variant_yaml[()] = {
-            **mozci_task.REMOVED_TEST_VARIANTS,
-            **{name: variant["suffix"] for name, variant in variants.items()},
-        }
-    except Exception:
-        logger.warning("Failed to retrieve the test variants of %s", rev, exc_info=True)
-
-
 def _minimal_task(task: dict) -> dict:
     """The parts of a task's definition needed to compute its config and manifests."""
     extra = task["task"]["extra"]
@@ -102,10 +72,10 @@ def _minimal_task(task: dict) -> dict:
 
 
 def _eligible_tasks(
-    task_graph: dict[str, dict], failed: dict[str, list[dict]] | None = None
+    task_graph: dict[str, dict], rev: str, failed: dict[str, list[dict]] | None = None
 ) -> Iterator[tuple[str, str, list[str]]]:
-    """The test tasks of a task graph that test selection optimizes: (label without chunk number,
-    config as mozci names it, manifests).
+    """The test tasks of a task graph (of the push `rev`) that test selection optimizes: (label
+    without chunk number, config as mozci names it, manifests).
 
     The tasks that test selection doesn't optimize (e.g. the standalone ones, which only run on
     backstop pushes) are left out. So are shippable tasks, as they are too costly to select: the
@@ -134,7 +104,7 @@ def _eligible_tasks(
         label = _without_chunk(task["label"])
         if label not in configurations:
             try:
-                configuration = get_configuration(task)
+                configuration = get_configuration(task, "autoland", rev)
             except Exception:
                 logger.warning(
                     "Failed to get the configuration of %s",
@@ -161,6 +131,7 @@ def _eligible_tasks(
 def get_config_selection_tasks(
     task_graph: dict[str, dict],
     target_tasks: Iterable[str],
+    rev: str,
     failed: dict[str, list[dict]] | None = None,
 ) -> dict[str, dict]:
     """The test tasks among which configs are selected, by label without chunk number.
@@ -173,42 +144,11 @@ def get_config_selection_tasks(
     """
     targets = {_without_chunk(label) for label in target_tasks}
     tasks: dict[str, dict] = {}
-    for label, config, manifests in _eligible_tasks(task_graph, failed):
+    for label, config, manifests in _eligible_tasks(task_graph, rev, failed):
         if label not in targets:
             continue
         task = tasks.setdefault(label, {"config": config, "manifests": []})
         task["manifests"] = sorted(set(task["manifests"]) | set(manifests))
-    return tasks
-
-
-def get_full_graph_tasks(content: bytes, labels: set[str]) -> dict[str, dict]:
-    """The definitions of some tasks from a decision task's full-task-graph.json, by label.
-
-    The full task graph is hundreds of MB, and much more once parsed, so only the definitions of
-    the given tasks are parsed, where they are in the text. If one isn't found this way (e.g. if
-    the format of the file changed), the whole graph is parsed.
-    """
-    text = content.decode()
-    decoder = json.JSONDecoder()
-    tasks: dict[str, dict] = {}
-    for label in labels:
-        key = f"{json.dumps(label)}:{{"
-        start = text.find(key)
-        while start != -1:
-            try:
-                task, _ = decoder.raw_decode(text, start + len(key) - 1)
-            except ValueError:
-                task = None
-            if isinstance(task, dict) and task.get("label") == label:
-                tasks[label] = task
-                break
-            start = text.find(key, start + 1)
-
-    missing = labels - tasks.keys()
-    if missing:
-        del text
-        graph = orjson.loads(content)
-        tasks.update({label: graph[label] for label in missing if label in graph})
     return tasks
 
 
@@ -236,9 +176,10 @@ def _classify_new_tasks(
     new tasks (unless they are candidates already), and the others are ignored, except the ones
     whose config can't be computed, which are returned (see _eligible_tasks).
     """
-    _set_test_variants(rev)
     failed: dict[str, list[dict]] = {}
-    eligible = {label: config for label, config, _ in _eligible_tasks(graph, failed)}
+    eligible = {
+        label: config for label, config, _ in _eligible_tasks(graph, rev, failed)
+    }
     for label in labels - failed.keys():
         if label not in eligible:
             ignored.add(label)
@@ -263,9 +204,8 @@ def _resolve_unresolved(state: dict, ignored: set[str], revs: set[str]) -> None:
         graph = {task["label"]: task for task in entry["tasks"]}
         labels = {_without_chunk(label) for label in graph}
         if entry["backstop"]:
-            _set_test_variants(rev)
             failed: dict[str, list[dict]] = {}
-            tasks = get_config_selection_tasks(graph, graph, failed)
+            tasks = get_config_selection_tasks(graph, graph, rev, failed)
             state["tasks"].update(tasks)
             ignored |= labels - tasks.keys() - failed.keys()
         else:
@@ -325,9 +265,8 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             continue
         task_graph = orjson.loads(r.content)
         target_tasks = targets.json()
-        _set_test_variants(rev)
         failed: dict[str, list[dict]] = {}
-        tasks = get_config_selection_tasks(task_graph, target_tasks, failed)
+        tasks = get_config_selection_tasks(task_graph, target_tasks, rev, failed)
         logger.info(
             "Retrieved %d test tasks from the backstop push %s", len(tasks), rev
         )
@@ -405,7 +344,7 @@ def update_config_selection_tasks(revs: list[str], known_tasks: set[str]) -> Non
             r = _get(rev, "full-task-graph.json")
             if not r.ok:
                 continue
-            graph = get_full_graph_tasks(r.content, unknown)
+            graph = test_scheduling.get_full_graph_tasks(r.content, unknown)
             del r
             failed = _classify_new_tasks(
                 state, ignored, rev, {_without_chunk(label) for label in unknown}, graph
@@ -478,26 +417,43 @@ def retrieve_build_platforms() -> None:
     logger.info("Retrieved the files built on %s.", ", ".join(sorted(built)))
 
 
-def update_commits() -> None:
-    """Mine the autoland commits after the last one in the commits DB, and update the DBs derived from them."""
-    logger.info("Browsing all commits...")
-    nodes = collections.deque(
-        (commit["node"] for commit in tqdm(repository.get_commits())),
-        maxlen=4096,
+def get_autoland_head() -> str:
+    """The node of the latest autoland commit on the default branch."""
+    # Unlike "tip", which is the latest commit on any branch.
+    r = utils.get_session("hgmo").get(
+        "https://hg.mozilla.org/integration/autoland/json-rev/default",
+        headers={"User-Agent": utils.get_user_agent()},
+        timeout=REQUEST_TIMEOUT,
     )
-    nodes.reverse()
-    logger.info("All commits browsed.")
+    r.raise_for_status()
+    return r.json()["node"]
+
+
+def update_commits(autoland_head: str) -> None:
+    """Mine the autoland commits up to `autoland_head` after the last one in the commits DB, and update the DBs derived from them."""
+    # The last commits of the DB, from the newest. They aren't filtered (like get_commits does), as
+    # the commits after the last one are the ones to mine: starting from an older one would mine
+    # again (and add to the DB) the last commits if they are filtered out (e.g. backouts).
+    nodes = [
+        commit["node"] for commit in reversed(db.read_last(repository.COMMITS_DB, 4096))
+    ]
+    logger.info("Read the last %d commits of the commits DB.", len(nodes))
 
     with hglib.open(REPO_DIR) as hg:
         # Try using nodes backwards, in case we have some node that was on central at the time
         # we mined commits, but is not yet on autoland.
         for node in nodes:
             try:
-                revs = repository.get_revs(hg, rev_start=f"children({node})")
+                revs = repository.get_new_revs(hg, node, autoland_head)
                 break
             except hglib.error.CommandError as e:
                 if b"abort: unknown revision" not in e.err:
                     raise
+
+    # Some of the commits can already be in the DB, e.g. when the last commit of the DB is a parent
+    # of a merge, the commits of its other parent.
+    in_db = repository.get_nodes_in_db(rev.decode("ascii") for rev in revs)
+    revs = [rev for rev in revs if rev.decode("ascii") not in in_db]
 
     logger.info("Updating commits DB...")
     try:
@@ -522,9 +478,15 @@ def update_commits() -> None:
 
 
 def refresh_commits() -> None:
-    """Pull the latest autoland commits, and add them to the commits DB (see update_commits)."""
-    repository.pull(REPO_DIR, "integration/autoland", "tip")
-    update_commits()
+    """Pull the latest autoland commits, and add them to the commits DB (see update_commits).
+
+    The latest commit on the default branch is pulled by node, rather than as "tip", to know which
+    commits were pulled from autoland, as the clone can also contain commits from other repositories
+    (e.g. try).
+    """
+    autoland_head = get_autoland_head()
+    repository.pull(REPO_DIR, "integration/autoland", autoland_head)
+    update_commits(autoland_head)
 
 
 def refresh_data() -> None:
@@ -620,6 +582,10 @@ def boot_worker() -> None:
         try:
             utils.extract_file(f"{repository.COMMITS_DB}.zst")
             logger.info("Commits DB extracted.")
+            # The index of a previous DB would be wrong.
+            repository.delete_commits_index()
+            repository.update_commits_index()
+            logger.info("Commits DB indexed.")
             return True
         except FileNotFoundError:
             logger.info("Commits DB not extracted, but missing models are allowed.")
@@ -656,7 +622,12 @@ def boot_worker() -> None:
             logger.info("Waiting autoland to be cloned...")
             clone_autoland_future.result()
 
-            update_commits()
+            try:
+                refresh_commits()
+            except Exception:
+                # It's not ideal, but better not to crash the service! The commits DB will be
+                # updated by the next refresh.
+                logger.exception("Failed to refresh the commits")
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()

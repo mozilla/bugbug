@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import glob
 import json
 import os
 import pickle
@@ -167,6 +168,21 @@ def test_clone(fake_hg_repo):
     # Assert that we do have the file from the remote repository, since we cloned
     # and updated the working dir.
     assert os.path.exists(os.path.join(f"{tmp_repo_dir}2", "file1"))
+
+
+def test_clone_changetracker_db(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    repository.clone("ciao", url=remote)
+
+    # mozext records the pushes in the changetracker.db of each repository, so it is only in the
+    # share and not in the pooled store, to download the pushlog only once.
+    assert os.path.exists(os.path.join("ciao", ".hg", "changetracker.db"))
+    assert not glob.glob(os.path.join("ciao-shared", "*", ".hg", "changetracker.db"))
 
 
 def test_get_revs(fake_hg_repo):
@@ -2374,6 +2390,136 @@ def test_get_commits():
     }
     assert len(retrieved_commits) == 10
     assert included_commits.issubset({c["node"] for c in retrieved_commits})
+
+
+@pytest.mark.parametrize("recent_commits", [1, 3, 5, 6, 10, 100])
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {},
+        {"include_no_bug": True},
+        {"include_backouts": True},
+        {"include_ignored": True, "include_backouts": True, "include_no_bug": True},
+    ],
+)
+def test_get_last_commit(monkeypatch, recent_commits, filters):
+    # The last 5 of the 10 mock commits are filtered out by default.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", recent_commits)
+
+    expected = list(repository.get_commits(**filters))[-1]
+    assert repository.get_last_commit(**filters) == expected
+
+
+def test_get_last_commit_reads_only_the_end(monkeypatch):
+    expected = list(repository.get_commits())[-1]
+
+    # The last allowed commit is the 6th from the end.
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 6)
+
+    def get_commits(*args, **kwargs):
+        raise AssertionError("All the commits were read")
+
+    monkeypatch.setattr(repository, "get_commits", get_commits)
+
+    assert repository.get_last_commit() == expected
+
+
+def test_get_last_commit_none(monkeypatch):
+    ignored_commits = [
+        commit
+        for commit in repository.get_commits(
+            include_ignored=True, include_backouts=True, include_no_bug=True
+        )
+        if commit["ignored"]
+    ]
+    with open(repository.COMMITS_DB, "w") as f:
+        for commit in ignored_commits:
+            f.write(json.dumps(commit) + "\n")
+
+    monkeypatch.setattr(repository, "LAST_COMMIT_RECENT_COMMITS", 2)
+    assert repository.get_last_commit() is None
+
+    os.remove(repository.COMMITS_DB)
+    assert repository.get_last_commit() is None
+
+
+def test_get_commits_from_db(monkeypatch):
+    # Small blocks, to read the DB in several of them, with commits spanning two blocks.
+    monkeypatch.setattr(repository, "COMMITS_INDEX_BLOCK_SIZE", 7)
+
+    def commit(i, **kwargs):
+        return {"node": f"{i:040x}", "desc": str(i), **kwargs}
+
+    def write(commits, mode):
+        with open(repository.COMMITS_DB, mode) as f:
+            for c in commits:
+                f.write(json.dumps(c, separators=(",", ":")) + "\n")
+
+    def get(*nums):
+        return repository.get_commits_from_db(f"{i:040x}" for i in nums)
+
+    db_commits = [commit(i) for i in range(5)]
+    write(db_commits, "w")
+
+    assert get(1, 3, 7) == {c["node"]: c for c in (db_commits[1], db_commits[3])}
+
+    # The commits appended to the DB are indexed on the next lookup, also when they don't start
+    # with their node.
+    new_commits = [commit(7), {"desc": "8", "node": f"{8:040x}"}]
+    write(new_commits, "a")
+    assert get(0, 7, 8) == {
+        db_commits[0]["node"]: db_commits[0],
+        new_commits[0]["node"]: new_commits[0],
+        new_commits[1]["node"]: new_commits[1],
+    }
+
+    # A partially written commit is not indexed until it is complete.
+    with open(repository.COMMITS_DB, "a") as f:
+        f.write('{"node":"' + f"{9:040x}")
+    assert get(9) == {}
+    with open(repository.COMMITS_DB, "a") as f:
+        f.write('","desc":"9"}\n')
+    assert get(9) == {f"{9:040x}": {"node": f"{9:040x}", "desc": "9"}}
+
+    # Rewriting the DB (e.g. to refresh the coverage of the commits) invalidates the index, as
+    # the commits can move.
+    def set_commit_coverage(commits):
+        for c in commits:
+            c["desc"] *= 3
+
+    monkeypatch.setattr(repository, "download_coverage_mapping", lambda: None)
+    monkeypatch.setattr(repository, "set_commit_coverage", set_commit_coverage)
+    repository.update_commits()
+    assert get(9) == {f"{9:040x}": {"node": f"{9:040x}", "desc": "999"}}
+
+    os.remove(repository.COMMITS_DB)
+    assert get(1) == {}
+
+
+def test_get_new_revs(tmp_path):
+    repo_dir = str(tmp_path / "repo")
+    hglib.init(repo_dir)
+
+    with hglib.open(repo_dir) as hg:
+
+        def commit(name, parent=None):
+            if parent is not None:
+                hg.update(parent, clean=True)
+            path = os.path.join(repo_dir, name)
+            with open(path, "w") as f:
+                f.write(name)
+            hg.add([path.encode()])
+            return hg.commit(message=name, user="bugbug")[1]
+
+        base = commit("base")
+        landed = commit("landed")
+        # A commit pulled from try, with a higher revision number than the next autoland one.
+        commit("try", base)
+        tip = commit("tip", landed)
+
+        assert repository.get_new_revs(hg, base.decode(), tip.decode()) == [landed, tip]
+        assert repository.get_new_revs(hg, landed.decode(), tip.decode()) == [tip]
+        assert repository.get_new_revs(hg, tip.decode(), tip.decode()) == []
 
 
 def test_get_revision_id():

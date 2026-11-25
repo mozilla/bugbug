@@ -213,6 +213,32 @@ when = { all_files = { ext = [".md", ".rst"] } }
 `any_file` is the normal implementation-code case. `all_files` is for
 patch-shape rules such as docs-only, tests-only, or generated-only changes.
 
+File predicates can also match the diff content of each changed file with
+`diff_regex`, a Python `re.search` pattern. It is tested against individual
+lines, without line endings, so a pattern cannot span lines and `^`/`$` anchor
+to each line. `side` says which lines are tested:
+
+- `"old"`: the file before the patch, i.e. context and removed (`-`) lines.
+- `"new"`: the file after the patch, i.e. context and added (`+`) lines.
+- `"any"`: either side (the default).
+
+`side` is only allowed with `diff_regex`. Within one predicate, all fields that
+are set must match (AND). Within a list such as `ext` or `include`, any entry
+may match (OR), and `exclude` removes a file if any entry matches. To combine
+whole predicates, use `any`, `all` or `not`. Removed files count as changed
+files; they have no new side, so `"new"` never matches them.
+
+```toml review-context
+version = 1
+
+[[rules]]
+name = "DOM: removed nsresult checks"
+when = { any_file = { ext = [".cpp", ".h"], diff_regex = "NS_ENSURE_SUCCESS\\(", side = "old" } }
+load = [
+  { type = "file", path = ".claude/skills/dom-errors/SKILL.md" },
+]
+```
+
 ### Reusable predicates
 
 Named predicate definitions let you reuse path sets or metadata groups across

@@ -1,8 +1,10 @@
 """GitHub-domain recordable actions.
 
 Mirrors ``actions/phabricator.py``'s shape: the tools record an intended comment
-(nothing is posted to GitHub here) and return a short confirmation string. See
-hackbot-api's ``app/action_handlers/github_handler.py`` for the apply side.
+or change (nothing is sent to GitHub here) and return a short confirmation
+string. See hackbot-api's ``app/action_handlers/github_handler.py`` for the
+apply side, which posts the comments, or pushes a branch carrying the run's
+changes and opens a pull request.
 """
 
 from typing import Annotated, Any
@@ -20,6 +22,13 @@ from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 ADD_COMMENT_ACTION_TYPE = "github.add_comment"
 ADD_INLINE_COMMENTS_ACTION_TYPE = "github.add_inline_comments"
+SUBMIT_PATCH_ACTION_TYPE = "github.submit_patch"
+
+# Actions that deliver the working directory's changes to GitHub, gating the
+# commit artifact built in ``context.publish_changes``. The GitHub counterpart
+# of ``phabricator.PATCH_ACTION_TYPES``: kept separate so a GitHub submission
+# does not also build a Phabricator diff, and vice versa.
+PATCH_ACTION_TYPES = frozenset({SUBMIT_PATCH_ACTION_TYPE})
 
 _Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -147,6 +156,52 @@ async def add_inline_comments(
     action = recorder.record(
         ADD_INLINE_COMMENTS_ACTION_TYPE, params, reasoning=reasoning
     )
+    return confirmation(action)
+
+
+@tool
+async def submit_patch(
+    recorder: ActionsRecorder,
+    title: Annotated[
+        str,
+        Field(
+            description=(
+                "Title for the new pull request: a single line describing the "
+                "fix, as you would write a commit message subject."
+            )
+        ),
+    ],
+    reasoning: Annotated[
+        str, Field(description="Why you are submitting this patch (for audit log).")
+    ],
+    body: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Pull request description (GitHub Markdown). Explain what the "
+                "change does and how you verified it. Keep it concise and do not "
+                "narrate the investigation."
+            ),
+        ),
+    ] = None,
+) -> str:
+    """Submit your fix for review as a new GitHub pull request.
+
+    This is how you deliver a code fix to a repository hosted on GitHub. The
+    pull request is opened from a new branch against the repository's default
+    branch, as a draft.
+
+    You do not supply a patch file. Your final code changes in the working
+    directory (and any commits you made) are squashed into the pull request's
+    one commit, with its title and description as the message, so make and
+    verify all your edits first, then call this once you are done. Calling it
+    records the submission as a proposed action for review; nothing is sent to
+    GitHub during the run.
+
+    Later actions can reference its `url`.
+    """
+    params: dict = {"title": title, "body": body}
+    action = recorder.record(SUBMIT_PATCH_ACTION_TYPE, params, reasoning=reasoning)
     return confirmation(action)
 
 

@@ -59,19 +59,63 @@ def test_refresh_data_keeps_going_after_a_failure(
     assert calls == ["tasks", "build platforms", "commits"]
 
 
+@responses.activate
 def test_refresh_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    tip = "a" * 40
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/integration/autoland/json-rev/default",
+        json={"node": tip},
+    )
     calls: list[object] = []
     monkeypatch.setattr(
         boot.repository,
         "pull",
         lambda repo_dir, branch, revision: calls.append(("pull", branch, revision)),
     )
-    monkeypatch.setattr(boot, "update_commits", lambda: calls.append("update"))
+    monkeypatch.setattr(
+        boot,
+        "update_commits",
+        lambda autoland_head: calls.append(("update", autoland_head)),
+    )
 
     boot.refresh_commits()
 
     # The latest autoland commits are pulled before being mined.
-    assert calls == [("pull", "integration/autoland", "tip"), "update"]
+    assert calls == [("pull", "integration/autoland", tip), ("update", tip)]
+
+
+def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    unknown, known, merge_parent, new = "1" * 40, "2" * 40, "4" * 40, "3" * 40
+    with open(boot.repository.COMMITS_DB, "w") as f:
+        for node in (merge_parent, known, unknown):
+            f.write(json.dumps({"node": node}) + "\n")
+
+    monkeypatch.setattr(boot.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+
+    # The last commits of the DB which are not in the clone are skipped.
+    def get_new_revs(hg, base, head):
+        assert head == "a" * 40
+        if base == unknown:
+            raise boot.hglib.error.CommandError(
+                [], 255, b"", b"abort: unknown revision"
+            )
+        assert base == known
+        # The other parent of a merge is not an ancestor of the last commit, but it is in the DB.
+        return [merge_parent.encode(), new.encode()]
+
+    mined: list[bytes] = []
+
+    def download_commits(repo_dir, revs):
+        mined.extend(revs)
+        return ()
+
+    monkeypatch.setattr(boot.repository, "get_new_revs", get_new_revs)
+    monkeypatch.setattr(boot.repository, "download_commits", download_commits)
+
+    boot.update_commits("a" * 40)
+
+    assert mined == [new.encode()]
 
 
 def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -224,9 +268,11 @@ AUTOLAND_VARIANTS = re.compile(
 
 
 @pytest.fixture(autouse=True)
-def mock_test_variants() -> None:
-    # mozci memoizes the test variants.
+def mock_test_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    # mozci memoizes the test variants, of mozilla-central and of the pushes.
     mozci_task.fetch_test_variant_yaml.clear()
+    monkeypatch.setattr(mozci_task, "_push_test_variants", {})
+    monkeypatch.setattr(mozci_task, "_push_test_variants_revs", set())
     # The suffixes of the test variants, of mozilla-central (retrieved by mozci) and of the pushes.
     responses.add(
         responses.GET,
@@ -238,7 +284,7 @@ def mock_test_variants() -> None:
 
 def test_get_config_selection_tasks() -> None:
     assert (
-        boot.get_config_selection_tasks(TASK_GRAPH, KNOWN_TASKS)
+        boot.get_config_selection_tasks(TASK_GRAPH, KNOWN_TASKS, "rev")
         == CONFIG_SELECTION_TASKS
     )
 
@@ -309,24 +355,6 @@ def test_retrieve_schedulable_tasks(
             "processed": ["rev2", "rev3"],
             "not_backstops": ["rev3"],
         }
-
-
-def test_get_full_graph_tasks() -> None:
-    graph = {"a": TASK_GRAPH["a"], "c": TASK_GRAPH["c"], "g": TASK_GRAPH["g"]}
-    graph = {task["label"]: task for task in graph.values()}
-    labels = {"test-linux2404-64/opt-mochitest-plain-1", "build-linux64/opt"}
-    expected = {label: graph[label] for label in labels}
-    # The definitions are found in the text, as the full task graph is compact JSON.
-    assert boot.get_full_graph_tasks(orjson.dumps(graph), labels) == expected
-    # Otherwise, the whole graph is parsed.
-    assert (
-        boot.get_full_graph_tasks(json.dumps(graph, indent=2).encode(), labels)
-        == expected
-    )
-    # Tasks which aren't in the graph are left out.
-    assert (
-        boot.get_full_graph_tasks(orjson.dumps(graph), {"test-unknown/opt-x-1"}) == {}
-    )
 
 
 def test_update_config_selection_tasks(
@@ -562,8 +590,8 @@ def test_update_config_selection_tasks_retries_unresolved(
     monkeypatch.chdir(tmp_path)
     with contextlib.suppress(FileNotFoundError):
         os.remove(boot.CONFIG_SELECTION_TASKS_PATH)
-    # Test variants added on autoland, which aren't on mozilla-central yet: the latest one isn't in
-    # the variants of the pushes at first either (e.g. a transient failure).
+    # A test variant added on autoland, which isn't on mozilla-central yet: the variants of the
+    # pushes can't be retrieved at first (e.g. a transient failure).
     new_variant = _task(
         "test-linux2404-64/opt-mochitest-plain-newv-1",
         "linux2404-64/opt",
@@ -619,12 +647,13 @@ def test_update_config_selection_tasks_retries_unresolved(
         boot._decision_artifact_url("p1", "full-task-graph.json"),
         body=orjson.dumps({**graph, renamed["label"]: renamed}),
     )
-    # The variants of the pushes don't have the latest one yet (e.g. a transient failure).
+    # The other variant is on mozilla-central, but the variants of the pushes can't be retrieved.
     responses.replace(
         responses.GET,
-        AUTOLAND_VARIANTS,
+        "https://hg.mozilla.org/mozilla-central/raw-file/default/taskcluster/test_configs/variants.yml",
         body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\n",
     )
+    responses.replace(responses.GET, AUTOLAND_VARIANTS, status=500)
 
     def read() -> dict:
         with open(boot.CONFIG_SELECTION_TASKS_PATH) as f:
@@ -632,7 +661,7 @@ def test_update_config_selection_tasks_retries_unresolved(
 
     boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
     state = read()
-    # The configs are named with the push's test variants.
+    # The configs of the tasks with known variants are computed.
     assert state["tasks"]["test-linux2404-64/opt-mochitest-plain-newv"] == {
         "config": "test-linux2404-64/opt-*-newv",
         "manifests": ["dom/a.toml"],
@@ -651,11 +680,11 @@ def test_update_config_selection_tasks_retries_unresolved(
     ]
     assert full_graphs == [boot._decision_artifact_url("p1", "full-task-graph.json")]
 
-    # Once the variants are known, they are resolved on the next update.
+    # Once the variants of the pushes can be retrieved, they are resolved on the next update.
     responses.replace(
         responses.GET,
         AUTOLAND_VARIANTS,
-        body="xorigin:\n  suffix: xorig\nnewvariant:\n  suffix: newv\nlatervariant:\n  suffix: later\n",
+        body="xorigin:\n  suffix: xorig\nlatervariant:\n  suffix: later\n",
     )
     boot.update_config_selection_tasks(["b1", "p1", "p2"], KNOWN_TASKS)
     state = read()

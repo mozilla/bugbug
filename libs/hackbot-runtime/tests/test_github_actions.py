@@ -1,8 +1,9 @@
-"""Tests for the GitHub recording tools (PR comments and inline review comments)."""
+"""Tests for the GitHub recording tools: comments, reviews and pull requests."""
 
 import pytest
 from agent_tools.registry import ToolError
-from hackbot_runtime.actions import ActionsRecorder, github
+from hackbot_runtime.actions import ActionsRecorder, github, phabricator
+from hackbot_runtime.actions.claude_sdk import actions_to_tool_names
 
 REPO = "mozilla-mobile/firefox-ios"
 
@@ -112,7 +113,7 @@ async def test_invalid_inline_comments_are_refused(comments):
 
 def test_tool_schemas():
     tools = {t.name: t for t in github.TOOLS}
-    assert set(tools) == {"add_comment", "add_inline_comments"}
+    assert set(tools) == {"add_comment", "add_inline_comments", "submit_patch"}
     assert set(tools["add_comment"].input_schema["required"]) == {
         "repo",
         "pull_number",
@@ -122,3 +123,41 @@ def test_tool_schemas():
     inline = tools["add_inline_comments"].input_schema
     assert set(inline["required"]) == {"repo", "pull_number", "comments", "reasoning"}
     assert "summary" in inline["properties"]
+    assert set(tools["submit_patch"].input_schema["required"]) == {
+        "title",
+        "reasoning",
+    }
+
+
+async def test_submit_patch_records_title_and_body():
+    rec = ActionsRecorder()
+
+    reply = await github.submit_patch(
+        rec, title="Fix the thing", body="Details", reasoning="r"
+    )
+
+    action = rec.actions[0]
+    assert action["type"] == "github.submit_patch"
+    assert action["params"] == {"title": "Fix the thing", "body": "Details"}
+    assert action["reasoning"] == "r"
+    assert reply.startswith("Recorded github.submit_patch (ID: ")
+
+
+async def test_submit_patch_body_is_optional():
+    rec = ActionsRecorder()
+
+    await github.submit_patch(rec, title="Fix", reasoning="r")
+
+    assert rec.actions[0]["params"] == {"title": "Fix", "body": None}
+
+
+def test_submit_patch_is_exposed_as_an_action_tool():
+    assert actions_to_tool_names(["github.submit_patch"]) == [
+        "mcp__actions__github_submit_patch"
+    ]
+
+
+def test_github_patch_types_do_not_overlap_phabricator_ones():
+    # Each gates building its own artifact in publish_changes.
+    assert {"github.submit_patch"} == github.PATCH_ACTION_TYPES
+    assert not github.PATCH_ACTION_TYPES & phabricator.PATCH_ACTION_TYPES
