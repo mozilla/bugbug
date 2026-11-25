@@ -381,6 +381,7 @@ def test_timed_out_attempt_keeps_its_patch(monkeypatch, tmp_path):
     monkeypatch.setattr(runner.tree, "diff", lambda src, base: PATCH)
     attempt = object.__new__(runner.Runner)
     attempt.work, attempt.ctx = tmp_path, SimpleNamespace(run_id="r")
+    attempt.run_log = None
     attempt.exp = runner.Experiment(
         "ds", "prompt-executor", "claude_code", "m", None, 1, 30, "j", None
     )
@@ -391,19 +392,22 @@ def test_timed_out_attempt_keeps_its_patch(monkeypatch, tmp_path):
 
 
 def test_run_isolated_tees_output(tmp_path, capsys):
-    code = asyncio.run(
-        run_isolated(
-            ["sh", "-c", "echo step one"],
-            {"PATH": "/bin:/usr/bin"},
-            tmp_path,
-            10,
-            tmp_path / "log",
-            "[x] ",
+    with (tmp_path / "run.log").open("w") as run_log:
+        code = asyncio.run(
+            run_isolated(
+                ["sh", "-c", "echo step one"],
+                {"PATH": "/bin:/usr/bin"},
+                tmp_path,
+                10,
+                tmp_path / "log",
+                "[x] ",
+                run_log,
+            )
         )
-    )
     assert code == 0
     assert (tmp_path / "log").read_text() == "step one\n"
     assert "[x] step one" in capsys.readouterr().out
+    assert (tmp_path / "run.log").read_text() == "[x] step one\n"
 
 
 def test_codex_items_are_reported_like_claude_messages(capsys):

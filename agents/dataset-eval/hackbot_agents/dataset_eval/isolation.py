@@ -18,6 +18,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+from typing import TextIO
 
 
 def example_env(
@@ -48,11 +49,13 @@ def _kill_group(pid: int) -> None:
         os.killpg(pid, signal.SIGKILL)
 
 
-async def _tee(stream: asyncio.StreamReader, log, prefix: str) -> None:
+async def _tee(stream: asyncio.StreamReader, log, prefix: str, also) -> None:
     async for line in stream:
         log.write(line)
-        sys.stdout.write(prefix + line.decode(errors="replace"))
-        sys.stdout.flush()
+        text = prefix + line.decode(errors="replace")
+        for out in (sys.stdout, *([also] if also else [])):
+            out.write(text)
+            out.flush()
 
 
 async def run_isolated(
@@ -62,10 +65,11 @@ async def run_isolated(
     timeout_s: float,
     log: Path,
     prefix: str = "",
+    also: TextIO | None = None,
 ) -> int | None:
     """Run ``args`` in its own process group; None when it hit ``timeout_s``.
 
-    Its output goes to ``log`` and, prefixed, to this process's stdout. The whole
+    Its output goes to ``log`` and, prefixed, to this process's stdout and ``also``. The whole
     group is killed afterwards either way, so no build, browser or test process
     outlives the example.
     """
@@ -78,7 +82,7 @@ async def run_isolated(
             stderr=asyncio.subprocess.STDOUT,
             start_new_session=True,
         )
-        reader = asyncio.create_task(_tee(proc.stdout, out, prefix))
+        reader = asyncio.create_task(_tee(proc.stdout, out, prefix, also))
         try:
             return await asyncio.wait_for(proc.wait(), timeout_s)
         except TimeoutError:
