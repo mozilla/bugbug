@@ -16,6 +16,7 @@ include:
   - path: agents/uplift-resolve/compose.yml
   - path: agents/autowebcompat-intervention/compose.yml
   - path: agents/dataset-eval/compose.yml
+  - path: agents/crash-info/compose.yml
 
 services:
   bugbug-base:

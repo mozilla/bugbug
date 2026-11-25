@@ -50,6 +50,7 @@ on:
           - agents/autowebcompat-repro
           - agents/bug-fix
           - agents/build-repair
+          - agents/crash-info
           - agents/dataset-eval
           - agents/frontend-triage
           - agents/gecko-triage

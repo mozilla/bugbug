@@ -319,3 +319,22 @@ class UpliftInputs(AgentInputs):
 
     # Override the agent's default reasoning effort (e.g. `high`).
     effort: str | None = None
+
+
+class CrashInfoInputs(AgentInputs):
+    bug_id: int
+    # Historical (evaluation) runs: hide everything after this time, or after
+    # the bug's first patch. Neither: a live run on the bug as it is now.
+    as_of: datetime | None = None
+    before_first_patch: bool = False
+    # Override the agent's default model (claude-opus-5-5) or effort (high).
+    model: str | None = None
+    effort: str | None = None
+    max_tool_calls: int | None = None
+    use_source_checkout: bool = False
+
+    @model_validator(mode="after")
+    def _validate_mode(self) -> "CrashInfoInputs":
+        if self.as_of is not None and self.before_first_patch:
+            raise ValueError("as_of and before_first_patch are mutually exclusive")
+        return self

@@ -1,0 +1,263 @@
+# Taxonomy of crash missing information (empirical_taxonomy-5).
+#
+# Definitions, canonical questions, include/exclude rules, distinctions and the
+# decision-card cues are transcribed from the taxonomy document. Four fields are
+# operational additions used by the agent, not part of the published taxonomy:
+#
+#   nearby          labels the document says to distinguish this one from
+#   phase           "initial" = assessable from the report alone;
+#                   "late" = usually only assessable after investigating causes
+#   actions         investigation actions that usually recover this information;
+#                   SEARCH_PRIOR_BUGS: earlier bugs fixed before the cutoff, whose
+#                   fixes show what was missing and what the repair had to do
+#   recoverable_by  "evidence" | "either" | "developer": where the answer usually lives
+#   plain           the label's name in plain words, shown to people (reports, UI);
+#                   prompts and the note bug-fix gets keep the id
+
+version = "5"
+
+[[categories]]
+id = "Repair"
+name = "Repair Specification"
+focus = "Missing information that tells what the repair must do: which cases need changed behavior, how abnormal failures should be handled, when work should stop safely, or which component should own the repair rule."
+
+[[categories]]
+id = "Obj"
+name = "Object Validity"
+focus = "Missing information about whether the object, reference, value, identity, or representation used by the failing code is valid, either over time or at the exact failure point."
+
+[[categories]]
+id = "Exec"
+name = "Execution Context"
+focus = "Missing information about conditions outside the immediate object or local operation: changing runtime state, stable environment configuration, or coordination among multiple components."
+
+[[categories]]
+id = "Verif"
+name = "Verification Evidence"
+focus = "Missing information needed to evaluate the repair: the expected result, the test setup and coverage needed for valid evidence, or diagnostics that distinguish causes or failing paths."
+
+[[categories]]
+id = "Trigger"
+name = "Failure Trigger Sequence"
+focus = "Missing information about the ordered real execution events that transform a normal state into the failing state."
+
+[[labels]]
+id = "Repair.GUARD"
+name = "Repair applicability"
+plain = "Which cases the fix must cover"
+category = "Repair"
+definition = "Missing information that identifies exactly which inputs, states, call sites, or execution paths need changed behavior. It defines the coverage of the repair, not the component that owns it."
+canonical_question = "Exactly which cases, states, or paths need different behavior?"
+include_when = "The missing fact specifies a predicate, feature/state check, exclusion, set of equivalent call sites, or set of operations sharing the same unsafe assumption."
+exclude_when = "The central unknown is which module or layer must own the repair (Repair.OWNERSHIP), how an abnormal failure is handled (Repair.ERROR), or only the semantic post-fix result (Verif.EXPECTED)."
+distinguish = "Repair.GUARD answers which cases or paths need the rule. Repair.OWNERSHIP answers which component must implement or own the rule. Verif.EXPECTED states the result after the decision."
+ask = "Which cases/paths/states should behavior differ?"
+cue = "Affected coverage, predicate, equivalent entry points."
+nearby = ["Repair.OWNERSHIP", "Repair.ERROR", "Verif.EXPECTED"]
+phase = "initial"
+actions = ["SEARCH_CODE", "SEARCH_BUGZILLA", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Repair.ERROR"
+name = "Abnormal-failure handling"
+plain = "How the fix must handle the error"
+category = "Repair"
+definition = "Missing information that explains how a real exception, error result, failed API call, or framework failure should be handled so that it cannot reach unsafe code. The handling may catch, propagate, translate, isolate, or recover from the failure."
+canonical_question = "When an abnormal failure occurs, where should it be handled and what should happen to it?"
+include_when = "Exception/error handling, conversion of a failure into a controlled result, propagation rules, failure isolation, or handling a failed API/framework operation while allowing the broader workflow to continue."
+exclude_when = "The fact describes an ordinary invalid or unsafe state that should simply stop or no-op (Repair.STOP), or a semantic postcondition that does not depend on an abnormal-failure mechanism (Verif.EXPECTED)."
+distinguish = "Repair.ERROR depends on an abnormal failure mechanism. Remove the exception/error: if the classification problem disappears, Repair.ERROR is usually correct; otherwise an ordinary safe exit is Repair.STOP."
+ask = "Where/how is an abnormal failure contained?"
+cue = "Exception/error propagation, translation, controlled recovery."
+nearby = ["Repair.STOP", "Verif.EXPECTED"]
+phase = "initial"
+actions = ["SEARCH_CODE", "INSPECT_REVISION", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Repair.STOP"
+name = "Safe termination"
+plain = "When the code must stop safely"
+category = "Repair"
+definition = "Missing information that identifies an ordinary state in which continuing is unsafe, invalid, redundant, or unnecessary. The correct repair is to end the current operation safely, for example by returning, rejecting, cancelling, skipping, invalidating, or doing nothing."
+canonical_question = "In what state should the current operation stop instead of continuing?"
+include_when = "Early return, invalid-input rejection, cancellation, duplicate-work suppression, invalidation followed by retry/refetch, or harmless completion where no work is required."
+exclude_when = "An exception/error is the central abnormal event (Repair.ERROR), execution continues on an alternate guarded path (Repair.GUARD), or the fact only specifies an externally meaningful result contract (Verif.EXPECTED)."
+distinguish = "Repair.STOP requires termination/no-op as the repair mechanism. Repair.ERROR contains an abnormal failure; Verif.EXPECTED states what result must hold, regardless of implementation."
+ask = "When must work stop/no-op/reject?"
+cue = "Ordinary safe termination or invalid-state exit."
+nearby = ["Repair.ERROR", "Repair.GUARD", "Verif.EXPECTED"]
+phase = "initial"
+actions = ["SEARCH_CODE", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Repair.OWNERSHIP"
+name = "Architectural responsibility"
+plain = "Where in the code the fix belongs"
+category = "Repair"
+definition = "Missing information that identifies where the repair logic belongs in the architecture and which component, module, or layer must enforce it. Use this when the key uncertainty is responsibility for the invariant, not merely which paths are affected."
+canonical_question = "Which component or layer should implement and enforce this repair rule, and why there?"
+include_when = "Explicit contrast between candidate implementation locations, assignment of policy/lifecycle responsibility to a layer, shared responsibility across named consumers, or movement of logic from a local workaround into a reusable abstraction."
+exclude_when = "The fact only lists affected call sites, methods, entry points, or operations that all need the same predicate; those are Repair.GUARD. A generic statement that a local fix is incomplete is insufficient without identifying an architectural owner/location."
+distinguish = "Use the owner-versus-coverage test: 'Which paths need the rule?' -> Repair.GUARD. 'Which component should own or implement the rule?' -> Repair.OWNERSHIP."
+ask = "Which component/layer is responsible?"
+cue = "Architectural placement/responsibility, not path coverage."
+nearby = ["Repair.GUARD"]
+phase = "late"
+actions = ["SEARCH_CODE", "INSPECT_REVISION", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "developer"
+
+[[labels]]
+id = "Obj.LIFETIME"
+name = "Object lifetime"
+plain = "How long the object stays valid"
+category = "Obj"
+definition = "Missing information about how the validity of one object or resource changes over time: when it becomes valid, how it is kept alive or transferred, and when it can be invalidated, reused, released, or destroyed."
+canonical_question = "What keeps this object or resource valid, and until when?"
+include_when = "Reference retention, ownership/transfer of a resource identity, delayed release, destruction timing, reuse before prior use completes, callback retention, or thread-affinity constraints on destruction."
+exclude_when = "The information is only a crash-instant snapshot (Obj.STATE), or two or more participants must coordinate shared work/resource and that coordination is central (Exec.CONCURRENCY)."
+distinguish = "Freeze time at the failure instant. If the essential fact disappears because before/after/until/reuse is required, use Obj.LIFETIME. If the essential fact is a relation among multiple actors, use Exec.CONCURRENCY."
+ask = "How does one object remain valid over time?"
+cue = "Retention, transfer, release, reuse, destruction timing."
+nearby = ["Obj.STATE", "Exec.CONCURRENCY"]
+phase = "initial"
+actions = ["SEARCH_CODE", "INSPECT_REVISION", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "evidence"
+
+[[labels]]
+id = "Obj.STATE"
+name = "Object state & identity"
+plain = "Which object or value is valid at the crash"
+category = "Obj"
+definition = "Missing information about which object, value, identity, backing state, or representation is valid at the failure point. This is a snapshot question: what is valid now, not how it became valid or invalid over time."
+canonical_question = "At the failure point, which object, value, or representation is actually valid?"
+include_when = "Stale versus fresh object, null or invalid backing object, body/metadata mismatch, canonical representation, current value, same-key/different-object distinction, or malformed local cache entry."
+exclude_when = "Validity changes over time and the transition is essential (Obj.LIFETIME), the state belongs to the surrounding process/session/shutdown context (Exec.SYSTEM), or the statement is a correctness postcondition (Verif.EXPECTED)."
+distinguish = "Obj.STATE is fully expressible as a snapshot at one instant. If the fact requires before/after/until/reused/released, use Obj.LIFETIME; if the state belongs to surrounding runtime context, use Exec.SYSTEM."
+ask = "Which local object/value is valid now?"
+cue = "Crash-instant snapshot, representation, identity."
+nearby = ["Obj.LIFETIME", "Exec.SYSTEM", "Verif.EXPECTED"]
+phase = "initial"
+actions = ["INSPECT_CRASH_EVIDENCE", "SEARCH_CODE"]
+recoverable_by = "evidence"
+
+[[labels]]
+id = "Exec.SYSTEM"
+name = "Runtime & persisted state"
+plain = "What the program was doing (shutdown, process, session)"
+category = "Exec"
+definition = "Missing information about surrounding system state that changes during execution or persists across a session, such as shutdown phase, process state, sandbox state, browsing context, or restored session data."
+canonical_question = "What surrounding runtime or persisted system state is active when the failure occurs?"
+include_when = "Shutdown phase, process lifecycle, selected session/browsing context, persisted session data, or sandbox/process state that changes during execution or across a session."
+exclude_when = "The condition is a relatively stable OS/build/dependency configuration (Exec.CONFIG) or immediate object/representation state (Obj.STATE)."
+distinguish = "If the state belongs to the object directly manipulated at the crash point, use Obj.STATE. If the condition is normally fixed for the run/build, use Exec.CONFIG."
+ask = "What surrounding dynamic/persisted runtime state is active?"
+cue = "Shutdown/session/process/sandbox context."
+nearby = ["Exec.CONFIG", "Obj.STATE"]
+phase = "initial"
+actions = ["INSPECT_CRASH_EVIDENCE", "SEARCH_CODE"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Exec.CONFIG"
+name = "Stable environment configuration"
+plain = "System, build and settings involved"
+category = "Exec"
+definition = "Missing information about environment properties that are usually fixed for a run or build, such as operating system or version, build mode, backend, feature setting, dependency, package, API capability, or shared-library interface."
+canonical_question = "Which stable platform, build, feature, dependency, or external capability is relevant?"
+include_when = "OS/version, architecture, build mode, backend, feature preference, application package/authority, external tool/package, or API/bridge/shared-library capability."
+exclude_when = "The condition is dynamic shutdown/session/process state (Exec.SYSTEM), or the configuration appears only as a test-specific setup or skip criterion (Verif.TEST_SCOPE)."
+distinguish = "If the condition is normally fixed for a run/build and does not evolve as part of the failing execution, use Exec.CONFIG. If it only determines whether test evidence is valid, use Verif.TEST_SCOPE."
+ask = "Which stable configured environment matters?"
+cue = "OS/build/backend/dependency/capability."
+nearby = ["Exec.SYSTEM", "Verif.TEST_SCOPE"]
+phase = "initial"
+actions = ["INSPECT_CRASH_EVIDENCE", "SEARCH_BUGZILLA"]
+recoverable_by = "evidence"
+
+[[labels]]
+id = "Exec.CONCURRENCY"
+name = "Cross-participant coordination"
+plain = "How threads or processes must take turns"
+category = "Exec"
+definition = "Missing information about how two or more participants must coordinate shared work or a shared resource. It covers relative timing, synchronization, re-entry, publication or discovery, acknowledgements, retries, joining, and cleanup."
+canonical_question = "Which participants are involved, and what ordering or coordination between them is required?"
+include_when = "Synchronous re-entry, event-queue ordering, IPC overtaking, producer/consumer acknowledgement, registry of live work, retry after a participant becomes ready, or shared-resource publication/cleanup."
+exclude_when = "Code is merely asynchronous but one object simply becomes invalid across time (Obj.LIFETIME), or the missing fact is the production/user event sequence that creates the failure state (Trigger.SEQUENCE)."
+distinguish = "Name the actors. A relation among two or more actors (Exec.CONCURRENCY). One object across time (Obj.LIFETIME). Ordered domain/user events that form the causal reproduction path (Trigger.SEQUENCE)."
+ask = "How must multiple participants coordinate?"
+cue = "Re-entry, relative timing, synchronization, publication/cleanup."
+nearby = ["Obj.LIFETIME", "Trigger.SEQUENCE"]
+phase = "initial"
+actions = ["SEARCH_CODE", "INSPECT_CRASH_EVIDENCE", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Verif.EXPECTED"
+name = "Correctness oracle"
+plain = "What the right result looks like"
+category = "Verif"
+definition = "Missing information that states the observable result or invariant that must hold after the repair. It serves as a direct pass/fail criterion for correctness."
+canonical_question = "What observable result or invariant would show that the repair is correct?"
+include_when = "Return/fallback value, preserved user/API behavior, ordering that must hold after the fix, absence of unintended mutation, stable output, or acceptance-versus-rejection semantics."
+exclude_when = "The fact specifies the condition selecting behavior (Repair.GUARD), abnormal-failure containment (Repair.ERROR), or harness setup needed to observe the result (Verif.TEST_SCOPE)."
+distinguish = "If the information can serve directly as an assertion or semantic oracle regardless of implementation, use Verif.EXPECTED. If it specifies the internal branch/guard to implement, use Repair.GUARD."
+ask = "What semantic result proves correctness?"
+cue = "Post-fix contract, invariant, fallback value."
+nearby = ["Repair.GUARD", "Repair.ERROR", "Verif.TEST_SCOPE", "Verif.DIAGNOSTIC"]
+phase = "initial"
+actions = ["SEARCH_CODE", "SEARCH_BUGZILLA", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "developer"
+
+[[labels]]
+id = "Verif.TEST_SCOPE"
+name = "Test preconditions & coverage"
+plain = "How to test the fix"
+category = "Verif"
+definition = "Missing information about how a test must be set up, synchronized, parameterized, or scoped so that it exercises the relevant behavior and provides valid evidence."
+canonical_question = "What test setup, synchronization, variants, or coverage boundary are required for valid evidence?"
+include_when = "Fixture/page setup, paint/event waits used only to stabilize the test, parameter variants, test-only environmental preconditions, narrow skip rules, or minimal test construction when the production trigger is already known."
+exclude_when = "The ordered operations are themselves the production causal sequence (Trigger.SEQUENCE), or the fact is the expected assertion/oracle (Verif.EXPECTED)."
+distinguish = "Remove the test harness. If the information remains a true causal statement about production behavior, use Trigger.SEQUENCE. If it only tells how to obtain valid evidence, use Verif.TEST_SCOPE."
+ask = "Under what test setup/coverage is evidence valid?"
+cue = "Harness state, synchronization, variant, skip boundary."
+nearby = ["Trigger.SEQUENCE", "Verif.EXPECTED", "Exec.CONFIG"]
+phase = "initial"
+actions = ["SEARCH_CODE", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Verif.DIAGNOSTIC"
+name = "Diagnostic evidence"
+plain = "What to look at to find the cause"
+category = "Verif"
+definition = "Missing information about what must be observed or recorded to tell which cause, object group, or execution path produced the failure or remains after the repair. Examples include logs, telemetry, counters, assertions, and probes."
+canonical_question = "What observation would tell us which cause or path is responsible?"
+include_when = "Telemetry dimensions, counts of affected stale entries, crash-signature separation, caught-exception logging, debug assertions, or probes used for causal discrimination."
+exclude_when = "The evidence only decides correct versus incorrect behavior without distinguishing causes or measuring the remaining causal population (Verif.EXPECTED)."
+distinguish = "Verif.DIAGNOSTIC answers which cause/path? or how much remains? Verif.EXPECTED answers is the repaired behavior correct?"
+ask = "What evidence distinguishes cause/path?"
+cue = "Telemetry, counters, logging, probes."
+nearby = ["Verif.EXPECTED"]
+phase = "initial"
+actions = ["INSPECT_CRASH_EVIDENCE", "SEARCH_BUGZILLA"]
+recoverable_by = "either"
+
+[[labels]]
+id = "Trigger.SEQUENCE"
+name = "Failure trigger sequence"
+plain = "The steps that lead to the crash"
+category = "Trigger"
+definition = "Missing information describing the ordered real execution events that create the failure from a normal state. The sequence may contain user actions, API calls, callbacks, lifecycle events, or internal operations."
+canonical_question = "What ordered events must occur to create the failing state?"
+include_when = "The missing fact supplies causally necessary ordered user actions, API calls, callbacks, internal events, lifecycle transitions, or reproduction operations."
+exclude_when = "The fact only supplies test-harness setup that makes evidence reliable (Verif.TEST_SCOPE), a crash-instant state without an ordered path (Obj.STATE), or a synchronization/re-entrancy rule among participants (Exec.CONCURRENCY)."
+distinguish = "Trigger.SEQUENCE is the path by which the failure is reached. If the information instead states the relative timing or coordination rule among actors, use Exec.CONCURRENCY; if it only stabilizes or scopes a test, use Verif.TEST_SCOPE."
+ask = "What ordered events create the failure?"
+cue = "Production/user/internal causal path."
+nearby = ["Verif.TEST_SCOPE", "Obj.STATE", "Exec.CONCURRENCY"]
+phase = "initial"
+actions = ["SEARCH_BUGZILLA", "INSPECT_CRASH_EVIDENCE", "SEARCH_CODE", "SEARCH_PRIOR_BUGS"]
+recoverable_by = "developer"

@@ -1,0 +1,30 @@
+services:
+  crash-info-agent:
+    build:
+      context: ../..
+      dockerfile: agents/crash-info/Dockerfile
+      target: agent
+    environment:
+      - RUN_ID
+      - BUG_ID=${BUG_ID:?error}
+      # Historical runs: AS_OF=2026-06-03T08:21:29Z or BEFORE_FIRST_PATCH=true.
+      - AS_OF
+      - BEFORE_FIRST_PATCH
+      # Default: claude-opus-5-5 at effort high.
+      - MODEL
+      - EFFORT
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      # Another Anthropic-compatible endpoint, for local runs only.
+      - ANTHROPIC_BASE_URL
+      - MAX_TOOL_CALLS
+      - USE_SOURCE_CHECKOUT
+      - SOURCE_REPO=/workspace/firefox
+      # No uploader locally: summary, logs and crash_info/* artifacts land in
+      # /artifacts/<run_id>, i.e. ~/hackbot/artifacts on the host.
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - workspace:/workspace
+      - ${HOME}/hackbot/artifacts:/artifacts
+
+volumes:
+  workspace:

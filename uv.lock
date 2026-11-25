@@ -22,6 +22,7 @@ members = [
     "hackbot-agent-autowebcompat-repro",
     "hackbot-agent-bug-fix",
     "hackbot-agent-build-repair",
+    "hackbot-agent-crash-info",
     "hackbot-agent-dataset-eval",
     "hackbot-agent-frontend-triage",
     "hackbot-agent-gecko-triage",
@@ -2548,6 +2549,36 @@ requires-dist = [
     { name = "weave", marker = "extra == 'eval'" },
 ]
 provides-extras = ["eval"]
+
+[[package]]
+name = "hackbot-agent-crash-info"
+version = "0.1.0"
+source = { editable = "agents/crash-info" }
+dependencies = [
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "claude-agent-sdk", specifier = ">=0.2.165" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "hackbot-agent-dataset-eval"

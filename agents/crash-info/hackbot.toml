@@ -1,0 +1,19 @@
+# CrashInfo is read-only. It runs on the Claude Agent SDK and reads public
+# Bugzilla, crash-stats, Searchfox and hg.mozilla.org over HTTP. The Firefox
+# checkout below is prepared only when a live run sets USE_SOURCE_CHECKOUT, to
+# grep the tree locally instead of using Searchfox.
+[source]
+repo_url = "https://github.com/mozilla-firefox/firefox.git"
+checkout_path = "/workspace/firefox"
+
+# No [firefox] table: nothing is built or run.
+
+# Infrastructure this agent runs on, applied by Terraform.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "2"
+memory = "4Gi"
+timeout_seconds = 3600
+
+[deploy.workspace]
+size = "20Gi"
