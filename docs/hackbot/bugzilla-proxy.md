@@ -365,13 +365,15 @@ throttled by nothing but its job timeout.
 
 **0. Proxy in the path, public scope only. Built.** What landed:
 
-| Piece                                               | Where                                                                              |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Scope evaluation: anchors, tiers, the group ceiling | [bugzilla_proxy/scope.py](../../services/bugzilla-proxy/bugzilla_proxy/scope.py)   |
-| Token verification and the claim shapes it refuses  | [bugzilla_proxy/tokens.py](../../services/bugzilla-proxy/bugzilla_proxy/tokens.py) |
-| Endpoint allowlist, post-filtering, audit log       | [bugzilla_proxy/app.py](../../services/bugzilla-proxy/bugzilla_proxy/app.py)       |
-| Minting, scope templates, the `$bug_id` placeholder | [hackbot-api/app/bz_token.py](../../services/hackbot-api/app/bz_token.py)          |
-| The `broker` container override and its allowlist   | [hackbot-api/app/jobs.py](../../services/hackbot-api/app/jobs.py)                  |
+| Piece                                                         | Where                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Scope evaluation: anchors, tiers, the group ceiling           | [bugzilla_proxy/scope.py](../../services/bugzilla-proxy/bugzilla_proxy/scope.py)               |
+| Token verification and the claim shapes it refuses            | [bugzilla_proxy/tokens.py](../../services/bugzilla-proxy/bugzilla_proxy/tokens.py)             |
+| Endpoints, per-bug decisions, errors, audit log               | [bugzilla_proxy/routers/rest.py](../../services/bugzilla-proxy/bugzilla_proxy/routers/rest.py) |
+| What a request may ask for, and what of the answer it may see | [bugzilla_proxy/params.py](../../services/bugzilla-proxy/bugzilla_proxy/params.py)             |
+| The two upstream keys, their clients and caches               | [bugzilla_proxy/upstream.py](../../services/bugzilla-proxy/bugzilla_proxy/upstream.py)         |
+| Minting, scope templates, the `$bug_id` placeholder           | [hackbot-api/app/bz_token.py](../../services/hackbot-api/app/bz_token.py)                      |
+| The `broker` container override and its allowlist             | [hackbot-api/app/jobs.py](../../services/hackbot-api/app/jobs.py)                              |
 
 Hardening that landed after review, each verified against bugzilla.mozilla.org where it
 concerns BMO behaviour:

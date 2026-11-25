@@ -17,13 +17,14 @@ client, which this service does not otherwise depend on.
 """
 
 import pytest
-from bugzilla_proxy.app import _CREDENTIAL_PHRASES, create_app
+from bugzilla_proxy.app import create_app
+from bugzilla_proxy.routers.rest import CREDENTIAL_PHRASES
 from fastapi.testclient import TestClient
 
 # The service scrubs these because they are about its own credential. They are
 # also exactly the phrases the agents' client matches, which is why the list is
 # asserted here rather than left as an implementation detail.
-LOGIN_TRIGGERS = _CREDENTIAL_PHRASES
+LOGIN_TRIGGERS = CREDENTIAL_PHRASES
 
 
 class NoUpstream:

@@ -6,11 +6,11 @@ import sys
 
 # Imports the app the way `uvicorn bugzilla_proxy.main:app` does, in a fresh
 # interpreter so nothing pytest configured can mask a missing handler, then
-# emits an audit line through the app's own logger.
+# emits an audit line through the router's logger.
 _PROBE = """
 import logging
 import bugzilla_proxy.main  # noqa: F401
-logging.getLogger("bugzilla_proxy.app").info("audit probe")
+logging.getLogger("bugzilla_proxy.routers.rest").info("audit probe")
 """
 
 

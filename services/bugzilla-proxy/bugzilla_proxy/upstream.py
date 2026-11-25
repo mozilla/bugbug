@@ -1,4 +1,9 @@
-"""The one place that talks to Bugzilla with a real credential."""
+"""The one place that talks to Bugzilla with a real credential.
+
+The proxy holds two: a privileged key for scopes with a private grant, and an
+unprivileged one for everything else. Each has its own client and its own
+cache of what it has seen.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,10 @@ import logging
 from typing import Any
 
 import httpx
+from cachetools import TTLCache
 
 from bugzilla_proxy.config import Settings
+from bugzilla_proxy.scope import AUTH_FIELDS, Scope
 
 log = logging.getLogger(__name__)
 
@@ -82,3 +89,94 @@ class Upstream:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+PRIVILEGED = "privileged"
+UNPRIVILEGED = "unprivileged"
+
+
+def key_for(scope: Scope) -> str:
+    """Which key reads for ``scope``: the unprivileged one unless it must not.
+
+    A scope that cannot reach private bugs reads with a key from an account in
+    no groups, so BMO refuses anything private even if a check here were
+    wrong. Only a scope with a private grant needs, and gets, the privileged
+    key, and stays behind every check the proxy applies.
+    """
+    return PRIVILEGED if scope.is_private else UNPRIVILEGED
+
+
+class Backend:
+    """One upstream credential, and what it has told us about each bug.
+
+    Kept per credential: the two keys see different bugs, so an answer cached
+    from one must never decide a request served with the other.
+    """
+
+    def __init__(self, upstream: Upstream, settings: Settings) -> None:
+        self.upstream = upstream
+        # Keyed by bug id, not by token: what this credential sees of a bug
+        # is the same for every caller using it. The TTL bounds how long a
+        # newly-private bug keeps being served.
+        self.bug_cache: TTLCache = TTLCache(
+            maxsize=settings.decision_cache_max_entries,
+            ttl=settings.decision_cache_ttl_seconds,
+        )
+
+    async def auth_fields(self, bug_ids: list[int]) -> dict[int, dict[str, Any] | None]:
+        """Fetch just enough of each bug to decide access, memoised.
+
+        One upstream call covers every id not already cached. An id upstream
+        does not return maps to None.
+        """
+        missing = sorted({i for i in bug_ids if i not in self.bug_cache})
+        if missing:
+            payload = await self.upstream.get(
+                "bug",
+                {
+                    "id": ",".join(str(i) for i in missing),
+                    "include_fields": ",".join(sorted(AUTH_FIELDS)),
+                },
+            )
+            found: dict[int, dict[str, Any]] = {}
+            for bug in payload.get("bugs") or []:
+                try:
+                    found[int(bug["id"])] = bug
+                except KeyError, TypeError, ValueError:
+                    continue
+            for bug_id in missing:
+                self.bug_cache[bug_id] = found.get(bug_id)
+        return {bug_id: self.bug_cache.get(bug_id) for bug_id in bug_ids}
+
+
+def build_backends(
+    settings: Settings,
+    privileged_upstream: Upstream | None = None,
+    unprivileged_upstream: Upstream | None = None,
+) -> dict[str, Backend | None]:
+    """One backend per key, keyed by name. Either may be missing.
+
+    A token needing a missing one gets a 503 rather than the other key.
+    """
+    if (
+        settings.bugzilla_privileged_api_key
+        and settings.bugzilla_privileged_api_key
+        == settings.bugzilla_unprivileged_api_key
+    ):
+        raise ValueError(
+            "the privileged and unprivileged Bugzilla API keys are the same; "
+            "scopes without private grants must read with a key from an "
+            "account in no groups, so a bug in the proxy cannot reach private "
+            "data"
+        )
+
+    def backend(given: Upstream | None, key: str) -> Backend | None:
+        upstream = given or (Upstream(settings, key) if key else None)
+        return Backend(upstream, settings) if upstream is not None else None
+
+    return {
+        PRIVILEGED: backend(privileged_upstream, settings.bugzilla_privileged_api_key),
+        UNPRIVILEGED: backend(
+            unprivileged_upstream, settings.bugzilla_unprivileged_api_key
+        ),
+    }
