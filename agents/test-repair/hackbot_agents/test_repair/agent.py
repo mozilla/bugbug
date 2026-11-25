@@ -25,8 +25,8 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 from hackbot_runtime import ActionsRecorder, AgentError, HackbotAgentResult
+from hackbot_runtime.action_types import ActionType
 from hackbot_runtime.actions import ACTIONS_SERVER_NAME
-from hackbot_runtime.actions.agents import ACTION_TYPE as START_RUN_ACTION_TYPE
 from hackbot_runtime.actions.agents import allow_agents
 from hackbot_runtime.actions.claude_sdk import actions_server_for, actions_to_tool_names
 from hackbot_runtime.claude import Reporter
@@ -314,7 +314,7 @@ def _fix_requests(recorder: ActionsRecorder) -> list[dict]:
     return [
         action
         for action in recorder.list_actions()
-        if action["type"] == START_RUN_ACTION_TYPE
+        if action["type"] == ActionType.AGENTS_START_RUN
     ]
 
 
@@ -352,10 +352,10 @@ async def run_test_repair(
     if actions_recorder is not None:
         allow_agents(actions_recorder, [FIX_AGENT])
         _, actions_server = actions_server_for(
-            actions_recorder, types=[START_RUN_ACTION_TYPE]
+            actions_recorder, types=[ActionType.AGENTS_START_RUN.value]
         )
         mcp_servers[ACTIONS_SERVER_NAME] = actions_server
-        allowed_tools += actions_to_tool_names([START_RUN_ACTION_TYPE])
+        allowed_tools += actions_to_tool_names([ActionType.AGENTS_START_RUN.value])
 
     known_intermittents_line = (
         KNOWN_INTERMITTENTS_LINE.format(
