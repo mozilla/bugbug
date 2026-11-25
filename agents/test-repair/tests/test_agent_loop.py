@@ -243,6 +243,9 @@ def test_a_hand_off_publishes_what_the_fix_works_from(tmp_path, monkeypatch):
     )
     assert result.culprit_commit == head
     assert [a["type"] for a in recorder.actions] == ["agents.start_run"]
+    assert (
+        "logs/job_1/live_backing_log.log" in recorder.actions[0]["params"]["artifacts"]
+    )
     assert {
         "summary.md",
         "analysis.md",
