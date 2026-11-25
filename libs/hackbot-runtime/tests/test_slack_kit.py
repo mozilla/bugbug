@@ -9,7 +9,10 @@ nothing it would refuse.
 import json
 
 import pytest
-from hackbot_runtime.slack_kit import create_start_agent_run_button
+from hackbot_runtime.slack_kit import (
+    create_apply_run_actions_button,
+    create_start_agent_run_button,
+)
 from slack_sdk.errors import SlackObjectFormationError
 from slack_sdk.models.blocks import ConfirmObject
 
@@ -108,3 +111,9 @@ def test_a_label_past_slacks_limit_is_refused_here():
 def test_a_style_slack_does_not_accept_is_refused_here():
     with pytest.raises(SlackObjectFormationError):
         _button(style="chartreuse")
+
+
+def test_the_apply_button_carries_only_the_run_and_names_it_in_its_id():
+    button = create_apply_run_actions_button("Post analysis", run_id="run-1").to_dict()
+    assert json.loads(button["value"]) == {"run_id": "run-1"}
+    assert button["action_id"] == "apply_run_actions:run-1"

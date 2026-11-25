@@ -25,7 +25,10 @@ import re
 
 from hackbot_runtime.actions.recorder import ActionsRecorder
 from hackbot_runtime.actions.slack import HACKBOT_UI_URL, record_message
-from hackbot_runtime.slack_kit import create_start_agent_run_button
+from hackbot_runtime.slack_kit import (
+    create_apply_run_actions_button,
+    create_start_agent_run_button,
+)
 from slack_sdk.models.blocks import ConfirmObject
 
 from .agent import FrontendTriageResult
@@ -53,7 +56,7 @@ URGENT_SEVERITY = "S1"
 
 HELD_NOTE = (
     ":hourglass: *Held for review.* This analysis is recorded but not on the bug. "
-    "Starting the fix posts it first."
+    "Either button posts it."
 )
 
 
@@ -226,6 +229,26 @@ def _bug_fix_button(result: FrontendTriageResult, *, run_id: str) -> dict:
     ).to_dict()
 
 
+def _post_analysis_button(result: FrontendTriageResult, *, run_id: str) -> dict:
+    """The offer to approve a held analysis without starting `bug-fix`.
+
+    No style, so the bug-fix button stays the primary one in the row.
+    """
+    return create_apply_run_actions_button(
+        "Post analysis",
+        run_id=run_id,
+        confirm=ConfirmObject(
+            title=f"Post the analysis to bug {result.bug_id}?",
+            text=(
+                f"This posts the triage analysis to bug {result.bug_id}. "
+                "No agent is started."
+            ),
+            confirm="Yes, post it",
+            deny="Cancel",
+        ),
+    ).to_dict()
+
+
 def build_blocks(
     result: FrontendTriageResult, *, run_id: str, comment: str | None = None
 ) -> list[dict]:
@@ -263,12 +286,10 @@ def build_blocks(
     if comment:
         blocks.append(_comment_block(result, comment))
 
-    blocks.append(
-        {
-            "type": "actions",
-            "elements": [_bug_fix_button(result, run_id=run_id)],
-        }
-    )
+    buttons = [_bug_fix_button(result, run_id=run_id)]
+    if not result.auto_apply:
+        buttons.append(_post_analysis_button(result, run_id=run_id))
+    blocks.append({"type": "actions", "elements": buttons})
     blocks.append(
         {
             "type": "context",

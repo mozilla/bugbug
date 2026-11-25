@@ -311,6 +311,19 @@ def test_the_button_names_the_agent_it_starts():
     )
 
 
+def test_only_a_held_run_offers_to_post_without_starting_bug_fix():
+    assert len(_block_of("actions")["elements"]) == 1
+    held = _block_of("actions", auto_apply=False)["elements"]
+    assert [b["text"]["text"] for b in held] == [
+        "Post analysis & run bug-fix",
+        "Post analysis",
+    ]
+    # Crosses to hackbot-api like the bug-fix button's value; the action_id is
+    # what a bug-fix click on the same run uses to remove this button.
+    assert json.loads(held[1]["value"]) == {"run_id": RUN_ID}
+    assert held[1]["action_id"] == f"apply_run_actions:{RUN_ID}"
+
+
 # --- the comment, collapsed ---
 
 COMMENT = (
