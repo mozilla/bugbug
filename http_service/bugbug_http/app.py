@@ -497,10 +497,7 @@ def clean_prediction_cache(job):
     redis_conn.delete(job.result_key, job.change_time_key)
 
 
-def get_result(job: JobInfo) -> Any | None:
-    LOGGER.debug("Checking for existing results at %s", job.result_key)
-    result = redis_conn.get(job.result_key)
-
+def _decode_result(result: bytes | None) -> Any | None:
     if result:
         LOGGER.debug("Found %r", result)
 
@@ -514,6 +511,47 @@ def get_result(job: JobInfo) -> Any | None:
         return orjson.loads(result)
 
     return None
+
+
+def get_result(job: JobInfo) -> Any | None:
+    LOGGER.debug("Checking for existing results at %s", job.result_key)
+    return _decode_result(redis_conn.get(job.result_key))
+
+
+def get_results(
+    jobs: Sequence[JobInfo], change_times: Sequence[str | None] | None = None
+) -> list[Any | None]:
+    """The results of several jobs, like get_result, with a single request to Redis.
+
+    When the change times of the items of the jobs are given, the results of the
+    items which changed since they were classified are removed first, like with
+    is_prediction_invalidated and clean_prediction_cache.
+    """
+    results = redis_conn.mget([job.result_key for job in jobs])
+
+    if change_times is not None:
+        saved_change_times = redis_conn.mget([job.change_time_key for job in jobs])
+        to_clean = []
+        for i, (job, change_time, saved_change_time) in enumerate(
+            zip(jobs, change_times, saved_change_times)
+        ):
+            if not change_time:
+                continue
+
+            # Without a saved change time, the item was classified by an old worker.
+            if (
+                results[i] is not None
+                if not saved_change_time
+                else saved_change_time.decode("utf-8") != change_time
+            ):
+                LOGGER.debug("Cleaning results for %s", job)
+                to_clean += [job.result_key, job.change_time_key]
+                results[i] = None
+
+        if to_clean:
+            redis_conn.delete(*to_clean)
+
+    return [_decode_result(result) for result in results]
 
 
 def compress_response(data: dict, status_code: int):
@@ -1153,15 +1191,12 @@ def batch_prediction(model_name):
 
     bug_change_dates = get_bugs_last_change_time(bugs)
 
-    for bug_id in bugs:
-        job = JobInfo(classify_bug, model_name, bug_id)
+    jobs = [JobInfo(classify_bug, model_name, bug_id) for bug_id in bugs]
+    # Change time could be None if it's a security bug
+    results = get_results(jobs, [bug_change_dates.get(int(bug_id)) for bug_id in bugs])
 
-        change_time = bug_change_dates.get(int(bug_id))
-        # Change time could be None if it's a security bug
-        if change_time and is_prediction_invalidated(job, change_time):
-            clean_prediction_cache(job)
-
-        data[str(bug_id)] = get_result(job)
+    for bug_id, job, result in zip(bugs, jobs, results):
+        data[str(bug_id)] = result
         if not data[str(bug_id)]:
             if not is_pending(job):
                 missing_bugs.append(bug_id)
@@ -1239,14 +1274,17 @@ def batch_comment_prediction(model_name: str):
     missing_comments = []
     status_code = 200
 
-    for comment_id in comment_ids:
-        job = JobInfo(classify_comment, model_name, comment_id)
+    jobs = [
+        JobInfo(classify_comment, model_name, comment_id) for comment_id in comment_ids
+    ]
+    results = get_results(
+        jobs, [change_times.get(comment_id) for comment_id in comment_ids]
+    )
+
+    for comment_id, job, result in zip(comment_ids, jobs, results):
         change_time = change_times.get(comment_id)
         if change_time is not None:
-            if is_prediction_invalidated(job, change_time):
-                clean_prediction_cache(job)
-
-            data[str(comment_id)] = get_result(job)
+            data[str(comment_id)] = result
             if not data[str(comment_id)]:
                 if not is_pending(job):
                     missing_comments.append(comment_id)
@@ -1429,11 +1467,14 @@ def batch_prediction_broken_site_report(model_name):
     data = {}
     missing_reports = []
 
-    for report in reports:
-        report_uuid = report["uuid"]
-        job = JobInfo(classify_broken_site_report, model_name, report_uuid)
+    jobs = [
+        JobInfo(classify_broken_site_report, model_name, report["uuid"])
+        for report in reports
+    ]
 
-        data[report_uuid] = get_result(job)
+    for report, job, result in zip(reports, jobs, get_results(jobs)):
+        report_uuid = report["uuid"]
+        data[report_uuid] = result
         if not data[report_uuid]:
             if not is_pending(job):
                 missing_reports.append(report)
