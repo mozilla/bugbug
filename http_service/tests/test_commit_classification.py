@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import gzip
 
 import hglib
@@ -202,22 +203,38 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         "ignored": "2" * 40,
         "scored": "3" * 40,
         "merge": "4" * 40,
+        # Added to .hg-annotate-ignore-revs after it was added to the commits DB.
+        "newly_ignored": "5" * 40,
     }
     monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
+    monkeypatch.setattr(models.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+    monkeypatch.setattr(
+        models.repository,
+        "get_ignore_revs",
+        lambda hg, repo_dir: {nodes["newly_ignored"]},
+    )
+
+    def commit(name):
+        return {
+            "node": nodes[name],
+            "bug_id": 1,
+            "desc": name,
+            "backsout": ["0" * 40] if name == "backout" else [],
+            "ignored": name == "ignored",
+        }
+
+    # The commits already in the commits DB are not mined again.
+    def get_commits_from_db(db_nodes):
+        return {
+            nodes[name]: commit(name) for name in ("backout", "scored", "newly_ignored")
+        }
 
     def download_commits(repo_dir, revs, **kwargs):
+        assert revs == [nodes["ignored"].encode(), nodes["merge"].encode()]
         # Merge commits are not mined.
-        return tuple(
-            {
-                "node": node,
-                "bug_id": 1,
-                "backsout": ["0" * 40] if name == "backout" else [],
-                "ignored": name == "ignored",
-            }
-            for name, node in nodes.items()
-            if name != "merge"
-        )
+        return (commit("ignored"),)
 
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
     monkeypatch.setattr(models.repository, "download_commits", download_commits)
     model = MockRegressorModel()
     monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: model)
@@ -225,8 +242,12 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
     assert models.classify_commits("regressor", "try", list(nodes.values())) == "OK"
 
     assert [commit["node"] for commit in model.classified] == [nodes["scored"]]
-    for reason in ("backout", "ignored"):
-        result = _get_result(nodes[reason], "try")
+    for name, reason in (
+        ("backout", "backout"),
+        ("ignored", "ignored"),
+        ("newly_ignored", "ignored"),
+    ):
+        result = _get_result(nodes[name], "try")
         assert result["ignored_reason"] == reason
         assert result["prob"] is None
         assert result["risk_band"] is None

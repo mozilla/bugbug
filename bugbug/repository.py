@@ -17,6 +17,7 @@ import os
 import pickle
 import re
 import shelve
+import shutil
 import subprocess
 import sys
 import threading
@@ -26,6 +27,7 @@ from typing import Collection, Iterable, Iterator, NamedTuple, NewType, Set, Uni
 
 import hglib
 import lmdb
+import orjson
 import requests
 import rs_parsepatch
 import tenacity
@@ -349,6 +351,102 @@ def get_last_commit(
         last_commit = collections.deque(get_commits(**filters), maxlen=1)
 
     return last_commit[0] if last_commit else None
+
+
+# The offset of each commit in the commits DB, by node, to find them without reading the whole DB.
+COMMITS_INDEX_DB = "data/commits_index.lmdb"
+# The size of the part of the commits DB which is indexed.
+COMMITS_INDEX_SIZE_KEY = b"$indexed_size$"
+# The serialized commits start with their node (see Commit.to_dict).
+COMMIT_LINE_PREFIX = b'{"node":"'
+COMMITS_INDEX_BLOCK_SIZE = 16 * 1024 * 1024
+
+
+def _update_commits_index(index: LMDBDict) -> None:
+    # The offset in the DB of the start of `pending`, the part of the DB read but not indexed yet.
+    pos = int(bytes(index.get(COMMITS_INDEX_SIZE_KEY, b"0")))
+    pending = b""
+
+    with open(COMMITS_DB, "rb") as f:
+        f.seek(pos)
+        # The DB is read in blocks, as mapping it in memory would make it count as used memory.
+        while block := f.read(COMMITS_INDEX_BLOCK_SIZE):
+            pending += block
+            start = 0
+            # Only the complete lines are indexed, in case the DB is being written to.
+            while (end := pending.find(b"\n", start)) != -1:
+                node_start = start + len(COMMIT_LINE_PREFIX)
+                if pending.startswith(COMMIT_LINE_PREFIX, start):
+                    node = pending[node_start : node_start + 40]
+                else:
+                    node = orjson.loads(pending[start:end])["node"].encode("ascii")
+                index[node] = str(pos + start).encode("ascii")
+                start = end + 1
+            pending = pending[start:]
+            pos += start
+
+    index[COMMITS_INDEX_SIZE_KEY] = str(pos).encode("ascii")
+
+
+def delete_commits_index() -> None:
+    """Delete the index of the commits DB, which is wrong once the DB is rewritten."""
+    shutil.rmtree(COMMITS_INDEX_DB, ignore_errors=True)
+
+
+def update_commits_index() -> None:
+    """Index the commits added to the commits DB since the last update."""
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+    finally:
+        index.close()
+
+
+def _get_commits_offsets(nodes: Iterable[str]) -> dict[str, int]:
+    """Return the offsets in the commits DB of the commits among `nodes` which are in it.
+
+    The index of the DB is updated first with the commits added to the DB since the last update.
+    """
+    if not os.path.exists(COMMITS_DB):
+        return {}
+
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+        return {
+            node: int(bytes(offset))
+            for node in nodes
+            if (offset := index.get(node.encode("ascii"))) is not None
+        }
+    finally:
+        index.close()
+
+
+def get_nodes_in_db(nodes: Iterable[str]) -> set[str]:
+    """Return the commits among `nodes` which are in the commits DB."""
+    return set(_get_commits_offsets(nodes))
+
+
+def get_commits_from_db(nodes: Iterable[str]) -> dict[str, CommitDict]:
+    """Return the commits among `nodes` which are already in the commits DB, by node.
+
+    These commits can't be mined again (with save=False), as their experience features would be
+    calculated after the ones of the commits pushed after them, which are in the experiences DB.
+    The commits are found through an index of the DB.
+    """
+    offsets = _get_commits_offsets(nodes)
+    if not offsets:
+        return {}
+
+    commits: dict[str, CommitDict] = {}
+    with open(COMMITS_DB, "rb") as f:
+        for node, offset in offsets.items():
+            f.seek(offset)
+            commit = orjson.loads(f.readline())
+            assert commit["node"] == node, f"The commits index is wrong for {node}"
+            commits[node] = commit
+
+    return commits
 
 
 def get_revision_id(commit: CommitDict) -> int | None:
@@ -1075,6 +1173,22 @@ def get_revs(hg, rev_start=0, rev_end="default"):
     return x.splitlines()
 
 
+def get_new_revs(hg: hglib.client, base: str, head: str) -> list[bytes]:
+    """Get the non-merge commits on the default branch which are ancestors of `head`, but not of `base`.
+
+    Unlike the commits after `base` by revision number, these don't include the commits from other
+    repositories pulled in the same clone (e.g. try).
+    """
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="default",
+        rev=f"::{head} - ::{base}",
+    )
+    return hg.rawcommand(args).splitlines()
+
+
 class Experiences:
     def __init__(self, save):
         self.save = save
@@ -1687,6 +1801,7 @@ def update_commits(repo_dir: str | None = None) -> None:
         refresh_backouts_and_ignored(repo_dir, commits)
 
     db.write(COMMITS_DB, commits)
+    delete_commits_index()
 
 
 def clean(hg, repo_dir):

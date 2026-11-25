@@ -29,6 +29,52 @@ def task_labels(group: str, configs: list[str]) -> list[str]:
     )
 
 
+def test_schedule_commits_from_db(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+    result_key = f"bugbug:job_result:schedule_tests:mozilla-central_{rev}"
+
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label1": 0.9}, {"test-group2": 0.9}
+    )
+
+    mined = []
+    orig_download_commits = models.repository.download_commits
+
+    def download_commits(*args, **kwargs):
+        commits = orig_download_commits(*args, **kwargs)
+        mined.extend(commits)
+        return commits
+
+    monkeypatch.setattr(models.repository, "download_commits", download_commits)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    result = models.redis.get(result_key)
+    assert len(mined) == 1
+
+    # The commits already in the commits DB are not mined again.
+    def get_commits_from_db(db_nodes):
+        return {commit["node"]: commit for commit in mined}
+
+    def no_download_commits(*args, **kwargs):
+        raise AssertionError("The commits were mined")
+
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
+    monkeypatch.setattr(models.repository, "download_commits", no_download_commits)
+    models.redis.delete(result_key)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    assert models.redis.get(result_key) == result
+
+
 @pytest.mark.parametrize(
     "labels_to_choose, groups_to_choose, reduced_labels, config_groups",
     [
