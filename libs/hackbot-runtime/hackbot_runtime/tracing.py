@@ -65,18 +65,19 @@ def resolve_agent_name(entrypoint: Callable) -> str:
     return Path(source).parent.name.replace("_", "-")
 
 
-def _init_weave() -> bool:
+def _init_weave(project: str | None = None) -> bool:
     """Initialize Weave when credentials are available; return whether enabled.
 
     Credentials come from ``WANDB_API_KEY`` (local) or the identity token file set
     by :mod:`wandb_wif` (deployment via federation). No-op when neither is present.
+    The project is ``WEAVE_PROJECT``, else ``project``, the agent's configured one.
     """
     if not (
         os.environ.get("WANDB_API_KEY") or os.environ.get(wandb_wif.TOKEN_FILE_ENV)
     ):
         return False
 
-    project = os.environ.get("WEAVE_PROJECT", DEFAULT_WEAVE_PROJECT)
+    project = os.environ.get("WEAVE_PROJECT") or project or DEFAULT_WEAVE_PROJECT
     try:
         import weave
 
@@ -207,12 +208,15 @@ def _trace_subagents_as(agent: str) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def trace_agent(entrypoint: Callable, run_id: str) -> Iterator[None]:
+def trace_agent(
+    entrypoint: Callable, run_id: str, weave_project: str | None = None
+) -> Iterator[None]:
     """Trace the agent run, labelled with the agent's name and tagged with the run id.
 
-    A no-op when tracing isn't configured (no W&B credentials).
+    A no-op when tracing isn't configured (no W&B credentials). ``weave_project``
+    is the agent's ``[tracing]`` one, which ``WEAVE_PROJECT`` overrides.
     """
-    if not _init_weave():
+    if not _init_weave(weave_project):
         yield
         return
 

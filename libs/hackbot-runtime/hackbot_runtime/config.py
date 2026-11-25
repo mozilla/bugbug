@@ -35,6 +35,13 @@ class FirefoxConfig(BaseModel):
     objdir: str = "objdir-ff-asan"
 
 
+class TracingConfig(BaseModel):
+    """``[tracing]``: where the agent's traces go."""
+
+    # Weave project, ``project`` or ``entity/project``; ``WEAVE_PROJECT`` overrides it.
+    weave_project: str | None = None
+
+
 class HackbotConfig(BaseModel):
     """Parsed ``hackbot.toml``. Every table is optional.
 
@@ -44,6 +51,7 @@ class HackbotConfig(BaseModel):
 
     source: SourceConfig | None = None
     firefox: FirefoxConfig | None = None
+    tracing: TracingConfig = TracingConfig()
     # Set by the runtime from the entry point, not read from the toml.
     agent_name: str | None = None
 

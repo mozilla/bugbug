@@ -1,22 +1,35 @@
 import asyncio
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from hackbot_agents.dataset_eval import dataset, prices, runner, tree
+from hackbot_agents.dataset_eval import dataset, runner, tree, weave_log
 from hackbot_agents.dataset_eval.grading import checks, tests
 from hackbot_agents.dataset_eval.isolation import example_env, run_isolated
-from hackbot_agents.dataset_eval.prompt_executor.harnesses import harness_env
-from hackbot_agents.dataset_eval.prompt_executor.harnesses.claude_code import _usage
-from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
-    _record_usage,
-    normalize,
-    to_messages,
+from hackbot_agents.dataset_eval.prompt_executor.harnesses import (
+    LOOP_LIMIT,
+    Looping,
+    Run,
+    harness_env,
+    otari,
+    record,
+    record_usage,
     trace,
 )
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.claude_code import _usage
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.codex import (
+    to_messages,
+    usage_of,
+)
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.deepseek_harness import (
+    DeepSeekHarness,
+)
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.oh_my_pi import OhMyPi
+from hackbot_agents.dataset_eval.prompt_executor.harnesses.opencode import OpenCode
 from hackbot_agents.dataset_eval.weave_log import WeaveLog
 
 
@@ -56,15 +69,20 @@ def test_codex_items_and_usage():
         },
         {"type": "agentMessage", "id": "3", "text": "done"},
     ]
-    usage = {
-        "total": {"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 7}
-    }
-    run = normalize(items, usage, "gpt-x")
+    run = Run()
+    for item in items:
+        for msg in to_messages(item, "gpt-x"):
+            record(run, msg)
     roles = [t["role"] for t in run.transcript]
     assert roles == ["assistant", "tool_call", "tool_result", "assistant"]
     assert run.transcript[0]["thinking"] == "look" and run.tool_errors == 1
-    assert run.usage == {
-        "gpt-x": {"input_tokens": 20, "cache_read_input_tokens": 80, "output_tokens": 7}
+    usage = {
+        "total": {"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 7}
+    }
+    assert usage_of(usage) == {
+        "input_tokens": 20,
+        "cache_read_input_tokens": 80,
+        "output_tokens": 7,
     }
 
 
@@ -80,31 +98,35 @@ def test_claude_usage_by_model():
     }
 
 
+def test_a_run_stops_when_its_model_repeats_a_call_to_no_effect():
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+
+    def call(run, i, command, result):
+        record(run, AssistantMessage([ToolUseBlock(f"c{i}", "bash", command)], "m"))
+        record(run, UserMessage([ToolResultBlock(f"c{i}", result)]))
+
+    # Polling a log that changes is not a loop.
+    run = Run()
+    for i in range(LOOP_LIMIT + 5):
+        call(run, i, {"command": "tail build.log"}, f"{i}:00 compiling")
+    run = Run()
+    for i in range(LOOP_LIMIT - 1):
+        call(run, i, {"command": "rg x"}, "===")
+    with pytest.raises(Looping):
+        call(run, LOOP_LIMIT, {"command": "rg x"}, "===")
+
+
 def test_harness_env_keeps_only_own_vendor(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_FEDERATION_RULE_ID", "a")
     monkeypatch.setenv("CODEX_API_KEY", "c")
     claude, codex = harness_env("anthropic"), harness_env("openai")
     assert "ANTHROPIC_FEDERATION_RULE_ID" in claude and "CODEX_API_KEY" not in claude
     assert "CODEX_API_KEY" in codex and "ANTHROPIC_FEDERATION_RULE_ID" not in codex
-
-
-def test_cost():
-    usage = {
-        "claude-opus-5-5": {
-            "input_tokens": 1_000_000,
-            "cache_read_input_tokens": 1_000_000,
-        }
-    }
-    assert prices.cost(usage) == pytest.approx(4.0 + 0.4)
-    assert prices.cost({"unknown": {"input_tokens": 1}}) is None
-    codex = {
-        "gpt-6.1-sol": {
-            "input_tokens": 1_000_000,
-            "cache_read_input_tokens": 1_000_000,
-            "output_tokens": 1_000_000,
-        }
-    }
-    assert prices.cost(codex) == pytest.approx(2.0 + 0.10 + 10.0)
 
 
 PATCH = (
@@ -137,6 +159,16 @@ def _git(repo, *args):
     ).stdout.strip()
 
 
+def test_builds_go_through_sccache_when_it_keeps_a_cache(tmp_path, monkeypatch):
+    sccache = tmp_path / "sccache"
+    sccache.write_text("")
+    monkeypatch.setattr(tree, "SCCACHE", sccache)
+    monkeypatch.delenv("SCCACHE_DIR", raising=False)
+    assert tree.mozconfig_text() == tree.MOZCONFIG
+    monkeypatch.setenv("SCCACHE_DIR", str(tmp_path / "cache"))
+    assert f"--with-ccache={sccache}" in tree.mozconfig_text()
+
+
 def test_tree_reset_keeps_only_the_build(tmp_path):
     repo = tmp_path / "firefox"
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -148,7 +180,7 @@ def test_tree_reset_keeps_only_the_build(tmp_path):
     _git(repo, "commit", "-qm", "base")
     base = tree.head(repo)
     (repo / ".mozconfig").write_text("left by an older evaluator\n")
-    assert tree.mozconfig(repo).read_text() == tree.MOZCONFIG
+    assert tree.mozconfig(repo).read_text() == tree.mozconfig_text()
     (repo / tree.OBJDIR).mkdir()
     (repo / tree.OBJDIR / "libxul.so").write_text("built")
 
@@ -169,6 +201,32 @@ def test_tree_reset_keeps_only_the_build(tmp_path):
     ).exists()
     assert (repo / ".mozconfig").exists()
     assert (repo / tree.OBJDIR / "libxul.so").read_text() == "built"
+
+
+def test_a_build_is_reused_only_for_the_tree_it_was_built_from(tmp_path):
+    repo = tmp_path / "firefox"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / ".gitignore").write_text("/obj*/\n")
+    (repo / "dom.cpp").write_text("base\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    base = tree.head(repo)
+    binaries = repo / tree.OBJDIR / "dist" / "bin"
+    binaries.mkdir(parents=True)
+    (binaries / "libxul.so").write_text("built")
+    assert not tree.built(repo, base)
+
+    assert tree.built_base(repo) is None
+    tree.stamp(repo).write_text(tree.state(repo, base))
+    assert tree.built(repo, base)
+    (repo / "dom.cpp").write_text("changed\n")
+    assert not tree.built(repo, base) and tree.built_base(repo) == base
+    tree.reset(repo, base)
+    assert tree.built(repo, base)
+    # The agent built something itself.
+    stamped = tree.stamp(repo).stat().st_mtime
+    os.utime(binaries / "libxul.so", (stamped + 10, stamped + 10))
+    assert not tree.built(repo, base)
 
 
 def test_example_env_is_fresh_and_shares_the_toolchain(tmp_path):
@@ -198,6 +256,36 @@ def test_run_isolated_times_out_and_kills_the_group(tmp_path):
     time.sleep(0.2)
     pid = marker.read_text().strip()
     assert subprocess.run(["kill", "-0", pid], capture_output=True).returncode != 0
+
+
+def test_weave_cost_is_what_weave_priced_the_usage_at(monkeypatch):
+    import weave
+
+    costs = {
+        "gpt-6-luna": {
+            "prompt_tokens_total_cost": 0.002,
+            "completion_tokens_total_cost": 0.0005,
+            "cache_read_input_tokens_total_cost": 0.0001,
+            "cache_creation_input_tokens_total_cost": None,
+            "prompt_token_cost": 1e-7,
+        }
+    }
+    # The call is not in Weave yet on the first read.
+    reads = iter([None, {"weave": {"costs": costs}}])
+
+    def get_call(*args, **kwargs):
+        summary = next(reads, {"weave": {"costs": costs}})
+        if summary is None:
+            raise LookupError
+        return SimpleNamespace(summary=summary)
+
+    monkeypatch.setattr(weave, "get_client", lambda: SimpleNamespace(get_call=get_call))
+    monkeypatch.setattr(weave_log.time, "sleep", lambda s: None)
+    usage_call = SimpleNamespace(id="c1")
+
+    assert weave_log._weave_cost([usage_call]) == pytest.approx(0.0026)
+    costs.clear()
+    assert weave_log._weave_cost([usage_call], wait_s=0) is None
 
 
 def test_weave_log_is_a_no_op_without_a_client():
@@ -241,8 +329,12 @@ def test_grade(monkeypatch, tmp_path):
     monkeypatch.setattr(
         runner.tree, "restore", lambda src, base, path: restored.append(path)
     )
+    monkeypatch.setattr(runner.tree, "diff", lambda src, base: PATCH)
+    (tmp_path / runner.tree.OBJDIR).mkdir()
     grader = object.__new__(runner.Runner)
     grader.work = tmp_path
+    published = []
+    grader.ctx = SimpleNamespace(publish_file=lambda key, *a: published.append(key))
     suite = {"harness": "wpt", "paths": ["dom/x"], "prefs": {"dom.x.enabled": True}}
     baseline = {"0:a.html": _entry("OK", one="FAIL", two="PASS")}
 
@@ -250,15 +342,28 @@ def test_grade(monkeypatch, tmp_path):
         row = {"id": "x", **row}
         return asyncio.run(grader.grade(tmp_path, "base", row, 0, base, patch))
 
-    assert grade({}) == {"builds": 1.0}
+    # A row without tests is not built.
+    assert grade({}) == {}
     # Editing test metadata is fine; it is restored like the tests.
     scores = grade({"tests": [suite]}, base=baseline)
     assert scores["integrity"] == 1.0 and scores["test_progress"] == 1.0
     assert restored == ["testing/web-platform"]
     assert ran == [("wpt", ["dom/x"], {"dom.x.enabled": True})]
+    assert published == ["test-logs/after0-x-0.log"]
     edits_tests = "diff --git a/testing/web-platform/tests/dom/x/a.html b/x\n+x\n"
     assert grade({"tests": [suite]}, edits_tests, baseline)["integrity"] == 0.0
+    # The tree was built as it is, so it is not built again.
+    calls = []
+
+    async def counted(*args):
+        calls.append(args)
+        return {"success": True}
+
+    monkeypatch.setattr(runner, "build_firefox", counted)
+    assert grade({"tests": [suite]}, base=baseline)["builds"] == 1.0 and not calls
     # A failed build scores no progress and no made-up regressions.
+    monkeypatch.setattr(runner, "build_firefox", build)
+    runner.tree.stamp(tmp_path).unlink()
     built[0] = False
     assert grade({"tests": [suite]}, base=baseline) == {
         "integrity": 1.0,
@@ -275,6 +380,7 @@ def test_timed_out_attempt_keeps_its_patch(monkeypatch, tmp_path):
     monkeypatch.setattr(runner.tree, "diff", lambda src, base: PATCH)
     attempt = object.__new__(runner.Runner)
     attempt.work, attempt.ctx = tmp_path, SimpleNamespace(run_id="r")
+    attempt.run_log = None
     attempt.exp = runner.Experiment(
         "ds", "prompt-executor", "claude_code", "m", None, 1, 30, "j", None
     )
@@ -285,19 +391,22 @@ def test_timed_out_attempt_keeps_its_patch(monkeypatch, tmp_path):
 
 
 def test_run_isolated_tees_output(tmp_path, capsys):
-    code = asyncio.run(
-        run_isolated(
-            ["sh", "-c", "echo step one"],
-            {"PATH": "/bin:/usr/bin"},
-            tmp_path,
-            10,
-            tmp_path / "log",
-            "[x] ",
+    with (tmp_path / "run.log").open("w") as run_log:
+        code = asyncio.run(
+            run_isolated(
+                ["sh", "-c", "echo step one"],
+                {"PATH": "/bin:/usr/bin"},
+                tmp_path,
+                10,
+                tmp_path / "log",
+                "[x] ",
+                run_log,
+            )
         )
-    )
     assert code == 0
     assert (tmp_path / "log").read_text() == "step one\n"
     assert "[x] step one" in capsys.readouterr().out
+    assert (tmp_path / "run.log").read_text() == "[x] step one\n"
 
 
 def test_codex_items_are_reported_like_claude_messages(capsys):
@@ -333,11 +442,421 @@ def test_codex_items_are_traced_as_a_weave_conversation():
     conversation = start_conversation(agent_name="prompt-executor", model="gpt-x")
     with conversation, conversation.start_turn(user_message="Do it.") as turn:
         for item in items:
-            trace(turn, to_messages(item, "gpt-x"))
+            trace(turn, to_messages(item, "gpt-x"), "openai")
         usage = {"input_tokens": 20, "cache_read_input_tokens": 80}
-        _record_usage(turn, usage, "gpt-x")
+        record_usage(turn, usage, "gpt-x", "openai")
 
     spans = {s.name: s for s in exporter.get_finished_spans()}
     assert "execute_tool shell" in spans and "chat gpt-x" in spans
     assert spans["execute_tool shell"].status.status_code.name == "ERROR"
     assert any(n.startswith("invoke_agent") for n in spans)
+
+
+def _fake_cli(
+    tmp_path, monkeypatch, name: str, events: list, then: str = "", stored=({}, None)
+) -> None:
+    """Put ``name`` on PATH: it saves its stdin, env and args and prints ``events``.
+
+    otari is stubbed: it serves any model and reports ``stored`` as the run's usage.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cli = bin_dir / name
+    cli.write_text(
+        "#!/bin/sh\n"
+        f'cat > {tmp_path}/stdin; env > {tmp_path}/env; echo "$@" > {tmp_path}/args\n'
+        + "".join(
+            f"echo '{e if isinstance(e, str) else json.dumps(e)}'\n" for e in events
+        )
+        + then
+    )
+    cli.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "a")
+    monkeypatch.setenv("OTARI_API_KEY", "k")
+    monkeypatch.setenv("OTARI_BASE_URL", "https://otari.test/api")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def usage(tag, model):
+        return stored
+
+    async def served(m):
+        return otari.Model(m, 1000, 100, True)
+
+    monkeypatch.setattr(otari, "model", served)
+    monkeypatch.setattr(otari, "usage", usage)
+
+
+def _env(tmp_path) -> dict[str, str]:
+    return dict(
+        line.split("=", 1)
+        for line in (tmp_path / "env").read_text().splitlines()
+        if "=" in line
+    )
+
+
+def test_oh_my_pi_events(tmp_path, monkeypatch):
+    usage = {"input": 10, "output": 5, "cacheRead": 90, "cacheWrite": 0}
+    call = {
+        "role": "assistant",
+        "provider": "otari",
+        "model": "deepinfra:qwen",
+        "content": [
+            {"type": "thinking", "thinking": "look"},
+            {"type": "toolCall", "id": "t1", "name": "bash", "arguments": {"c": "ls"}},
+        ],
+        "usage": usage,
+        "stopReason": "toolUse",
+    }
+    result = {
+        "role": "toolResult",
+        "toolCallId": "t1",
+        "content": [{"type": "text", "text": "x"}],
+        "isError": True,
+    }
+    answer = {
+        **call,
+        "content": [{"type": "text", "text": "done"}],
+        "stopReason": "stop",
+    }
+    events = [
+        "Warning: not JSON",
+        {"type": "message_end", "message": {"role": "user", "content": "Do it."}},
+        {"type": "message_end", "message": call},
+        {"type": "message_end", "message": result},
+        {"type": "turn_end", "message": call, "toolResults": [result]},
+        {"type": "message_end", "message": answer},
+        {"type": "turn_end", "message": answer, "toolResults": []},
+    ]
+    # With a subagent's 100 input tokens that the stream did not show.
+    stored = {"deepinfra:qwen": {"input_tokens": 120, "cache_read_input_tokens": 180}}
+    _fake_cli(tmp_path, monkeypatch, "omp", events, stored=(stored, 0.75))
+
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(OhMyPi().run("Do it.", tmp_path, "deepinfra:qwen", "high", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "tool_call", "tool_result", "assistant"]
+    assert run.tool_errors == 1 and run.models == ["deepinfra:qwen"]
+    assert run.usage["deepinfra:qwen"]["input_tokens"] == 120
+    assert run.cost_usd == 0.75
+    assert (tmp_path / "stdin").read_text() == "Do it."
+    args = (tmp_path / "args").read_text()
+    assert "--model otari/deepinfra:qwen" in args and "--thinking high" in args
+    config = json.loads((tmp_path / ".omp" / "agent" / "models.yml").read_text())
+    provider = config["providers"]["otari"]
+    assert provider["baseUrl"] == "https://otari.test/api/v1"
+    assert provider["headers"]["Otari-Tags"].startswith("hackbot_attempt=")
+    assert provider["models"][0]["contextWindow"] == 1000
+    env = _env(tmp_path)
+    assert "ANTHROPIC_API_KEY" not in env and env["OTARI_API_KEY"] == "k"
+    assert env["PWD"] == str(tmp_path)
+
+
+def test_opencode_events(tmp_path, monkeypatch):
+    tool = {
+        "callID": "t1",
+        "tool": "bash",
+        "state": {"status": "error", "input": {"command": "ls"}, "error": "x"},
+    }
+    step = {
+        "cost": 0,
+        "tokens": {
+            "input": 10,
+            "output": 5,
+            "reasoning": 2,
+            "cache": {"read": 90, "write": 0},
+        },
+    }
+    events = [
+        {"type": "step_start", "part": {}},
+        {"type": "reasoning", "part": {"text": "look"}},
+        {"type": "tool_use", "part": tool},
+        {"type": "step_finish", "part": step},
+        {"type": "text", "part": {"text": "done"}},
+        {"type": "step_finish", "part": step},
+    ]
+    _fake_cli(tmp_path, monkeypatch, "opencode", events)
+
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(OpenCode().run("Do it.", tmp_path, "deepinfra:qwen", "high", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "assistant", "tool_call", "tool_result", "assistant"]
+    assert run.transcript[1]["thinking"] == "look" and run.tool_errors == 1
+    assert run.usage["deepinfra:qwen"]["output_tokens"] == 14
+    # otari had no priced usage, and OpenCode cannot price otari's models.
+    assert run.cost_usd is None
+    args = (tmp_path / "args").read_text()
+    assert "--model otari/deepinfra:qwen" in args and "--variant high" in args
+    env = _env(tmp_path)
+    config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    provider = config["provider"]["otari"]
+    assert provider["options"]["baseURL"] == "https://otari.test/api/v1"
+    assert provider["options"]["apiKey"] == "{env:OTARI_API_KEY}"
+    assert provider["models"]["deepinfra:qwen"]["limit"] == {
+        "context": 1000,
+        "output": 100,
+    }
+    assert "instructions.md" in config["instructions"][0]
+    assert "ANTHROPIC_API_KEY" not in env
+
+
+def test_timed_out_cli_run_keeps_what_it_did(tmp_path, monkeypatch):
+    step = {"tokens": {"input": 1, "output": 2}}
+    events = [
+        {"type": "text", "part": {"text": "half"}},
+        {"type": "step_finish", "part": step},
+    ]
+    _fake_cli(
+        tmp_path,
+        monkeypatch,
+        "opencode",
+        events,
+        then="exec sleep 60\n",
+        stored=({"deepinfra:qwen": {"input_tokens": 1}}, 0.1),
+    )
+    run = Run()
+
+    async def stopped():
+        async with asyncio.timeout(2):
+            await OpenCode().run("Do it.", tmp_path, "deepinfra:qwen", None, run)
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        asyncio.run(stopped())
+
+    assert time.monotonic() - started < 10
+    assert run.message == "half" and run.cost_usd == 0.1
+    assert run.usage["deepinfra:qwen"]["output_tokens"] == 2
+
+
+def test_deepseek_harness_events(tmp_path, monkeypatch):
+    usage = {"inputTokens": 10, "outputTokens": 5, "cacheReadTokens": 90}
+    events = [
+        {"type": "session", "sessionId": "s", "cwd": "/"},
+        {"type": "thinking", "text": "look"},
+        {"type": "tool_call", "callId": "t1", "tool": "shell", "input": {"c": "ls"}},
+        {"type": "tool_result", "callId": "t1", "status": "error", "result": "x"},
+        {"type": "status", "phase": "step_end", "turn": 1, "step": 1, "usage": usage},
+        {"type": "text", "text": "done"},
+        {"type": "status", "phase": "step_end", "turn": 1, "step": 2, "usage": usage},
+        {
+            "type": "final",
+            "sessionId": "s",
+            "reason": {"kind": "completed"},
+            "text": "done",
+        },
+    ]
+    _fake_cli(tmp_path, monkeypatch, "dsh", events, stored=({}, 0.5))
+
+    harness = DeepSeekHarness()
+    run = Run(transcript=[{"role": "user", "content": "Do it."}])
+    asyncio.run(harness.run("Do it.", tmp_path, "deepseek/deepseek-v4", "max", run))
+
+    assert run.message == "done" and run.error is None
+    roles = [t["role"] for t in run.transcript]
+    assert roles == ["user", "assistant", "tool_call", "tool_result", "assistant"]
+    assert run.tool_errors == 1
+    assert run.usage["deepseek/deepseek-v4"]["cache_read_input_tokens"] == 180
+    assert run.cost_usd == 0.5
+    args = (tmp_path / "args").read_text().split()
+    rows = {
+        row["id"]: row["config"]
+        for row in json.loads(Path(args[args.index("--patch") + 1]).read_text())
+    }
+    route = rows["llm-pi-ai"]["providers"]["otari"]
+    assert route["baseURL"] == "https://otari.test/api/v1"
+    assert route["apiKeyEnv"] == "OTARI_API_KEY"
+    assert route["compat"] == {"supportsDeveloperRole": False}
+    levels = ("high", "low", "max", "medium")
+    assert route["models"] == [
+        {
+            "id": "deepseek/deepseek-v4",
+            "contextWindow": 1000,
+            "maxTokens": 100,
+            "reasoningEfforts": {level: level for level in levels},
+        }
+    ]
+    assert rows["agent-default-model"] == {
+        "provider": "otari",
+        "model": "deepseek/deepseek-v4",
+        "reasoningEffort": "max",
+    }
+    env = _env(tmp_path)
+    assert "ANTHROPIC_API_KEY" not in env and env["DSH_HOME"] == f"{tmp_path}/.dsh"
+
+
+def test_a_response_is_one_chat_span_with_its_usage():
+    from claude_agent_sdk import AssistantMessage, TextBlock, ThinkingBlock
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+    from weave.conversation import start_conversation
+
+    if not isinstance(otel_trace.get_tracer_provider(), TracerProvider):
+        otel_trace.set_tracer_provider(TracerProvider())
+    exporter = InMemorySpanExporter()
+    otel_trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(exporter))
+    messages = [
+        AssistantMessage([ThinkingBlock("look", "")], "m"),
+        AssistantMessage([TextBlock("done")], "m"),
+    ]
+    usage = {"input_tokens": 10, "output_tokens": 3, "cache_read_input_tokens": 90}
+    conversation = start_conversation(agent_name="prompt-executor", model="m")
+    with conversation, conversation.start_turn(user_message="Do it.") as turn:
+        trace(turn, messages, "otari", usage)
+
+    (chat,) = [s for s in exporter.get_finished_spans() if s.name == "chat m"]
+    assert chat.attributes["gen_ai.usage.input_tokens"] == 100
+    assert chat.attributes["gen_ai.usage.cache_read.input_tokens"] == 90
+
+
+def test_every_span_is_tagged_with_the_harness():
+    from hackbot_agents.dataset_eval.prompt_executor.__main__ import (
+        HARNESS_SPAN_ATTRIBUTE,
+        tag_traces,
+    )
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    # The global provider can be set once per process; other tests may have.
+    if not isinstance(otel_trace.get_tracer_provider(), TracerProvider):
+        otel_trace.set_tracer_provider(TracerProvider())
+    exporter = InMemorySpanExporter()
+    otel_trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(exporter))
+    tag_traces("opencode")
+    with otel_trace.get_tracer("t").start_as_current_span("chat"):
+        pass
+
+    (span,) = exporter.get_finished_spans()
+    assert span.attributes[HARNESS_SPAN_ATTRIBUTE] == "opencode"
+
+
+def test_otari_prices_are_registered_once_and_again_when_they_change(monkeypatch):
+    import weave
+
+    added = []
+
+    class Client:
+        def query_costs(self, llm_ids):
+            return [SimpleNamespace(**cost) for cost in added]
+
+        def add_cost(self, llm_id, provider_id, effective_date, **costs):
+            # Weave stores the rates as 32-bit floats.
+            rounded = {k: float(f"{v:.8g}") for k, v in costs.items()}
+            added.append({"effective_date": effective_date, **rounded})
+
+    monkeypatch.setattr(weave, "get_client", lambda: Client())
+    pricing = {
+        "input_price_per_million": 0.15,
+        "output_price_per_million": 0.6,
+        "cache_read_price_per_million": 0.003,
+        "unit": "token",
+    }
+    model = otari.Model("m", None, None, False, pricing)
+
+    asyncio.run(otari.register_price(model))
+    asyncio.run(otari.register_price(model))
+    assert len(added) == 1 and added[0]["effective_date"].year == 2000
+    model.pricing = {**pricing, "output_price_per_million": 0.9}
+    asyncio.run(otari.register_price(model))
+    assert len(added) == 2 and added[1]["effective_date"].year > 2000
+
+
+def test_otari_usage_of():
+    totals = {
+        "request_count": 3,
+        "billed_input_tokens": 100,
+        "billed_output_tokens": 7,
+        "cache_read_tokens": 80,
+        "cache_write_tokens": 5,
+        "cost": 0.25,
+    }
+    assert otari.usage_of({"totals": totals}, "m") == (
+        {
+            "m": {
+                "input_tokens": 15,
+                "output_tokens": 7,
+                "cache_read_input_tokens": 80,
+                "cache_creation_input_tokens": 5,
+            }
+        },
+        0.25,
+    )
+    unpriced = {**totals, "unpriced_requests": 1}
+    assert otari.usage_of({"totals": unpriced}, "m")[1] is None
+    assert otari.usage_of({"totals": {"request_count": 0}}, "m") == ({}, None)
+
+
+def test_otari_settle_adds_what_the_stream_left_out(monkeypatch):
+    from weave.conversation import start_conversation
+
+    stored = {"m": {"input_tokens": 15, "output_tokens": 4}}
+
+    async def usage(tag, model):
+        return stored, 2.0
+
+    monkeypatch.setattr(otari, "usage", usage)
+    run = Run(usage={"m": {"input_tokens": 10, "output_tokens": 9}})
+    model = otari.Model("m", None, None, False)
+    conversation = start_conversation(agent_name="prompt-executor", model="m")
+    with conversation, conversation.start_turn(user_message="Do it.") as turn:
+        asyncio.run(otari.settle(run, "t", model, turn))
+
+    assert run.usage == {"m": {"input_tokens": 15, "output_tokens": 9}}
+    assert run.cost_usd == 2.0
+
+
+def test_otari_settle_prices_the_stream_without_usage_access(monkeypatch):
+    import httpx
+
+    async def forbidden(tag, model):
+        raise httpx.HTTPStatusError(
+            "403", request=httpx.Request("GET", "x"), response=httpx.Response(403)
+        )
+
+    monkeypatch.setattr(otari, "usage", forbidden)
+    pricing = {
+        "input_price_per_million": 1.0,
+        "output_price_per_million": 2.0,
+        "cache_read_price_per_million": 0.1,
+        "unit": "token",
+    }
+    model = otari.Model("m", None, None, False, pricing)
+    run = Run(
+        usage={
+            "m": {
+                "input_tokens": 1_000_000,
+                "output_tokens": 1_000_000,
+                "cache_read_input_tokens": 1_000_000,
+            }
+        }
+    )
+    asyncio.run(otari.settle(run, "t", model, None))
+
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)
+
+    # otari has written only part of the run yet: its cost is too low.
+    async def partial(tag, name):
+        return {}, 0.5
+
+    monkeypatch.setattr(otari, "usage", partial)
+    asyncio.run(otari.settle(run, "t", model, None))
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)
+
+    async def not_json(tag, name):
+        raise ValueError("not JSON")
+
+    monkeypatch.setattr(otari, "usage", not_json)
+    asyncio.run(otari.settle(run, "t", model, None))
+    assert run.cost_usd == pytest.approx(1.0 + 2.0 + 0.1)

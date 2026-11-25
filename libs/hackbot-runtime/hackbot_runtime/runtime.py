@@ -213,7 +213,7 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
         _configure_auth()
         if ctx.parent_run_id:
             ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
+        with trace_agent(entrypoint, ctx.run_id, ctx.config.tracing.weave_project):
             outcome: object = entrypoint(ctx)
     except Exception as exc:
         log.exception("Agent raised an exception")
@@ -234,7 +234,7 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
         _configure_auth()
         if ctx.parent_run_id:
             ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
+        with trace_agent(entrypoint, ctx.run_id, ctx.config.tracing.weave_project):
             outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:
         log.exception("Agent raised an exception")

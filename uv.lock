@@ -774,7 +774,7 @@ requires-dist = [
     { name = "tabulate", specifier = "~=0.10.0" },
     { name = "taskcluster", specifier = "~=116.0" },
     { name = "tenacity", specifier = "~=9.1.4" },
-    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'perf-regression-predictor') or (sys_platform == 'win32' and extra == 'perf-regression-predictor')", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "(sys_platform == 'linux' or sys_platform == 'win32') and extra == 'perf-regression-predictor'", specifier = "==2.15.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'perf-regression-predictor'", specifier = "==2.15.0" },
     { name = "tqdm", specifier = ">=4.67.3,<4.71.0" },
     { name = "transformers", marker = "extra == 'perf-regression-predictor'", specifier = "==5.22.2" },
@@ -1503,6 +1503,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/01/ffe51729a8f961a437920560659073e47f575d4627445216c1177ecd4a41/cymem-2.0.13-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:666ce6146bc61b9318aa70d91ce33f126b6344a25cf0b925621baed0c161e9cc", size = 290465, upload-time = "2025-11-14T14:58:21.815Z" },
     { url = "https://files.pythonhosted.org/packages/fd/ac/c9e7d68607f71ef978c81e334ab2898b426944c71950212b1467186f69f9/cymem-2.0.13-cp314-cp314t-win_amd64.whl", hash = "sha256:84c1168c563d9d1e04546cb65e3e54fde2bf814f7c7faf11fc06436598e386d1", size = 46665, upload-time = "2025-11-14T14:58:23.512Z" },
     { url = "https://files.pythonhosted.org/packages/66/66/150e406a2db5535533aa3c946de58f0371f2e412e23f050c704588023e6e/cymem-2.0.13-cp314-cp314t-win_arm64.whl", hash = "sha256:e9027764dc5f1999fb4b4cabee1d0322c59e330c0a6485b436a68275f614277f", size = 39715, upload-time = "2025-11-14T14:58:24.773Z" },
+]
+
+[[package]]
+name = "deepseek-harness-runtime-bin"
+version = "0.2.2rc2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/3c/3af58301dc7a71e5deb7807fa7f084c82609feca777ee0c3696ce80f27f1/deepseek_harness_runtime_bin-0.2.2rc2-py3-none-macosx_14_0_arm64.whl", hash = "sha256:76ac8fe84e6999e14a2229e20cbcaa819dc22b5bfaa40abb0fe810db8a31abc7", size = 91559131, upload-time = "2026-11-11T12:54:55.076Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/58/0b17819770412a9ef3ba2ee473d516d2819ff7bd6498a310b45740a82516/deepseek_harness_runtime_bin-0.2.2rc2-py3-none-macosx_14_0_x86_64.whl", hash = "sha256:3abb396390e34fc699119060302531d71ec0df6a79adf070572d77715ba1f395", size = 94953513, upload-time = "2026-11-11T12:54:58.72Z" },
+    { url = "https://files.pythonhosted.org/packages/52/7d/2e3718bd653d61f244d77ded9122efd924d45e03c5c74a035af26adb9285/deepseek_harness_runtime_bin-0.2.2rc2-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:dc8f6e2c463c9c174b8fbafa394ada62351ff16b9febde4b90dca6b57f1b4e84", size = 99239965, upload-time = "2026-11-11T12:55:02.487Z" },
+    { url = "https://files.pythonhosted.org/packages/95/37/ba779ea8e90daa84f9f1ea9982521e9e1f6d99223857efc6f9cf739b4b85/deepseek_harness_runtime_bin-0.2.2rc2-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:3c8f15a7a92b12857032995ec5dbcc105f192c36218e9b6bb2c5b54b4ee7db17", size = 97364370, upload-time = "2026-11-11T12:55:06.098Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/87/cc1080f32f3835637d93d265ff94d2b24a1ec6b96780894a7e7eeb0a0b5a/deepseek_harness_runtime_bin-0.2.2rc2-py3-none-win_amd64.whl", hash = "sha256:a791af95a97be205a73354c6819e95b5fe2ff40a57ef8a78d53c188ee33e9aea", size = 86959936, upload-time = "2026-11-11T12:55:11.67Z" },
 ]
 
 [[package]]
@@ -2556,6 +2568,7 @@ dependencies = [
     { name = "agent-tools", extra = ["firefox"] },
     { name = "anthropic" },
     { name = "claude-agent-sdk" },
+    { name = "deepseek-harness-runtime-bin" },
     { name = "hackbot-runtime", extra = ["claude-sdk"] },
     { name = "openai-codex" },
     { name = "pydantic-settings" },
@@ -2571,6 +2584,7 @@ requires-dist = [
     { name = "agent-tools", extras = ["firefox"], editable = "libs/agent-tools" },
     { name = "anthropic" },
     { name = "claude-agent-sdk", specifier = ">=0.2.165" },
+    { name = "deepseek-harness-runtime-bin", specifier = "==0.2.2rc2" },
     { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
     { name = "openai-codex", specifier = "==0.167.0" },
     { name = "pydantic-settings" },

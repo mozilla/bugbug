@@ -9,6 +9,8 @@ The mozconfig and objdir survive resets, so every build after the first is
 incremental.
 """
 
+import hashlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -20,6 +22,15 @@ ac_add_options --enable-optimize
 ac_add_options --disable-debug-symbols
 mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/{OBJDIR}
 """
+# Installed by `mach bootstrap`.
+SCCACHE = Path.home() / ".mozbuild" / "sccache" / "sccache"
+
+
+def mozconfig_text() -> str:
+    """The mozconfig; it compiles through sccache when SCCACHE_DIR keeps a cache."""
+    if os.environ.get("SCCACHE_DIR") and SCCACHE.exists():
+        return MOZCONFIG + f"ac_add_options --with-ccache={SCCACHE}\n"
+    return MOZCONFIG
 
 
 def _git(tree: Path, *args: str) -> str:
@@ -34,8 +45,9 @@ def head(tree: Path) -> str:
 
 def mozconfig(tree: Path) -> Path:
     path = tree / ".mozconfig"
-    if not path.exists() or path.read_text() != MOZCONFIG:
-        path.write_text(MOZCONFIG)
+    text = mozconfig_text()
+    if not path.exists() or path.read_text() != text:
+        path.write_text(text)
     return path
 
 
@@ -49,6 +61,36 @@ def diff(tree: Path, base: str) -> str:
     """Everything changed since ``base``, new files included."""
     _git(tree, "add", "-A")
     return _git(tree, "diff", "--staged", base)
+
+
+def state(tree: Path, base: str) -> str:
+    """What the tree would be built from: ``base``, the changes on it, the mozconfig."""
+    built_from = mozconfig_text() + diff(tree, base)
+    return f"{base} {hashlib.sha256(built_from.encode()).hexdigest()}"
+
+
+def stamp(tree: Path) -> Path:
+    """Where the objdir records the :func:`state` it was last built from."""
+    return tree / OBJDIR / "eval-built"
+
+
+def built_base(tree: Path) -> str | None:
+    """The commit the objdir was last built at, with or without changes on it."""
+    path = stamp(tree)
+    return path.read_text().split()[0] if path.exists() else None
+
+
+def built(tree: Path, base: str) -> bool:
+    """Whether the objdir holds a build of the tree as it is, and none since.
+
+    A build the agent ran itself leaves no stamp but newer binaries.
+    """
+    path = stamp(tree)
+    if not path.exists() or path.read_text() != state(tree, base):
+        return False
+    stamped = path.stat().st_mtime
+    binaries = (tree / OBJDIR / "dist" / "bin").rglob("*")
+    return all(p.stat().st_mtime <= stamped for p in binaries if p.is_file())
 
 
 def restore(tree: Path, base: str, path: str) -> None:
