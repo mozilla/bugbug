@@ -26,6 +26,7 @@ from .isolation import example_env, run_isolated
 from .weave_log import WeaveLog
 
 log = logging.getLogger(__name__)
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 AGENTS = {"prompt-executor": "hackbot_agents.dataset_eval.prompt_executor"}
 # Past its own time limit, for the agent to stop and report what it did.
@@ -84,6 +85,11 @@ class Runner:
     def __init__(self, exp: Experiment, ctx: HackbotContext, rows: list[dict]):
         self.exp, self.ctx, self.rows = exp, ctx, rows
         self.work = Path(tempfile.mkdtemp(prefix="work-"))
+        # The whole run's output, which the runtime publishes as the run's log.
+        self.run_log = ctx.log_path.open("a", encoding="utf-8")
+        handler = logging.StreamHandler(self.run_log)
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logging.getLogger().addHandler(handler)
         self.judge = anthropic.AsyncAnthropic()
         import weave
 
@@ -155,6 +161,7 @@ class Runner:
             exp.example_timeout_min * 60 + STOP_GRACE_S,
             ex_dir / "agent.log",
             f"[{row['id']}] ",
+            self.run_log,
         )
         patch = tree.diff(src, base)
         summary = ex_dir / "artifacts" / self.ctx.run_id / "summary.json"
