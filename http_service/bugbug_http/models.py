@@ -471,12 +471,19 @@ def _get_commits(
     db_commits = repository.get_commits_from_db(rev.decode("ascii") for rev in revs)
     LOGGER.info("%d of %d commits found in the commits DB", len(db_commits), len(revs))
     if db_commits:
-        # Commits can be added to .hg-annotate-ignore-revs after they are mined.
+        # Commits can be added to .hg-annotate-ignore-revs, or backed out, after
+        # they are mined.
         with hglib.open(REPO_DIR) as hg:
             ignore_revs = repository.get_ignore_revs(hg, REPO_DIR)
+            backedoutby = repository.get_backedoutby(
+                hg, [node.encode("ascii") for node in db_commits]
+            )
         for commit in db_commits.values():
             commit["ignored"] = repository.is_ignored(
                 commit["node"], commit["desc"], ignore_revs
+            )
+            commit["backedoutby"] = (
+                backedoutby.get(commit["node"]) or commit["backedoutby"]
             )
 
     to_mine = [rev for rev in revs if rev.decode("ascii") not in db_commits]
@@ -521,6 +528,13 @@ def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
     return None
 
 
+def _get_scored_reason(commit: repository.CommitDict) -> str | None:
+    """Get the reason to flag a commit which is scored anyway."""
+    if commit["backedoutby"]:
+        return "backedout"
+    return None
+
+
 def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     """Classify commits with a commit model, and store the result of each in Redis.
 
@@ -529,7 +543,8 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     and mined from the service's local clone, so their features are computed in
     the same way as during training. Backouts and commits ignored during
     training (e.g. reformatting commits) are listed with their `ignored_reason`
-    but not scored, unknown revisions and merges are marked as not available.
+    but not scored. Backed-out commits are scored, with `ignored_reason` set to
+    "backedout". Unknown revisions and merges are marked as not available.
     """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
@@ -580,7 +595,7 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
                 "index": index,
                 "class": class_,
                 "risk_band": model.find_risk_band(prob[1]),
-                "ignored_reason": None,
+                "ignored_reason": _get_scored_reason(commit),
             }
 
     for node in nodes:

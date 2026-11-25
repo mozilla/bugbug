@@ -1706,6 +1706,27 @@ def get_backsout(hg: hglib.client, revs: list[bytes]) -> dict[str, list[str]]:
     }
 
 
+def get_backedoutby(hg: hglib.client, revs: list[bytes]) -> dict[str, str]:
+    """Get the node of the commit backing out each of the given commits ("" if none).
+
+    Only the backouts which are in the local repository are known.
+    """
+    if len(revs) == 0:
+        return {}
+
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\\0{backedoutby}\\0",
+        rev=revs,
+    )
+    out = hg.rawcommand(args).split(b"\x00")[:-1]
+
+    return {
+        node.decode("ascii"): backedoutby.decode("ascii")
+        for node, backedoutby in hglib.util.grouper(2, out)
+    }
+
+
 BACKOUT_DESC_RE = re.compile(
     r"^(Backed out|Back out|Backout|Revert\b)|This reverts commit", re.I | re.M
 )
