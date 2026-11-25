@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import Response
 from hackbot_client import HackbotClient
-from pydantic import BeforeValidator, StringConstraints
+from pydantic import BaseModel, BeforeValidator, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
+    AttachmentInputs,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -143,6 +144,8 @@ async def create_run(
                 detail=f"Parent run {parent.run_id} has not succeeded",
             )
 
+    await _store_attachments(inputs)
+
     run_id = uuid.uuid7()
     results_prefix = gcs.run_prefix(str(run_id))
 
@@ -203,6 +206,7 @@ async def create_run(
             "SENTRY_DSN": settings.agents_sentry_dsn,
             **(agent.build_env or model_to_env)(inputs),
             **(await _parent_artifacts_env(parent)),
+            **(await _input_attachments_env(inputs, timeout)),
         }
         execution_name = await jobs.trigger_execution(
             agent.job_name, env_overrides, timeout
@@ -233,6 +237,34 @@ async def _parent_artifacts_env(parent: Run | None) -> dict[str, str]:
         settings.job_execution_timeout_seconds,
     )
     return {"PARENT_ARTIFACTS": json.dumps(urls)}
+
+
+async def _store_attachments(inputs: BaseModel) -> None:
+    """Upload inline attachments and swap them for their stored form."""
+    if not isinstance(inputs, AttachmentInputs) or not inputs.attachments:
+        return
+    try:
+        inputs.attachments = await gcs.store_input_attachments(inputs.attachments)
+    except gcs.InputAttachmentNotFoundError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        log.exception("Failed to store input attachments")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to store input attachments",
+        ) from exc
+
+
+async def _input_attachments_env(
+    inputs: BaseModel, timeout_seconds: int
+) -> dict[str, str]:
+    """Signed download URLs for the run's attachments, for the runtime."""
+    if not isinstance(inputs, AttachmentInputs) or not inputs.attachments:
+        return {}
+    urls = await gcs.generate_input_attachment_urls(
+        inputs.attachments, timeout_seconds + settings.signed_policy_grace_seconds
+    )
+    return {"INPUT_ATTACHMENTS": json.dumps(urls)}
 
 
 @router.get("/runs")

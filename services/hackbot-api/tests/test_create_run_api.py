@@ -17,6 +17,8 @@ from app import gcs, jobs
 from app.auth import require_api_key
 from app.schemas import RunStatus
 
+STORED_ATTACHMENT_KEY = "uploads/" + "a" * 64
+
 
 @pytest.fixture(autouse=True)
 def _stub_gcp(monkeypatch):
@@ -232,3 +234,166 @@ def test_an_unchained_run_gets_no_parent_artifacts(client, db, monkeypatch):
     monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
     _create(client)
     assert "PARENT_ARTIFACTS" not in envs[0]
+
+
+def _attach(client, monkeypatch, attachments, *, missing=()):
+    """Create an autowebcompat-repro run with `attachments`."""
+    stored_calls = []
+
+    async def fake_store(items):
+        stored_calls.append(items)
+        out = []
+        for item in items:
+            if item.key in missing:
+                raise gcs.InputAttachmentNotFoundError(item.name, item.key)
+            out.append(
+                item.model_copy(
+                    update={
+                        "data_base64": None,
+                        "key": item.key or STORED_ATTACHMENT_KEY,
+                        "size": 3,
+                    }
+                )
+            )
+        return out
+
+    async def fake_urls(items, expiration_seconds):
+        return {item.name: f"https://get.example/{item.key}" for item in items}
+
+    envs = []
+
+    async def fake_trigger(job_name, env, timeout_seconds):
+        envs.append(env)
+        return "projects/p/locations/l/jobs/j/executions/e"
+
+    monkeypatch.setattr(gcs, "store_input_attachments", fake_store)
+    monkeypatch.setattr(gcs, "generate_input_attachment_urls", fake_urls)
+    monkeypatch.setattr(jobs, "trigger_execution", fake_trigger)
+    resp = client.post(
+        "/agents/autowebcompat-repro/runs",
+        json={"bug_data": "Page is blank", "attachments": attachments},
+    )
+    return resp, envs, stored_calls
+
+
+def test_attachments_reach_the_agent_as_signed_urls(client, db, monkeypatch):
+    resp, envs, _ = _attach(
+        client,
+        monkeypatch,
+        [{"name": "shot.png", "content_type": "image/png", "data_base64": "YWJj"}],
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert json.loads(envs[0]["INPUT_ATTACHMENTS"]) == {
+        "shot.png": f"https://get.example/{STORED_ATTACHMENT_KEY}"
+    }
+    assert "ATTACHMENTS" not in envs[0]
+    assert "YWJj" not in json.dumps(envs[0])
+
+
+def test_a_run_stores_references_to_its_attachments_not_their_content(
+    client, db, monkeypatch
+):
+    resp, _, _ = _attach(
+        client, monkeypatch, [{"name": "shot.png", "data_base64": "YWJj"}]
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert db.added.inputs["attachments"] == [
+        {
+            "name": "shot.png",
+            "content_type": None,
+            "key": STORED_ATTACHMENT_KEY,
+            "size": 3,
+        }
+    ]
+
+
+def test_stored_attachments_can_be_sent_again(client, db, monkeypatch):
+    # A retrigger sends back the stored inputs, so the stored form is accepted.
+    resp, envs, stored = _attach(
+        client,
+        monkeypatch,
+        [{"name": "shot.png", "key": STORED_ATTACHMENT_KEY, "size": 3}],
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert stored[0][0].key == STORED_ATTACHMENT_KEY
+    assert json.loads(envs[0]["INPUT_ATTACHMENTS"]) == {
+        "shot.png": f"https://get.example/{STORED_ATTACHMENT_KEY}"
+    }
+
+
+def test_an_attachment_that_is_gone_is_rejected(client, db, monkeypatch):
+    resp, envs, _ = _attach(
+        client,
+        monkeypatch,
+        [{"name": "shot.png", "key": STORED_ATTACHMENT_KEY}],
+        missing={STORED_ATTACHMENT_KEY},
+    )
+
+    assert resp.status_code == 422
+    assert "no longer available" in resp.text
+    assert db.added is None
+    assert envs == []
+
+
+def test_a_run_whose_attachments_cannot_be_stored_is_not_recorded(
+    client, db, monkeypatch
+):
+    async def fail(items):
+        raise RuntimeError("inputs_bucket not configured")
+
+    monkeypatch.setattr(gcs, "store_input_attachments", fail)
+    resp = client.post(
+        "/agents/autowebcompat-repro/runs",
+        json={
+            "bug_data": "Page is blank",
+            "attachments": [{"name": "shot.png", "data_base64": "YWJj"}],
+        },
+    )
+
+    assert resp.status_code == 502
+    assert db.added is None
+
+
+@pytest.mark.parametrize(
+    "attachment",
+    [
+        {"name": "shot.png"},
+        {"name": "shot.png", "data_base64": "YWJj", "key": STORED_ATTACHMENT_KEY},
+        {"name": "shot.png", "data_base64": "not base64!"},
+        {"name": "../shot.png", "data_base64": "YWJj"},
+        {"name": ".hidden", "data_base64": "YWJj"},
+        {"name": "shot.png", "key": "runs/other/summary.json"},
+    ],
+)
+def test_an_invalid_attachment_is_rejected(client, db, monkeypatch, attachment):
+    resp, envs, stored = _attach(client, monkeypatch, [attachment])
+
+    assert resp.status_code == 422
+    assert stored == []
+    assert envs == []
+
+
+def test_attachment_names_must_be_unique(client, db, monkeypatch):
+    resp, _, stored = _attach(
+        client,
+        monkeypatch,
+        [
+            {"name": "shot.png", "data_base64": "YWJj"},
+            {"name": "shot.png", "data_base64": "ZGVm"},
+        ],
+    )
+
+    assert resp.status_code == 422
+    assert "duplicate attachment names" in resp.text
+    assert stored == []
+
+
+def test_a_run_without_attachments_gets_no_attachment_urls(client, db, monkeypatch):
+    resp, envs, stored = _attach(client, monkeypatch, [])
+
+    assert resp.status_code == 201, resp.text
+    assert "INPUT_ATTACHMENTS" not in envs[0]
+    assert stored == []

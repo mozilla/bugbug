@@ -85,6 +85,13 @@ class HackbotContext(BaseSettings):
     # Signed download URLs for the parent's artifacts, by key. Unset locally,
     # where the parent's artifacts are read from `artifacts_dir` instead.
     parent_artifacts: dict[str, str] | None = None
+    # Signed download URLs for the files the run was started with, by name.
+    # Unset locally, where the files are read from `local_input_attachments_dir`
+    # instead.
+    input_attachments: dict[str, str] | None = None
+    # A folder of files to use as the run's attachments in local runs, which
+    # have no URLs. Overridable via LOCAL_INPUT_ATTACHMENTS_DIR.
+    local_input_attachments_dir: Path | None = None
 
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -106,6 +113,7 @@ class HackbotContext(BaseSettings):
     _repo_path: Path | None = PrivateAttr(default=None)
     _prepared_ref: str | None = PrivateAttr(default=None)
     _parent_artifacts_dir: Path | None = PrivateAttr(default=None)
+    _input_attachments_dir: Path | None = PrivateAttr(default=None)
 
     @classmethod
     def from_config(cls, config_path: Path) -> HackbotContext:
@@ -268,6 +276,27 @@ class HackbotContext(BaseSettings):
         if self._parent_artifacts_dir is None:
             raise RuntimeError("this run was not started by another run")
         return self._parent_artifacts_dir
+
+    def fetch_input_attachments(self) -> None:
+        """Make the run's attachments available; called by the runtime."""
+        if self.input_attachments is None:
+            self._input_attachments_dir = self.local_input_attachments_dir
+            return
+        dest = Path(tempfile.mkdtemp(prefix=f"hackbot-{self.run_id}-inputs-"))
+        artifacts.download_all(self.input_attachments, dest)
+        self._input_attachments_dir = dest
+
+    @property
+    def input_attachments_dir(self) -> Path | None:
+        """The folder holding the run's attachments, or None if it has none."""
+        return self._input_attachments_dir
+
+    @property
+    def input_attachment_files(self) -> list[Path]:
+        """The run's attachments, sorted by name. Empty when it has none."""
+        if self._input_attachments_dir is None:
+            return []
+        return sorted(p for p in self._input_attachments_dir.iterdir() if p.is_file())
 
     @cached_property
     def actions(self) -> ActionsRecorder:

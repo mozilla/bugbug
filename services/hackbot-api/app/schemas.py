@@ -1,9 +1,18 @@
+import base64
+import binascii
 from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 
 class RunStatus(str, Enum):
@@ -18,6 +27,73 @@ class AgentInputs(BaseModel):
     """Run-level inputs shared by every agent."""
 
     require_review: bool = False
+
+
+AttachmentName = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._ -]*$",
+    ),
+]
+
+INPUT_ATTACHMENT_KEY_PATTERN = r"^uploads/[0-9a-f]{64}$"
+
+MAX_INPUT_ATTACHMENTS = 10
+
+
+class InputAttachment(BaseModel):
+    """A file passed to the agent next to its inputs."""
+
+    name: AttachmentName
+    content_type: str | None = None
+    data_base64: Annotated[str | None, Field(exclude=True)] = None
+    key: Annotated[str | None, Field(pattern=INPUT_ATTACHMENT_KEY_PATTERN)] = None
+    size: int | None = None
+
+    @field_validator("data_base64")
+    @classmethod
+    def _validate_base64(cls, value: str | None) -> str | None:
+        if value is not None:
+            try:
+                base64.b64decode(value, validate=True)
+            except binascii.Error as exc:
+                raise ValueError("data_base64 is not valid base64") from exc
+        return value
+
+    @model_validator(mode="after")
+    def _validate_source(self) -> InputAttachment:
+        if (self.data_base64 is None) == (self.key is None):
+            raise ValueError(
+                f"attachment {self.name!r} needs exactly one of data_base64 or key"
+            )
+        return self
+
+    def data(self) -> bytes:
+        if self.data_base64 is None:
+            raise ValueError(f"attachment {self.name!r} has no inline content")
+        return base64.b64decode(self.data_base64, validate=True)
+
+
+class AttachmentInputs(BaseModel):
+    """Inputs for agents that accept files next to their env var inputs."""
+
+    attachments: Annotated[
+        list[InputAttachment], Field(max_length=MAX_INPUT_ATTACHMENTS)
+    ] = []
+
+    @field_validator("attachments")
+    @classmethod
+    def _validate_unique_names(
+        cls, value: list[InputAttachment]
+    ) -> list[InputAttachment]:
+        names = [attachment.name for attachment in value]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"duplicate attachment names: {', '.join(duplicates)}")
+        return value
 
 
 class ArtifactRef(BaseModel):
@@ -137,7 +213,7 @@ class AutowebcompatInputs(AgentInputs):
         return self
 
 
-class AutowebcompatReproInputs(AutowebcompatInputs):
+class AutowebcompatReproInputs(AutowebcompatInputs, AttachmentInputs):
     """Inputs for the autowebcompat-repro agent."""
 
 

@@ -87,6 +87,41 @@ A run started by another run's `agents.start_run` action gets `PARENT_RUN_ID` an
 published them with; a failed download fails the run. Locally there are no URLs, and the
 directory is the parent's own `artifacts_dir/<parent_run_id>`, so treat it as read-only.
 
+### Input attachments
+
+Some inputs are too large for an env var: GCP caps each one at 32 kB. Agents whose input
+schema includes `AttachmentInputs` accept an `attachments` list. Each item has a `name`,
+an optional `content_type`, and the file content as `data_base64`:
+
+```json
+{
+  "bug_data": "The checkout button does nothing.",
+  "attachments": [
+    {
+      "name": "screenshot.png",
+      "content_type": "image/png",
+      "data_base64": "iVBORw0..."
+    }
+  ]
+}
+```
+
+The API stores each file in the inputs bucket under a key made from its SHA-256 hash.
+The run's stored inputs keep `name`, `content_type`, `key` and `size`, but not the
+content. Sending that stored form back, as a retrigger does, reuses the stored file.
+
+The agent gets `INPUT_ATTACHMENTS` (signed download URLs by name). The runtime downloads
+the files before `main()`. A failed download fails the run. Agents read them from
+`ctx.input_attachment_files`, or from the folder `ctx.input_attachments_dir` (`None` when
+the run has none). Locally there are no URLs: set `LOCAL_INPUT_ATTACHMENTS_DIR` to a folder
+of files instead. That folder is read in place, so treat it as read-only.
+
+The model only knows about the files if its prompt says where they are. Add
+`input_attachments_prompt(ctx.input_attachment_files)` to the agent's prompt. It returns
+`""` when the run has no attachments, so it is safe to add unconditionally.
+
+All other inputs still arrive as env vars.
+
 ## Capturing source changes
 
 After the agent runs, its work may be committed locally, uncommitted, or untracked.

@@ -116,6 +116,7 @@ class Settings(BaseSettings):
     gcp_project: str = ""
     gcp_region: str = "us-central1"
     results_bucket: str = ""
+    inputs_bucket: str = ""
 
     # Cloud SQL Postgres
     cloud_sql_instance: str = ""
