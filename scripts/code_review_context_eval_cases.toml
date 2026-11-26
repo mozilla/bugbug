@@ -1,0 +1,54 @@
+# Cases for scripts/code_review_context_eval.py.
+#
+# Each case is a Phabricator revision, optionally pinned to a diff. `expected`
+# lists issues a human reviewer found that the review guidelines cover: a
+# generated comment on the same file within a few lines counts as catching it.
+
+# Desktop theme patches reviewed by Review Helper with the desktop-theme
+# review-context.toml rules, at the diff it reviewed.
+
+[[cases]]
+revision = 337832
+diff = 1423729
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/content-area.css"
+line = 967
+description = "A :hover background-color without a paired color, invisible in high contrast mode (use-paired-color-tokens)."
+
+[[cases]]
+revision = 342862
+diff = 1446322
+
+[[cases]]
+revision = 337743
+diff = 1452563
+
+[[cases]]
+revision = 335202
+diff = 1448469
+
+[[cases]]
+revision = 326633
+diff = 1456140
+
+[[cases]]
+revision = 346286
+diff = 1456342
+
+[[cases]]
+revision = 344792
+diff = 1450303
+
+# Other review-context.toml rules, to check the guidelines instructions don't
+# make the agent read documents where the guidelines point nowhere.
+
+[[cases]]
+revision = 346114
+diff = 1456418
+note = "dom/media"
+
+[[cases]]
+revision = 340962
+diff = 1456453
+note = "js/src"

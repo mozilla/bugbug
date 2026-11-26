@@ -65,6 +65,14 @@ from bugbug.tools.core.platforms.base import Patch
 logger = getLogger(__name__)
 
 
+DEFAULT_REVIEW_LLM_KWARGS = {
+    "max_tokens": 40_000,
+    "temperature": None,
+    "thinking": {"type": "adaptive"},
+    "effort": "high",
+}
+
+
 def current_date_for_prompt() -> str:
     return datetime.now(UTC).date().isoformat()
 
@@ -185,11 +193,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         if "llm" not in kwargs:
             kwargs["llm"] = init_chat_model(
-                DEFAULT_ANTHROPIC_MODEL,
-                max_tokens=40_000,
-                temperature=None,
-                thinking={"type": "adaptive"},
-                effort="high",
+                DEFAULT_ANTHROPIC_MODEL, **DEFAULT_REVIEW_LLM_KWARGS
             )
 
         if "patch_summarizer" not in kwargs:
