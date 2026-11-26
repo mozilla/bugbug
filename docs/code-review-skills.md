@@ -462,6 +462,27 @@ curl --fail-with-body --silent --show-error \
   --data-binary @-
 ```
 
+### Evaluating guideline changes
+
+`scripts/code_review_context_eval.py` runs the production review pipeline on
+the revisions in `scripts/code_review_context_eval_cases.toml` and reports, for
+each review, the documents the reviewer read, its tool calls and comments, and
+whether it caught the issues human reviewers found that the guidelines cover.
+Each review's full transcript is saved, with summarized thinking, to see why the
+reviewer did or didn't read something. Compare runs before and after a change:
+
+```bash
+python scripts/code_review_context_eval.py run runs/before --trials 2
+python scripts/code_review_context_eval.py run runs/after --trials 2 \
+  --checkout ~/firefox --override '.claude/skills/desktop-theme*/**/*.md'
+python scripts/code_review_context_eval.py summarize runs/before runs/after
+```
+
+`--checkout` merges a local checkout's `review-context.toml` into the landed
+rules, and `--override` uses local files instead of the landed ones. Add cases
+for your area: a revision and diff Review Helper reviewed, and the issues it
+should have caught.
+
 ### Gotchas
 
 **Rules are evaluated against the post-patch file list.** Paths in file predicates

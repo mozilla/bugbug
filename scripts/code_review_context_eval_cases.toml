@@ -1,0 +1,408 @@
+# Cases for scripts/code_review_context_eval.py.
+#
+# Each case is a Phabricator revision, optionally pinned to a diff. `expected`
+# lists issues a human reviewer found that the review guidelines cover: a
+# generated comment on the same file within a few lines counts as catching it.
+
+# Desktop theme patches reviewed by Review Helper with the desktop-theme
+# review-context.toml rules, at the diff it reviewed.
+
+[[cases]]
+revision = 337832
+diff = 1423729
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/content-area.css"
+line = 967
+description = "A :hover background-color without a paired color, invisible in high contrast mode (use-paired-color-tokens)."
+
+[[cases]]
+revision = 342862
+diff = 1446322
+
+[[cases]]
+revision = 337743
+diff = 1452563
+
+[[cases]]
+revision = 335202
+diff = 1448469
+
+[[cases]]
+revision = 326633
+diff = 1456140
+
+[[cases]]
+revision = 346286
+diff = 1456342
+
+[[cases]]
+revision = 344792
+diff = 1450303
+
+# Other review-context.toml rules, to check the guidelines instructions don't
+# make the agent read documents where the guidelines point nowhere.
+
+[[cases]]
+revision = 346114
+diff = 1456418
+note = "dom/media"
+
+[[cases]]
+revision = 340962
+diff = 1456453
+note = "js/src"
+
+# Issues human reviewers raised on desktop theme stylesheets that the theme
+# guidelines cover (high contrast, color pairing, design tokens, rem and font
+# sizes, RTL), at the diff they commented on. Descriptions quote the reviewer.
+
+[[cases]]
+revision = 321706
+diff = 1373807
+
+[[cases.expected]]
+file = "browser/themes/shared/toolbarbuttons.css"
+line = 225
+description = "With `:not([disabled])`, a disabled button keeps a transparent interior while still drawing its ButtonText outline, next to neighbours that now have ButtonFace. `--button-background-color-toolbar-disabled` is defined as..."
+
+[[cases]]
+revision = 321706
+diff = 1377392
+
+[[cases.expected]]
+file = "browser/themes/shared/toolbarbuttons.css"
+line = 226
+description = "`--button-background-color-toolbar-disabled` is moz-button's toolbar-type token and aliases the toolbarbutton tokens; reading it back from here inverts that. A `toolbarbutton.background.color.disabled` token (forcedColors..."
+
+[[cases]]
+revision = 322517
+diff = 1364681
+
+[[cases.expected]]
+file = "toolkit/content/widgets/panel-list/panel-list.css"
+line = 32
+description = "Instead of doing this let's add a token/make a token change in `panel-list.tokens.json` (not really semantic to re-map a margin token to padding, and we can avoid the nova pref check)"
+
+[[cases.expected]]
+file = "toolkit/content/widgets/panel-list/panel-list.css"
+line = 42
+description = "Instead of doing this let's make a token change in `panel-list.tokens.json` (not really semantic to re-map a margin token to padding, and we can avoid the nova pref check)"
+
+[[cases]]
+revision = 322679
+diff = 1375850
+
+[[cases.expected]]
+file = "browser/themes/shared/privatebrowsing/aboutPrivateBrowsing.css"
+line = 709
+description = "We're never restoring these in High Contrast Mode (HCM), which will cause an accessibility failure because this element normally has a border in HCM. You'll need something like ``` @media (prefers-contrast) { border: var(--border-width)..."
+
+[[cases.expected]]
+file = "browser/themes/shared/privatebrowsing/aboutPrivateBrowsing.css"
+line = 732
+description = "you can use `--space-xlarge` here."
+
+[[cases.expected]]
+file = "browser/themes/shared/privatebrowsing/aboutPrivateBrowsing.css"
+line = 734
+description = "Pretty sure you can use `--icon-size-small` instead of just `16px` here."
+
+[[cases.expected]]
+file = "browser/themes/shared/privatebrowsing/aboutPrivateBrowsing.css"
+line = 741
+description = "`padding-inline-start` correctly maps to the physical right side in RTL, so no need for this."
+
+[[cases]]
+revision = 322679
+diff = 1377083
+
+[[cases.expected]]
+file = "browser/themes/shared/privatebrowsing/aboutPrivateBrowsing.css"
+line = 621
+description = "If you're going to change `--link-color`, then you need to change the hover and active colors as well. Otherwise a normal link and an active link are going to be the same color which I believe is an S2 accessibility issue. Right now I..."
+
+[[cases]]
+revision = 323461
+diff = 1377671
+
+[[cases.expected]]
+file = "browser/themes/shared/urlbar.css"
+line = 105
+description = "Rather than patching the high contrast values in here, can we put them in urlbar.tokens.json? The nova value takes prefersContrast and forcedColors keys (see icon.fill.opacity), so the hover/active ghost mapping goes under prefersContrast..."
+
+[[cases]]
+revision = 324655
+diff = 1373209
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/tabs.css"
+line = 975
+description = "This is a new stylelint rule I added, and from a quick look it seems the rule might be correct here? With forced colors I think you can't just inherit color for a ghost button."
+
+[[cases]]
+revision = 325080
+diff = 1372280
+
+[[cases.expected]]
+file = "browser/themes/shared/browser-shared.css"
+line = 156
+description = "Seems strange to abandon our design tokens here for hard-coded colours... are we sure there aren't tokens we should be using instead?"
+
+[[cases]]
+revision = 325599
+diff = 1374551
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/tabs.css"
+line = 2641
+description = "Could you please set `color: var(--button-text-color-ghost-active);` as well? Thank you!"
+
+[[cases]]
+revision = 326308
+diff = 1378772
+
+[[cases.expected]]
+file = "browser/components/aiwindow/ui/components/aitab-highlights/aitab-highlights.css"
+line = 14
+description = "I think this definition should happen inside the not forced-colors block, else you're overwriting the HCM, which should remain `--background-color-box: var(--background-color-canvas);` if using `--text-color`, since that HCM value equates..."
+
+[[cases]]
+revision = 327192
+diff = 1398851
+
+[[cases.expected]]
+file = "browser/themes/shared/browser-shared.css"
+line = 1454
+description = "I think the `forced-colors` check should be here, it looks weird in HCM with this styling"
+
+[[cases]]
+revision = 327394
+diff = 1381650
+
+[[cases.expected]]
+file = "browser/components/asrouter/content/components/asrouter-newtab-multistage/asrouter-newtab-multistage.css"
+line = 2168
+description = "`width: 180px`, `height: 150px`, `margin-inline-start: 12px`, and `margin-block: 12px` are raw pixel values added without the required `/* stylelint-disable-line stylelint-plugin-mozilla/use-design-tokens */` comment. Every other raw-px..."
+
+[[cases]]
+revision = 327971
+diff = 1384878
+
+[[cases.expected]]
+file = "browser/components/aiwindow/ui/components/memories-icon-button/memories-icon-button.css"
+line = 8
+description = "Hmmm... this line is inside `@media not (forced-colors)`, so it only applies when HCM is off. But the bug calls for a fix in HCM mode. Any reason why a non-HCM background override is being removed as part of an HCM-mode fix? The git..."
+
+[[cases]]
+revision = 328299
+diff = 1396085
+
+[[cases.expected]]
+file = "toolkit/themes/shared/pictureinpicture/player.css"
+line = 470
+description = "`player.css` imports `tokens-platform.css`, where `--font-size-root` is unset, so this just throws away the size from `font: menu` and the panel inherits Gecko's 16px default. Is that intended? If so using `font-size: unset;` seems clearer?"
+
+[[cases]]
+revision = 328306
+diff = 1385629
+
+[[cases.expected]]
+file = "browser/components/screenshots/screenshots-buttons.css"
+line = 76
+description = "This needs to set `color` to make sure HCM works."
+
+[[cases]]
+revision = 328339
+diff = 1388075
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/content-area.css"
+line = 773
+description = "Let's use `var(--space-small)` please"
+
+[[cases]]
+revision = 328878
+diff = 1387893
+
+[[cases.expected]]
+file = "browser/components/aiwindow/ui/components/aitab-page/aitab-error/aitab-error.css"
+line = 6
+description = "Since the font color is `ButtonText` i think that this should be `Button`. Have you tried loading this patch in HCM mode to confirm?"
+
+[[cases]]
+revision = 329059
+diff = 1395708
+
+[[cases.expected]]
+file = "toolkit/themes/shared/pictureinpicture/player.css"
+line = 20
+description = "The player root has no `color-scheme`, so in a light theme `--border-color` resolves to black under prefers-contrast, and this border disappears against the dark controls. `--focus-outline-color` also takes the light-surface accent...."
+
+[[cases]]
+revision = 329969
+diff = 1392774
+
+[[cases.expected]]
+file = "browser/themes/shared/sanitizeDialog_v2.css"
+line = 93
+description = "Please use design tokens instead of the hard-coded values. The disable state override is missing, so we have to add that as well. And you won't need a media query anymore, tokens handle HCM for free."
+
+[[cases]]
+revision = 330167
+diff = 1393360
+
+[[cases.expected]]
+file = "browser/themes/shared/toolbarbuttons.css"
+line = 143
+description = "Please move these values into `toolbarbutton.tokens.json` as `forcedColors` keys, like bug 2023649 did for the hover and active fills: `opacity.disabled` → `{button.opacity.disabled}`, plus new `icon.fill.disabled` and..."
+
+[[cases.expected]]
+file = "browser/themes/shared/toolbarbuttons.css"
+line = 451
+description = "The enabled outline color is `--toolbarbutton-outline-color`, not `--button-border-color`. They only differ under `[lwtheme]`, where `toolbar.css` sets it to `currentColor`. While you're here, the `:hover` branch could also use..."
+
+[[cases]]
+revision = 330624
+diff = 1408684
+
+[[cases.expected]]
+file = "browser/themes/windows/places/organizer.css"
+line = 70
+description = "`--space-xsmall` is 0.25rem, and 1rem is 12px on Windows by default, so `padding-inline-start` here becomes 3px instead of 4px. It might be better to revert this one too."
+
+[[cases.expected]]
+file = "browser/themes/windows/places/organizer.css"
+line = 110
+description = "Same here, `margin-inline-end: var(--space-xxsmall)` becomes 1.5px instead of 2px on Windows."
+
+[[cases]]
+revision = 334376
+diff = 1408623
+
+[[cases.expected]]
+file = "browser/components/aiwindow/ui/components/aitab-tool-ui/aitab-tool-ui.css"
+line = 41
+description = "Seems like `--ai-action-confirmation-background-color` doesn't have a default value for HCM mode from what I'm seeing in `browser/components/aiwindow/ui/components/ai-action-confirmation/ai-action-confirmation.css`. This is not an issue..."
+
+[[cases]]
+revision = 334694
+diff = 1409911
+
+[[cases.expected]]
+file = "browser/components/aboutwelcome/content/aboutwelcome.css"
+line = 1879
+description = "`#B89CFF` should be `--color-violet-30` and `#764EDD` should be `--color-violet-50`"
+
+[[cases]]
+revision = 334717
+diff = 1422461
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/tabs.css"
+line = 1275
+description = "These don't reach the gradient. `--tab-border-color-accent` is computed on `:root`, so the selected tab still paints violet→orange under the new outline. It's hidden at 1x and 2x but shows as a one-device-pixel fringe at 1.25x, 1.5x and..."
+
+[[cases]]
+revision = 337058
+diff = 1429320
+
+[[cases.expected]]
+file = "browser/themes/shared/windowLock.css"
+line = 23
+description = "Currently the main paragraph and button font-size ends up being 11px on Mac, which is considered inaccessibly small: `--font-size-large` might end up being too big on Windows, in which case we can split the difference (but should aim for..."
+
+[[cases]]
+revision = 337148
+diff = 1418712
+
+[[cases.expected]]
+file = "browser/components/aboutlogins/content/components/login-message-popup.css"
+line = 57
+description = "In RTL, this change makes it so that the arrow is off-center. Could we add a selector here that does `transform: translateX(50%) rotate(270deg)` when RTL?"
+
+[[cases]]
+revision = 337194
+diff = 1429830
+
+[[cases.expected]]
+file = "toolkit/themes/shared/tree/tree.css"
+line = 242
+description = "tree.js sets `style.left` and `style.width` on this input. In RTL, `inset-inline-start: 0` turns into `right: 0`, and the over-constrained box ignores `left`, so the input jumps to the right edge. Please keep `left: 0` here."
+
+[[cases]]
+revision = 337194
+diff = 1444576
+
+[[cases.expected]]
+file = "toolkit/themes/shared/media/pipToggle.css"
+line = 287
+description = "Now that the `direction: rtl` rule matches, this padding should mirror too: `padding-block: 6px 8px; padding-inline: 8px 16px;`. Otherwise RTL text starts 16px in from its edge instead of 8px."
+
+[[cases]]
+revision = 337687
+diff = 1421523
+
+[[cases.expected]]
+file = "browser/components/aiwindow/ui/components/ai-clarifying-question/ai-clarifying-question.css"
+line = 68
+description = "The shadow could go on the `moz-button.close-button` The border change will be wrong HCM since this is `CanvasText` there"
+
+[[cases]]
+revision = 337832
+diff = 1423083
+
+[[cases.expected]]
+file = "browser/themes/shared/tabbrowser/content-area.css"
+line = 1185
+description = "This is going to cause issues on other operating systems. Each operating system uses a different font-size when `font: menu|message-box`. I would just remove this `font-size` rule."
+
+[[cases]]
+revision = 339395
+diff = 1433794
+
+[[cases.expected]]
+file = "browser/themes/shared/migration/migration-wizard.css"
+line = 16
+description = "1.3em is about 19.5px when the in-content root is 15px. --font-size-large is 1.133rem, about 17px, and --font-size-xlarge is about 22px, so neither token matches. This fallback is what the wizard uses when header-font-size is empty. 0.73em..."
+
+[[cases]]
+revision = 340933
+diff = 1433536
+
+[[cases.expected]]
+file = "toolkit/themes/shared/findbar.css"
+line = 27
+description = "`--background-color-box` doesn't pair with `-moz-dialogtext`, and this rule will reach Thunderbird once the pre-Nova block is gone. Please use `color: var(--text-color)` with it."
+
+[[cases]]
+revision = 341574
+diff = 1436018
+
+[[cases.expected]]
+file = "browser/components/sidebar/sidebar-main.css"
+line = 92
+description = "The opacity probably should be `1` in High contrast mode."
+
+[[cases]]
+revision = 341583
+diff = 1436087
+
+[[cases.expected]]
+file = "browser/components/widgets/content/widget-composer.css"
+line = 43
+description = "This can be replaced by `--border-radius-xlarge`, which lets you drop the `stylelint-disable` line too."
+
+[[cases.expected]]
+file = "browser/components/widgets/content/widget-composer.css"
+line = 138
+description = "These can be replaced by `--color-accent-primary`, `--color-accent-primary-hover` and `--color-accent-primary-active`."
+
+[[cases]]
+revision = 341611
+diff = 1444532
+
+[[cases.expected]]
+file = "browser/themes/shared/translations/panel.css"
+line = 49
+description = "`--font-size-small` is `1rem` in chrome. So this makes the hint button text slightly larger than before: about 12px instead of about 10.8px on Windows. To avoid the visual change, could we keep 0.9em with a `stylelint-disable-next-line`,..."
