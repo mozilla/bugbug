@@ -14,7 +14,8 @@ from bugbug.tools.core.data_types import CommentSeverity, InlineComment
 from bugbug.tools.core.exceptions import LargeDiffError, RecursionLimitError
 from bugbug.tools.core.platforms.phabricator import (
     PhabricatorPatch,
-    get_phabricator_client,
+    create_inline_comment,
+    create_revision_comment,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,8 +149,6 @@ async def _submit_review_to_phabricator(
     review_request: ReviewRequest, generated_comments: Collection[GeneratedComment]
 ) -> AsyncIterator[tuple[GeneratedComment, int]]:
     """Submit generated comments to Phabricator."""
-    phabricator = get_phabricator_client()
-
     for comment in generated_comments:
         if comment.platform_comment_id:
             # This could happen if the submission process is retried after a
@@ -161,27 +160,24 @@ async def _submit_review_to_phabricator(
             )
             continue
 
-        phabricator_inline_comment = phabricator.request(
-            "differential.createinline",
-            revisionID=review_request.revision_id,
-            diffID=review_request.diff_id,
-            filePath=comment.file_path,
-            isNewFile=comment.on_new,
-            lineNumber=comment.line_start,
-            lineLength=comment.line_end - comment.line_start,
+        inline_comment_id = await create_inline_comment(
+            revision_id=review_request.revision_id,
+            diff_id=review_request.diff_id,
+            file_path=comment.file_path,
+            is_new_file=comment.on_new,
+            line_number=comment.line_start,
+            line_length=comment.line_end - comment.line_start,
             content=format_inline_comment_content(comment),
         )
 
         # We yield here to allow the caller to save the platform comment id to
         # the database.
-        yield comment, phabricator_inline_comment["id"]
+        yield comment, inline_comment_id
 
     is_first_review = await review_request.is_first_published_review()
 
-    phabricator.request(
-        "differential.createcomment",
-        revision_id=review_request.revision_id,
-        attach_inlines=1,
+    await create_revision_comment(
+        review_request.revision_id,
         message=create_main_review_comment(
             review_request,
             generated_comments,

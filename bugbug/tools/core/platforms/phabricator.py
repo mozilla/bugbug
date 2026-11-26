@@ -116,9 +116,13 @@ def get_phabricator_client(
     return PhabricatorAPI(api_key, api_url)
 
 
-@retry_transient_errors()
-async def _conduit(method: str, **params: Any) -> Any:
-    """Call a read-only Conduit API method through the shared HTTP client."""
+async def _conduit_once(method: str, **params: Any) -> Any:
+    """Call a Conduit API method through the shared HTTP client, exactly once.
+
+    This never retries. Writes must go through it (or a wrapper that does not
+    retry), since retrying after a timeout can repeat a write the server
+    already applied.
+    """
     payload = {**params, "__conduit__": {"token": os.getenv("PHABRICATOR_API_KEY")}}
     r = await get_http_client().post(
         f"{_base_url()}/api/{method}",
@@ -129,6 +133,45 @@ async def _conduit(method: str, **params: Any) -> Any:
     data = r.json()
     ConduitError.raise_if_error(data)
     return data["result"]
+
+
+@retry_transient_errors()
+async def _conduit(method: str, **params: Any) -> Any:
+    """Call a read-only Conduit API method, retrying transient errors."""
+    return await _conduit_once(method, **params)
+
+
+async def create_inline_comment(
+    revision_id: int,
+    diff_id: int,
+    file_path: str,
+    is_new_file: bool,
+    line_number: int,
+    line_length: int,
+    content: str,
+) -> int:
+    """Create a draft inline comment on a diff and return its ID. Not retried."""
+    result = await _conduit_once(
+        "differential.createinline",
+        revisionID=revision_id,
+        diffID=diff_id,
+        filePath=file_path,
+        isNewFile=is_new_file,
+        lineNumber=line_number,
+        lineLength=line_length,
+        content=content,
+    )
+    return result["id"]
+
+
+async def create_revision_comment(revision_id: int, message: str) -> None:
+    """Post a comment on a revision, publishing the draft inlines. Not retried."""
+    await _conduit_once(
+        "differential.createcomment",
+        revision_id=revision_id,
+        attach_inlines=1,
+        message=message,
+    )
 
 
 @alru_cache
