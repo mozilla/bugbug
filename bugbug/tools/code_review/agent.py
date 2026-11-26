@@ -33,6 +33,7 @@ from bugbug.tools.code_review.langchain_tools import (
     SEARCHFOX_TOOLS,
     CodeReviewContext,
     create_load_skill_tool,
+    read_review_guideline,
 )
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
@@ -110,7 +111,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = list(SEARCHFOX_TOOLS)
+        tools = [*SEARCHFOX_TOOLS, read_review_guideline]
 
         if skills:
             tools.append(create_load_skill_tool(skills))
@@ -232,18 +233,26 @@ class CodeReviewTool(GenerativeModelTool):
         self, patch: Patch, patch_summary: str
     ) -> tuple[AgentResponse, list[dict]]:
         from bugbug.tools.code_review.review_context import (
-            resolve_external_context_for_review,
+            load_external_context_for_review,
+            resolve_review_context_source,
         )
 
-        external_context, manifest = await resolve_external_context_for_review(
+        source = await resolve_review_context_source(
             patch,
             self._review_context_repo,
-            review_context_branch=(
-                self._review_context_branch if self._review_context_repo else None
-            ),
-            extra_context_toml=self._extra_context_toml,
-            content_overrides=self._content_overrides,
+            self._review_context_branch if self._review_context_repo else None,
         )
+        external_context = ""
+        manifest: list[dict] = []
+        if source is not None:
+            external_context, manifest = await load_external_context_for_review(
+                patch,
+                source[0],
+                review_context_branch=source[1],
+                extra_context_toml=self._extra_context_toml,
+                content_overrides=self._content_overrides,
+            )
+        context = CodeReviewContext(patch=patch, review_context_source=source)
 
         messages = [
             HumanMessage(
@@ -253,7 +262,7 @@ class CodeReviewTool(GenerativeModelTool):
             )
         ]
         for attempt in range(2):
-            result = await self._invoke_review_agent(patch, messages)
+            result = await self._invoke_review_agent(context, messages)
 
             if result is not None and result.get("structured_response") is not None:
                 return result["structured_response"], manifest
@@ -270,13 +279,15 @@ class CodeReviewTool(GenerativeModelTool):
 
         raise ValueError("Review agent returned no structured response")
 
-    async def _invoke_review_agent(self, patch: Patch, messages: list) -> dict | None:
+    async def _invoke_review_agent(
+        self, context: CodeReviewContext, messages: list
+    ) -> dict | None:
         """Run the review agent and return its final streamed state."""
         result = None
         try:
             async for chunk in self.agent.astream(
                 {"messages": messages},
-                context=CodeReviewContext(patch=patch),
+                context=context,
                 stream_mode="values",
                 config={"recursion_limit": 500},
             ):

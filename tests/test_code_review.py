@@ -507,6 +507,67 @@ def test_expand_context_fetches_from_stack_base(monkeypatch):
     base_patch.get_old_file.assert_awaited_once_with("file.txt")
 
 
+def _guideline_runtime(monkeypatch, source):
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(
+            context=SimpleNamespace(patch=None, review_context_source=source)
+        ),
+    )
+
+
+def test_read_review_guideline_reads_from_review_context_source(monkeypatch):
+    _guideline_runtime(monkeypatch, ("mozilla-firefox/firefox", "autoland"))
+    fetch = AsyncMock(return_value=SimpleNamespace(text="Checklist\n"))
+    monkeypatch.setattr(langchain_tools, "_fetch_url", fetch)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine(
+            "accessible/docs/HCMCSSChecklist.md"
+        )
+    )
+
+    assert result == "Checklist\n"
+    fetch.assert_awaited_once_with(
+        "https://raw.githubusercontent.com/mozilla-firefox/firefox/refs/heads/"
+        "autoland/accessible/docs/HCMCSSChecklist.md"
+    )
+
+
+def test_read_review_guideline_reports_missing_file(monkeypatch):
+    _guideline_runtime(monkeypatch, ("mozilla-firefox/firefox", "autoland"))
+    request = httpx.Request("GET", "https://example.com")
+    response = httpx.Response(404, request=request)
+    monkeypatch.setattr(
+        langchain_tools,
+        "_fetch_url",
+        AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Not found", request=request, response=response
+            )
+        ),
+    )
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/missing.md")
+    )
+
+    assert result == (
+        "Warning: docs/missing.md does not exist in mozilla-firefox/firefox@autoland."
+    )
+
+
+def test_read_review_guideline_without_review_context(monkeypatch):
+    _guideline_runtime(monkeypatch, None)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/guide.md")
+    )
+
+    assert result.startswith("Warning:")
+
+
 GITHUB = "https://raw.githubusercontent.com/mozilla-firefox/firefox"
 COMMITS_API = "https://api.github.com/repos/mozilla-firefox/firefox/commits"
 SEARCH_API = "https://api.github.com/search/commits"

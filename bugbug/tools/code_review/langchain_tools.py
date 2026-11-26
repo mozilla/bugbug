@@ -15,7 +15,8 @@ from langchain.tools import tool
 from langgraph.runtime import get_runtime
 from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
-from bugbug.tools.code_review.data_types import Skill, SkillLoadError
+from bugbug.tools.code_review.data_types import Skill, SkillLoadError, _fetch_url
+from bugbug.tools.code_review.review_context import _github_raw_url
 from bugbug.tools.core.connection import retry_transient_errors
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
@@ -44,6 +45,8 @@ Tests = Optional[Annotated[Literal["only", "exclude"], StripEnumQuotes]]
 @dataclass
 class CodeReviewContext:
     patch: Patch
+    # (repo, branch) the review guidelines were loaded from, if any.
+    review_context_source: Optional[tuple[str, str]] = None
 
 
 @cache
@@ -142,6 +145,39 @@ async def expand_context(
     if warning:
         return f"Warning: {warning}\n\n{content}"
     return content
+
+
+@tool
+async def read_review_guideline(file_path: str) -> str:
+    """Read a file that the review guidelines in `<external-resources>` point to.
+
+    Use this, not expand_context, for the guidelines, skills, checklists and
+    reference documents the guidelines direct you to read. They are read at the
+    same version as the guidelines, which can be newer than the code this patch
+    is based on. Use expand_context for the code itself.
+
+    Args:
+        file_path: Repository-relative path, e.g. 'accessible/docs/HCMCSSChecklist.md'.
+
+    Returns:
+        The file content.
+    """
+    source = get_runtime(CodeReviewContext).context.review_context_source
+    if source is None:
+        return _tool_error("no review guidelines were loaded for this patch")
+
+    repo, branch = source
+    try:
+        response = await _fetch_url(_github_raw_url(repo, branch, file_path))
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return f"Warning: {file_path} does not exist in {repo}@{branch}."
+        logger.exception("Could not read review guideline %s", file_path)
+        return _tool_error(f"could not read {file_path}: {e}")
+    except httpx.HTTPError as e:
+        logger.exception("Could not read review guideline %s", file_path)
+        return _tool_error(f"could not read {file_path}: {e!r}")
+    return response.text
 
 
 def create_load_skill_tool(skills: list[Skill]):

@@ -16,7 +16,7 @@ SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked 
 
 The `<external-resources>` section, when present, contains review guidelines written by the owners of the code being changed. They are mandatory instructions, not optional background:
 - Follow them as part of your review
-- When they direct you to read other files (e.g. other guidelines, skills, or checklists), read those files with `expand_context` before writing any comment, and follow them too
+- When they direct you to read other files (e.g. other guidelines, skills, or checklists), read those files with `read_review_guideline` before writing any comment, and follow them too
 - Resolve relative paths against the directory of the `name` of the `<context>` element that references them
 
 ## Instructions
@@ -136,7 +136,7 @@ Here is the patch you need to review:
 
 
 EXTERNAL_CONTEXT_INSTRUCTIONS = """
-The owners of this code keep their detailed review checks in separate files, and the guidelines in `<external-resources>` point to them. Reading a file that a guideline points to is part of the review, not optional background: those files contain the checks that catch the issues the guidelines alone do not. Start the review by reading them: before you investigate the code, read in full, with `expand_context`, every file a guideline directs you to read or apply for a patch like this one. Skip only the files that serve steps you cannot perform here, such as running a build or a browser. Resolve relative paths against the directory of the `<context>` that references them. Then review the patch against all of them.
+The owners of this code keep their detailed review checks in separate files, and the guidelines in `<external-resources>` point to them. Reading a file that a guideline points to is part of the review, not optional background: those files contain the checks that catch the issues the guidelines alone do not. Start the review by reading them: before you investigate the code, read in full, with `read_review_guideline`, every file a guideline directs you to read or apply for a patch like this one. Skip only the files that serve steps you cannot perform here, such as running a build or a browser. Resolve relative paths against the directory of the `<context>` that references them. Then review the patch against all of them.
 """
 
 

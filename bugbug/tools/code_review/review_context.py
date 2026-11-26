@@ -606,6 +606,25 @@ def format_external_content(content_items: list[ExternalContentItem]) -> str:
     return f"\n\n<external_context>\n{content}\n</external_context>"
 
 
+async def resolve_review_context_source(
+    patch,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+) -> tuple[str, str] | None:
+    """Return the (repo, branch) review context is loaded from, if any.
+
+    Without an explicit repository, it is inferred from the patch's repository.
+    """
+    if review_context_repo is None:
+        repo_ref = await patch.github_repo_ref()
+        if repo_ref:
+            review_context_repo, inferred_branch = repo_ref
+            review_context_branch = review_context_branch or inferred_branch
+    if not review_context_repo:
+        return None
+    return review_context_repo, review_context_branch or "main"
+
+
 async def resolve_external_context_for_review(
     patch,
     review_context_repo: str | None = None,
@@ -614,17 +633,15 @@ async def resolve_external_context_for_review(
     content_overrides: dict[str, str] | None = None,
 ) -> tuple[str, list[dict]]:
     """Resolve the context repository and load matching review context."""
-    if review_context_repo is None:
-        repo_ref = await patch.github_repo_ref()
-        if repo_ref:
-            review_context_repo, inferred_branch = repo_ref
-            review_context_branch = review_context_branch or inferred_branch
-    if not review_context_repo:
+    source = await resolve_review_context_source(
+        patch, review_context_repo, review_context_branch
+    )
+    if source is None:
         return "", []
     return await load_external_context_for_review(
         patch,
-        review_context_repo,
-        review_context_branch=review_context_branch or "main",
+        source[0],
+        review_context_branch=source[1],
         extra_context_toml=extra_context_toml,
         content_overrides=content_overrides,
     )
