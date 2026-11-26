@@ -13,7 +13,7 @@ from fastapi import (
     Response,
     status,
 )
-from hackbot_client import HackbotClient, Identity
+from hackbot_client import HackbotClient, Identity, IdentityProvider, Source
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -354,9 +354,9 @@ async def _trigger_github_mention(
             "comment": mention.comment,
         },
         dedupe_key=mention.dedupe_key,
-        source="github",
+        source=Source.github,
         identity=Identity(
-            identity_provider="github",
+            identity_provider=IdentityProvider.github,
             user_id=str(mention.sender["id"]),
             username=mention.sender["login"],
         ),

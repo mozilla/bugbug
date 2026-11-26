@@ -31,7 +31,13 @@ from app.routers import webhooks
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from hackbot_client import Identity, RunStatus, TriggeredRun
+from hackbot_client import (
+    Identity,
+    IdentityProvider,
+    RunStatus,
+    Source,
+    TriggeredRun,
+)
 from pydantic import ValidationError
 
 SECRET = "test-github-webhook-secret"
@@ -646,8 +652,10 @@ def test_route_triggers_run_for_conversation_comment(
     assert api.dedupe_keys == ["github-issue-comment:1001"]
     assert api.identities == [
         (
-            "github",
-            Identity(identity_provider="github", user_id="42", username="dev"),
+            Source.github,
+            Identity(
+                identity_provider=IdentityProvider.github, user_id="42", username="dev"
+            ),
         )
     ]
 
