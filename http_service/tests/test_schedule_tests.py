@@ -458,6 +458,63 @@ def test_schedule_backout_try(
     assert result["groups"] == {}
 
 
+def test_schedule_try(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    repo_dir, remote_repo_dir = mock_repo
+
+    # Like try, the remote repository doesn't publish the changesets pushed to it, so
+    # they stay draft when pulled. The base history is public, as on try.
+    with open(f"{remote_repo_dir}/.hg/hgrc", "a") as f:
+        f.write("\n[phases]\npublish = False\n")
+    for d in (repo_dir, remote_repo_dir):
+        with hglib.open(str(d)) as hg:
+            hg.phase(revs=[b"desc('Base history 3')"], public=True)
+
+    with hglib.open(str(remote_repo_dir)) as hg:
+        stack_node = hg.log(limit=1)[0].node
+        try_task_config = f"{remote_repo_dir}/try_task_config.json"
+        with open(try_task_config, "w") as f:
+            f.write("{}\n")
+        hg.add([try_task_config.encode("utf-8")])
+        hg.commit("Try parameters", user="bugbug")
+        rev = hg.log(limit=1)[0].node.decode("ascii")
+
+    stacks = []
+    orig_get_stack = models.repository.get_stack
+
+    def get_stack(repo_dir, branch, r):
+        stack = orig_get_stack(repo_dir, branch, r)
+        stacks.append(stack)
+        return stack
+
+    monkeypatch.setattr(models.repository, "get_stack", get_stack)
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests("try", rev) == "OK"
+
+    # The stack is computed from the local repository: the draft changesets pulled from
+    # the remote one, except the one which only specifies try parameters.
+    assert stacks == [[stack_node]]
+    assert not any(
+        "json-automationrelevance" in call.request.url for call in responses.calls
+    )
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:try_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
+
+
 def test_schedule_backout_treeherder_failure(
     monkeypatch: pytest.MonkeyPatch,
     mock_hgmo: None,
