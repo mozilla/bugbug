@@ -96,7 +96,7 @@ async def expand_context(
     try:
         if isinstance(patch, PhabricatorPatch):
             try:
-                stack = patch._stack_patches
+                stack = await patch.get_stack_patches()
             except ValueError as e:
                 warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
                 stack = [patch]

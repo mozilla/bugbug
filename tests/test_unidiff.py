@@ -332,7 +332,7 @@ class _FakeReviewData(ReviewData):
         self.raw_diff = raw_diff
         self.comments = comments
 
-    def get_patch_by_id(self, patch_id):
+    def get_raw_diff(self, diff_id):
         raise NotImplementedError
 
     def get_all_inline_comments(self, comment_filter):

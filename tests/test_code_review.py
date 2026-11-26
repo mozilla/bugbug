@@ -249,6 +249,9 @@ def test_patch_stack_bails_on_nonlinear_graph():
         def __init__(self):
             pass
 
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {"phid": "PHID-D"}
@@ -262,16 +265,8 @@ def test_patch_stack_bails_on_nonlinear_graph():
                 "PHID-D": ["PHID-B", "PHID-C"],  # diamond
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    try:
-        _ = fake.patch_stack
-        raise AssertionError("expected ValueError")
-    except ValueError as e:
-        assert "not linear" in str(e)
+    with pytest.raises(ValueError, match="not linear"):
+        asyncio.run(FakePatch().get_stack_patches())
 
 
 def test_patch_stack_linear_despite_unrelated_diamond():
@@ -282,6 +277,9 @@ def test_patch_stack_linear_despite_unrelated_diamond():
     # the fixed code must return the 3-entry linear chain without any error.
     class FakePatch(PhabricatorPatch):
         def __init__(self, revision_phid=None):
+            pass
+
+        async def load(self):
             pass
 
         @property
@@ -298,12 +296,7 @@ def test_patch_stack_linear_despite_unrelated_diamond():
                 "PHID-E": ["PHID-C"],
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    stack = fake.patch_stack
+    stack = asyncio.run(FakePatch().get_stack_patches())
     assert len(stack) == 3  # A, C, E
 
 
@@ -554,6 +547,9 @@ def make_phabricator_stack(
         stack_graph = {phid: phids[i - 1 : i] for i, phid in enumerate(phids)}
 
     class FakeStackPatch(phab_platform.PhabricatorPatch):
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {
@@ -576,8 +572,7 @@ def make_phabricator_stack(
         def raw_diff(self):
             return by_phid[self._revision_phid][1]
 
-        @property
-        def _changesets(self):
+        async def _get_changesets(self):
             return [
                 {
                     "id": f"{self._revision_phid}:{pf.path}",
@@ -625,7 +620,7 @@ def make_phabricator_stack(
             return httpx.Response(200, json=body, request=request)
         return httpx.Response(200, text=body, request=request)
 
-    def conduit(method, ids):
+    async def conduit(method, ids):
         requests.append((method, ids))
         local_commits = {"local-node": {"firstPublicParent": first_public_parent}}
         return {
@@ -640,11 +635,7 @@ def make_phabricator_stack(
     monkeypatch.setattr(
         phab_platform, "get_http_client", lambda: SimpleNamespace(get=get)
     )
-    monkeypatch.setattr(
-        phab_platform,
-        "get_phabricator_client",
-        lambda: SimpleNamespace(request=conduit),
-    )
+    monkeypatch.setattr(phab_platform, "_conduit", conduit)
     return FakeStackPatch(revision_phid=phids[-1]), requests
 
 
@@ -878,7 +869,7 @@ def test_expand_context_reports_github_error_without_reading_latest(monkeypatch)
         repo_files={(CENTRAL, "c.txt"): 503},
     )
     monkeypatch.setattr(
-        phab_platform.PhabricatorPatch._get_file_from_repo.retry, "sleep", AsyncMock()
+        phab_platform.PhabricatorPatch._get_github_file.retry, "sleep", AsyncMock()
     )
     result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
     assert result.startswith("Warning: could not retrieve c.txt")
@@ -2249,6 +2240,7 @@ def test_run_appends_scope_suggestion_last():
 
     patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
     patch.raw_diff = "diff"
+    patch.load = AsyncMock()
 
     tool.count_tokens = MagicMock(return_value=10)
     tool._agent_model = "model-x"

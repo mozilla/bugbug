@@ -5,18 +5,18 @@
 
 """Phabricator platform implementation for code review."""
 
+import asyncio
+import json
 import os
 from collections import defaultdict
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
-import tenacity
 from async_lru import alru_cache
-from libmozdata.phabricator import PhabricatorRevisionNotFoundException
+from libmozdata.phabricator import ConduitError, PhabricatorRevisionNotFoundException
 from tqdm import tqdm
-from unidiff import PatchSet
 
 from bugbug.tools.core.connection import (
     get_github_api_headers,
@@ -117,15 +117,29 @@ def get_phabricator_client(
     return PhabricatorAPI(api_key, api_url)
 
 
-@cache
-def resolve_project_phid(slug: str) -> Optional[str]:
+@retry_transient_errors()
+async def _conduit(method: str, **params: Any) -> Any:
+    """Call a read-only Conduit API method through the shared HTTP client."""
+    payload = {**params, "__conduit__": {"token": os.getenv("PHABRICATOR_API_KEY")}}
+    r = await get_http_client().post(
+        f"{_base_url()}/api/{method}",
+        data={"params": json.dumps(payload), "output": "json"},
+        headers=_edge_key_headers(),
+    )
+    r.raise_for_status()
+    data = r.json()
+    ConduitError.raise_if_error(data)
+    return data["result"]
+
+
+@alru_cache
+async def resolve_project_phid(slug: str) -> Optional[str]:
     """Resolve a Phabricator project slug to its PHID.
 
     Returns None if no project matches the slug. Cached for the process
     lifetime since project PHIDs are stable; a cold start re-resolves.
     """
-    phabricator = get_phabricator_client()
-    response = phabricator.request(
+    response = await _conduit(
         "project.search",
         constraints={"slugs": [slug]},
     )
@@ -135,14 +149,13 @@ def resolve_project_phid(slug: str) -> Optional[str]:
     return data[0]["phid"]
 
 
-@cache
-def _repo_callsign(repository_phid: str) -> Optional[str]:
+@alru_cache
+async def _repo_callsign(repository_phid: str) -> Optional[str]:
     """Resolve a Phabricator repository PHID to its callsign.
 
     Cached for the process lifetime; callsigns are effectively static.
     """
-    phabricator = get_phabricator_client()
-    response = phabricator.request(
+    response = await _conduit(
         "diffusion.repository.search",
         constraints={"phids": [repository_phid]},
     )
@@ -152,15 +165,14 @@ def _repo_callsign(repository_phid: str) -> Optional[str]:
     return data[0]["fields"].get("callsign")
 
 
-@cache
-def get_project_members(project_phid: str) -> frozenset[str]:
+@alru_cache
+async def get_project_members(project_phid: str) -> frozenset[str]:
     """Return the set of user PHIDs that are members of a Phabricator project.
 
     Cached for the process lifetime; a process restart re-fetches and picks up
     membership changes.
     """
-    phabricator = get_phabricator_client()
-    response = phabricator.request(
+    response = await _conduit(
         "project.search",
         constraints={"phids": [project_phid]},
         attachments={"members": True},
@@ -174,26 +186,31 @@ def get_project_members(project_phid: str) -> frozenset[str]:
     )
 
 
-def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
-    """Internal implementation for fetching user information.
+async def _get_users_info_batch(user_phids: set[str]) -> dict[str, dict]:
+    """Fetch user information for multiple user PHIDs at once.
 
-    This function is retried by the wrapper function.
+    Args:
+        user_phids: Set of user PHIDs to fetch (PHID-USER-xxx)
+
+    Returns:
+        Dictionary mapping user PHID to info dict with keys:
+        - email: User's email address
+        - is_trusted: Whether user is in bmo-editbugs-team
+        - real_name: User's real name
     """
-    phabricator = get_phabricator_client()
-
     if not user_phids:
         return {}
 
     logger.info("Fetching user info for %s PHIDs", len(user_phids))
 
     # Get user names and nick
-    users_response = phabricator.request(
+    users_response = await _conduit(
         "user.search",
         constraints={"phids": list(user_phids)},
     )
 
     # Determine trusted status via bmo-editbugs-team membership.
-    trusted_members = get_project_members(EDITBUGS_GROUP_PHID)
+    trusted_members = await get_project_members(EDITBUGS_GROUP_PHID)
 
     result = {}
     for user_data in users_response.get("data", []):
@@ -210,32 +227,6 @@ def _get_users_info_batch_impl(user_phids: set[str]) -> dict[str, dict]:
         }
 
     return result
-
-
-@tenacity.retry(
-    stop=tenacity.stop_after_attempt(3),
-    wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
-    retry=tenacity.retry_if_exception_type(Exception),
-    reraise=True,
-)
-def _get_users_info_batch_with_retry(user_phids: set[str]) -> dict[str, dict]:
-    """Fetch user information with retries."""
-    return _get_users_info_batch_impl(user_phids)
-
-
-def _get_users_info_batch(user_phids: set[str]) -> dict[str, dict]:
-    """Fetch user information for multiple user PHIDs at once.
-
-    Args:
-        user_phids: Set of user PHIDs to fetch (PHID-USER-xxx)
-
-    Returns:
-        Dictionary mapping user PHID to info dict with keys:
-        - email: User's email address
-        - is_trusted: Whether user is in bmo-editbugs-team
-        - real_name: User's real name
-    """
-    return _get_users_info_batch_with_retry(user_phids)
 
 
 def _sanitize_comments(comments: list, users_info: dict[str, dict]) -> tuple[list, int]:
@@ -399,11 +390,53 @@ class PhabricatorPatch(Patch):
     def patch_url(self) -> str:
         return f"{_base_url()}/D{self.revision_id}"
 
-    def is_accessible(self) -> bool:
+    @alru_cache
+    async def load(self) -> None:
+        """Fetch the revision and the diff that the synchronous properties read.
+
+        Raises PhabricatorRevisionNotFoundException if the revision does not
+        exist or is not visible.
+        """
+        if self._revision_id or self._revision_phid:
+            self._revision_metadata = await self._search_revision()
+            self._diff_metadata, self._raw_diff = await self._fetch_diff()
+        else:
+            self._diff_metadata, self._raw_diff = await self._fetch_diff()
+            self._revision_phid = self._diff_metadata["revisionPHID"]
+            self._revision_metadata = await self._search_revision()
+
+    async def _search_revision(self) -> dict:
+        # We pass either the revision ID or the revision PHID, not both.
+        constraints = (
+            {"ids": [self._revision_id]}
+            if self._revision_id
+            else {"phids": [self._revision_phid]}
+        )
+        revisions = (
+            await _conduit("differential.revision.search", constraints=constraints)
+        )["data"]
+        if len(revisions) != 1:
+            raise PhabricatorRevisionNotFoundException()
+        return revisions[0]
+
+    async def _fetch_diff(self) -> tuple[dict, str]:
+        diffs, raw_diff = await asyncio.gather(
+            _conduit("differential.diff.search", constraints={"ids": [self.diff_id]}),
+            _conduit("differential.getrawdiff", diffID=self.diff_id),
+        )
+        (diff,) = diffs["data"]
+        # Flatten the fields and index the refs by type, like libmozdata does.
+        diff.update(diff.pop("fields"))
+        diff["refs"] = {ref["type"]: ref for ref in diff["refs"]}
+        diff["baseRevision"] = diff["refs"].get("base", {}).get("identifier")
+        return diff, raw_diff
+
+    async def is_accessible(self) -> bool:
         try:
-            return bool(self._revision_metadata)
+            await self.load()
         except PhabricatorRevisionNotFoundException:
             return False
+        return True
 
     def is_public(self) -> bool:
         return self._revision_metadata["fields"]["policy"]["view"] == "public"
@@ -435,17 +468,19 @@ class PhabricatorPatch(Patch):
 
         raise ValueError("Cannot determine revision PHID")
 
-    @retry_transient_errors()
     async def _get_file_from_patch(self, file_path: str, is_before_patch: bool) -> str:
-        for changeset in self._changesets:
+        for changeset in await self._get_changesets():
             if changeset["fields"]["path"]["displayPath"] == file_path:
                 break
         else:
             raise FileNotFoundError(f"File {file_path} not found in changesets")
 
-        changeset_id = changeset["id"]
-
         view = "old" if is_before_patch else "new"
+        return await self._get_changeset_view(changeset["id"], view)
+
+    @staticmethod
+    @retry_transient_errors()
+    async def _get_changeset_view(changeset_id: int, view: str) -> str:
         client = get_http_client()
         r = await client.get(
             f"{_base_url()}/differential/changeset/?view={view}&ref={changeset_id}",
@@ -463,9 +498,14 @@ class PhabricatorPatch(Patch):
         repo, _branch = repo_ref
         return repo
 
-    @retry_transient_errors()
     async def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
-        repo = await self._github_repo()
+        return await self._get_github_file(
+            await self._github_repo(), commit_hash, file_path
+        )
+
+    @staticmethod
+    @retry_transient_errors()
+    async def _get_github_file(repo: str, commit_hash: str, file_path: str) -> str:
         client = get_http_client()
         r = await client.get(
             f"https://raw.githubusercontent.com/{repo}/{commit_hash}/{file_path}",
@@ -512,7 +552,7 @@ class PhabricatorPatch(Patch):
         """
         if file_path.startswith(("a/", "b/")):
             file_path = file_path[2:]
-        patches = self._stack_patches if stack is None else stack
+        patches = await self.get_stack_patches() if stack is None else stack
         for patch in reversed(patches):
             old_view = before_patch and patch is self
             for patched_file in patch.patch_set:
@@ -540,34 +580,18 @@ class PhabricatorPatch(Patch):
             file_path, commit_hash=await base_patch.get_base_commit_hash()
         )
 
-    @cached_property
-    def _changesets(self) -> list[dict]:
-        phabricator = get_phabricator_client()
-
-        diff = self._diff_metadata
-
-        changesets = phabricator.request(
-            "differential.changeset.search",
-            constraints={"diffPHIDs": [diff["phid"]]},
+    @alru_cache
+    async def _get_changesets(self) -> list[dict]:
+        return (
+            await _conduit(
+                "differential.changeset.search",
+                constraints={"diffPHIDs": [self._diff_metadata["phid"]]},
+            )
         )["data"]
 
-        return changesets
-
-    @cached_property
+    @property
     def raw_diff(self) -> str:
-        phabricator = get_phabricator_client()
-        raw_diff = phabricator.load_raw_diff(self.diff_id)
-
-        return raw_diff
-
-    @cached_property
-    def _diff_metadata(self) -> dict:
-        phabricator = get_phabricator_client()
-        diffs = phabricator.search_diffs(diff_id=self.diff_id)
-        assert len(diffs) == 1
-        diff = diffs[0]
-
-        return diff
+        return self._raw_diff
 
     async def get_base_revision(self) -> Optional[str]:
         try:
@@ -617,11 +641,9 @@ class PhabricatorPatch(Patch):
 
         return None
 
-    @cached_property
-    def _first_public_parent(self) -> Optional[str]:
+    async def _get_first_public_parent(self) -> Optional[str]:
         """Return the public ancestor moz-phab recorded for this diff, if any."""
-        phabricator = get_phabricator_client()
-        diff = phabricator.request("differential.querydiffs", ids=[self.diff_id])[
+        diff = (await _conduit("differential.querydiffs", ids=[self.diff_id]))[
             str(self.diff_id)
         ]
         # Conduit encodes an empty property map as an empty list.
@@ -647,7 +669,7 @@ class PhabricatorPatch(Patch):
         if commit_hash and await self._commit_exists(repo, commit_hash):
             return commit_hash
 
-        first_public_parent = self._first_public_parent
+        first_public_parent = await self._get_first_public_parent()
         if first_public_parent and await self._commit_exists(repo, first_public_parent):
             return first_public_parent
 
@@ -677,26 +699,12 @@ class PhabricatorPatch(Patch):
         return datetime.fromtimestamp(self._diff_metadata["dateModified"])
 
     @cached_property
-    def _revision_metadata(self) -> dict:
-        phabricator = get_phabricator_client()
-
-        # We pass either the revision PHID or the revision ID, not both.
-        revision_phid = self.revision_phid if not self._revision_id else None
-
-        revision = phabricator.load_revision(
-            rev_phid=revision_phid, rev_id=self._revision_id
-        )
-
-        return revision
-
-    @cached_property
     def bug(self) -> Bug:
         return Bug.get(self.bug_id)
 
     async def bug_component(self) -> Optional[str]:
         if not self.has_bug:
             return None
-        import asyncio
 
         from libmozdata.bugzilla import Bugzilla
 
@@ -723,11 +731,7 @@ class PhabricatorPatch(Patch):
         if not repository_phid:
             return None
 
-        import asyncio
-
-        callsign = await asyncio.get_event_loop().run_in_executor(
-            None, _repo_callsign, repository_phid
-        )
+        callsign = await _repo_callsign(repository_phid)
         if not callsign:
             return None
 
@@ -769,15 +773,13 @@ class PhabricatorPatch(Patch):
     def author_phid(self) -> str:
         return self._revision_metadata["fields"]["authorPHID"]
 
-    @cached_property
-    def reviewer_phids(self) -> list[str]:
+    async def get_reviewer_phids(self) -> list[str]:
         """PHIDs of the revision's reviewers (a mix of users and projects).
 
         The reviewers attachment is not part of the default revision metadata,
         so we fetch it with a dedicated ``differential.revision.search`` call.
         """
-        phabricator = get_phabricator_client()
-        response = phabricator.request(
+        response = await _conduit(
             "differential.revision.search",
             constraints={"phids": [self.revision_phid]},
             attachments={"reviewers": True},
@@ -792,13 +794,15 @@ class PhabricatorPatch(Patch):
             if r.get("reviewerPHID")
         ]
 
-    @property
-    def reviewer_project_phids(self) -> list[str]:
+    async def get_reviewer_project_phids(self) -> list[str]:
         """PHIDs of the revision's reviewer *groups* (Phabricator projects)."""
-        return [phid for phid in self.reviewer_phids if phid.startswith("PHID-PROJ-")]
+        return [
+            phid
+            for phid in await self.get_reviewer_phids()
+            if phid.startswith("PHID-PROJ-")
+        ]
 
-    @cached_property
-    def historical_reviewer_project_phids(self) -> list[str]:
+    async def get_historical_reviewer_project_phids(self) -> list[str]:
         """Reviewer-group PHIDs that were *ever* added as reviewers.
 
         A review rotation adds a group as a reviewer, assigns an individual
@@ -818,11 +822,11 @@ class PhabricatorPatch(Patch):
                 seen.add(phid)
                 phids.append(phid)
 
-        for phid in self.reviewer_project_phids:
+        for phid in await self.get_reviewer_project_phids():
             _add(phid)
 
         try:
-            transactions = self._get_transactions()
+            transactions = await self._get_transactions()
         except Exception:
             logger.exception(
                 "Could not fetch transactions for D%s; using current reviewers only",
@@ -850,9 +854,9 @@ class PhabricatorPatch(Patch):
     def stack_graph(self) -> dict:
         return self._revision_metadata["fields"].get("stackGraph", {})
 
-    @cached_property
-    def _stack_patches(self) -> list[PhabricatorPatch]:
-        """Return patches from the bottom-most ancestor to this revision.
+    @alru_cache
+    async def get_stack_patches(self) -> list[PhabricatorPatch]:
+        """Return loaded patches from the bottom-most ancestor to this revision.
 
         Walks the Phabricator stackGraph from the bottom-most ancestor up to the
         current revision. A non-linear ancestry raises ValueError.
@@ -880,29 +884,20 @@ class PhabricatorPatch(Patch):
             phid = deps[0] if deps else None
         ordered_phids.reverse()
 
-        return [
+        stack = [
             self if phid == current_phid else self.__class__(revision_phid=phid)
             for phid in ordered_phids
         ]
+        await asyncio.gather(*(patch.load() for patch in stack))
+        return stack
 
-    @cached_property
-    def patch_stack(self) -> list[PatchSet]:
-        return [patch.patch_set for patch in self._stack_patches]
-
-    @property
-    def stack_base_patch(self) -> PhabricatorPatch:
-        return self._stack_patches[0]
-
-    @cached_property
-    def _all_comments(self) -> list:
-        return [c for c in self.get_comments() if c.is_renderable]
-
-    @cached_property
-    def _users_info(self) -> dict[str, dict]:
-        user_phids = {c.author_phid for c in self._all_comments} | {self.author_phid}
-        if self.author_phid != self.diff_author_phid:
-            user_phids.add(self.diff_author_phid)
-        return _get_users_info_batch(user_phids)
+    async def _load_comments(self) -> None:
+        """Fetch the comments, and the users who wrote them, rendered by to_md()."""
+        self._all_comments = [c for c in await self.get_comments() if c.is_renderable]
+        self._users_info = await _get_users_info_batch(
+            {c.author_phid for c in self._all_comments}
+            | {self.author_phid, self.diff_author_phid}
+        )
 
     def _format_user_display(self, user_phid: str) -> str:
         info = self._users_info.get(user_phid, {})
@@ -934,32 +929,32 @@ class PhabricatorPatch(Patch):
     def comments(self) -> list:
         return sorted(self._all_comments, key=lambda c: c.date_created)
 
-    def _get_transactions(self) -> list[dict]:
-        phabricator = get_phabricator_client()
-
-        transactions = phabricator.request(
-            "transaction.search",
-            objectIdentifier=self._revision_metadata["phid"],
+    async def _get_transactions(self) -> list[dict]:
+        return (
+            await _conduit(
+                "transaction.search",
+                objectIdentifier=self._revision_metadata["phid"],
+            )
         )["data"]
 
-        return transactions
-
-    def get_comments(
+    async def get_comments(
         self,
-    ) -> Iterable[PhabricatorInlineComment | PhabricatorGeneralComment]:
-        transactions = self._get_transactions()
+    ) -> list[PhabricatorInlineComment | PhabricatorGeneralComment]:
+        return [
+            comment
+            for transaction in await self._get_transactions()
+            if (comment := phabricator_transaction_to_comment(transaction))
+        ]
 
-        for transaction in transactions:
-            comment = phabricator_transaction_to_comment(transaction)
-            if comment:
-                yield comment
-
-    def to_md(self) -> str:
+    async def to_md(self) -> str:
         """Generate a comprehensive, LLM-friendly markdown representation of the patch.
 
         Returns a well-structured markdown document that includes revision metadata,
         diff information, stack information, code changes, and comments.
         """
+        await self.load()
+        await self._load_comments()
+
         date_format = "%Y-%m-%d %H:%M:%S"
         md_lines = []
 
@@ -1018,6 +1013,9 @@ class PhabricatorPatch(Patch):
                 )
                 for phid in stack_graph
             }
+            others = [patch for patch in patch_map.values() if patch is not self]
+            await asyncio.gather(*(patch.load() for patch in others))
+            await asyncio.gather(*(patch._load_comments() for patch in others))
 
             for phid, dependencies in stack_graph.items():
                 from_patch = patch_map[phid]
@@ -1168,13 +1166,8 @@ class SanitizedPhabricatorPatch(PhabricatorPatch):
 
 
 class PhabricatorReviewData(ReviewData):
-    @tenacity.retry(
-        stop=tenacity.stop_after_attempt(7),
-        wait=tenacity.wait_exponential(multiplier=2, min=2),
-        reraise=True,
-    )
-    def get_patch_by_id(self, patch_id: str | int) -> Patch:
-        return PhabricatorPatch(patch_id)
+    def get_raw_diff(self, diff_id: int) -> str:
+        return get_phabricator_client().load_raw_diff(diff_id)
 
     def get_all_inline_comments(
         self, comment_filter

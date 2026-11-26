@@ -9,7 +9,6 @@ Fetches review-context.toml from a GitHub repository, matches changed files
 against the rules, and pre-loads the referenced content.
 """
 
-import asyncio
 import fnmatch
 import hashlib
 import json
@@ -338,15 +337,11 @@ async def _fetch_revision(
             return None
         rev_num = int(m.group(1))
         try:
-            from bugbug.tools.core.platforms.phabricator import get_phabricator_client
+            from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
-            def _load():
-                phab = get_phabricator_client()
-                revision = phab.load_revision(rev_id=rev_num)
-                diff_id = revision["fields"]["diffID"]
-                return phab.load_raw_diff(diff_id)
-
-            content = await asyncio.get_event_loop().run_in_executor(None, _load)
+            patch = PhabricatorPatch(revision_id=rev_num)
+            await patch.load()
+            content = patch.raw_diff
             name = f"Revision D{rev_num}"
             return (
                 name,

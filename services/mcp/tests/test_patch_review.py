@@ -8,6 +8,7 @@ from fastmcp.client import Client
 @pytest.fixture
 def review_dependencies(mocker):
     patch = Mock()
+    patch.load = AsyncMock()
     patch.github_repo_ref = AsyncMock(return_value=("inferred/repo", "release"))
     mocker.patch("bugbug_mcp.server.PhabricatorPatch", return_value=patch)
     tool = Mock(target_software="Firefox")
