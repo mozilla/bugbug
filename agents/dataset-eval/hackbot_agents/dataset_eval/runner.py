@@ -240,6 +240,9 @@ class Runner:
                 log.info("bootstrapping the toolchain")
                 bootstrap = await bootstrap_firefox(src)
                 if not bootstrap.get("success"):
+                    for stream in ("stdout", "stderr"):
+                        tail = bootstrap.get(stream, "").splitlines()[-100:]
+                        log.error("mach bootstrap %s:\n%s", stream, "\n".join(tail))
                     raise AgentError(f"bootstrap failed: {bootstrap.get('message')}")
             log.info(
                 "building Firefox after %s (the first build is the long one)",
