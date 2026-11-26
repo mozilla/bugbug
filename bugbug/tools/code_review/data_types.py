@@ -153,7 +153,7 @@ class ExternalContentLoadError(Exception):
 
 @retry_transient_errors()
 async def _fetch_url(url: str, headers: dict[str, str] | None = None) -> httpx.Response:
-    response = await get_http_client().get(url, headers=headers, timeout=30)
+    response = await get_http_client().get(url, headers=headers)
     response.raise_for_status()
     return response
 

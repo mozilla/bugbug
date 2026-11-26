@@ -9,6 +9,8 @@ import httpx
 import pytest
 
 from bugbug.tools.core.connection import (
+    close_http_client,
+    get_http_client,
     is_transient_http_error,
     retry_transient_errors,
 )
@@ -88,3 +90,11 @@ async def test_retry_honors_retry_after(retry_after, expected) -> None:
     )
     assert await fetch() == "ok"
     sleep.assert_awaited_once_with(expected)
+
+
+@pytest.mark.asyncio
+async def test_http_client_timeouts() -> None:
+    await close_http_client()
+    timeout = get_http_client().timeout
+    assert (timeout.connect, timeout.read) == (10, 60)
+    await close_http_client()

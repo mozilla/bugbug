@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 # Longest wait honored from a Retry-After header, so a single call stays bounded.
 MAX_RETRY_AFTER = 30
 
+# Connecting is quick unless something is wrong, and failures are retried. Reads
+# get more time: Conduit can take tens of seconds on large revisions, GitHub
+# serves large files slowly, and the timers keep running while the event loop
+# is busy with other concurrent reviews.
+HTTP_TIMEOUT = httpx.Timeout(60, connect=10)
+
 
 def get_user_agent() -> str:
     """Get the User-Agent string from environment or default."""
@@ -75,6 +81,7 @@ def get_http_client() -> httpx.AsyncClient:
     """Get the shared HTTP client instance."""
     http_client = httpx.AsyncClient(
         follow_redirects=True,
+        timeout=HTTP_TIMEOUT,
         headers={
             "User-Agent": get_user_agent(),
         },
