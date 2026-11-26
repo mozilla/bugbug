@@ -185,6 +185,49 @@ def test_clone_changetracker_db(fake_hg_repo):
     assert not glob.glob(os.path.join("ciao-shared", "*", ".hg", "changetracker.db"))
 
 
+def test_get_stack_try(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    public = commit(hg)
+    hg.phase(revs=[public.encode("ascii")], public=True)
+
+    add_file(hg, local, "file2", "1\n")
+    revision1 = commit(hg)
+    add_file(hg, local, "try_task_config.json", "{}\n")
+    commit(hg)
+    add_file(hg, local, "file3", "1\n")
+    revision2 = commit(hg)
+
+    # The public changesets and the ones which only specify try parameters are not
+    # part of the stack.
+    assert repository.get_stack(local, "try", revision2) == [
+        revision1.encode("ascii"),
+        revision2.encode("ascii"),
+    ]
+
+
+def test_get_stack_hgmo(fake_hg_repo, monkeypatch):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n")
+    revision = commit(hg)
+
+    monkeypatch.setattr(
+        repository.utils,
+        "get_hgmo_stack",
+        lambda branch, rev: [f"hgmo {branch} {rev}".encode("ascii")],
+    )
+
+    # The pushes of the other repositories are only known by hg.mozilla.org.
+    branch = "integration/autoland"
+    assert repository.get_stack(local, branch, revision) == [
+        f"hgmo {branch} {revision}".encode("ascii")
+    ]
+    # Revisions which aren't full nodes are not evaluated as revsets.
+    assert repository.get_stack(local, "try", "tip") == [b"hgmo try tip"]
+
+
 def test_get_revs(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 

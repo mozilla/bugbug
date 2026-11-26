@@ -29,7 +29,7 @@ from bugbug.models.perf_regression_predictor import (
 from bugbug.perf.calibration import Calibration, load_calibrations
 from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
-from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
+from bugbug.utils import get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -740,9 +740,9 @@ def schedule_tests(branch: str, rev: str) -> str:
     repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision
-    LOGGER.info("Loading commits to analyze using automationrelevance...")
+    LOGGER.info("Loading the commits to analyze...")
     try:
-        revs = get_hgmo_stack(branch, rev)
+        revs = repository.get_stack(REPO_DIR, branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning("Push not found for %s @ %s!", branch, rev)
         return "NOK"
