@@ -22,6 +22,7 @@ from bugbug.tools.core.connection import (
     get_github_api_headers,
     get_http_client,
     get_user_agent,
+    retry_transient_errors,
 )
 from bugbug.tools.core.data_types import InlineComment
 from bugbug.tools.core.platforms.base import Patch, ReviewData
@@ -434,6 +435,7 @@ class PhabricatorPatch(Patch):
 
         raise ValueError("Cannot determine revision PHID")
 
+    @retry_transient_errors()
     async def _get_file_from_patch(self, file_path: str, is_before_patch: bool) -> str:
         for changeset in self._changesets:
             if changeset["fields"]["path"]["displayPath"] == file_path:
@@ -461,6 +463,7 @@ class PhabricatorPatch(Patch):
         repo, _branch = repo_ref
         return repo
 
+    @retry_transient_errors()
     async def _get_file_from_repo(self, file_path: str, commit_hash: str) -> str:
         repo = await self._github_repo()
         client = get_http_client()
@@ -573,6 +576,7 @@ class PhabricatorPatch(Patch):
             return None
 
     @staticmethod
+    @retry_transient_errors()
     async def _commit_exists(repo: str, commit_hash: str) -> bool:
         client = get_http_client()
         r = await client.get(
@@ -590,6 +594,7 @@ class PhabricatorPatch(Patch):
         return True
 
     @staticmethod
+    @retry_transient_errors()
     async def _latest_landing_commit(repo: str, before: datetime) -> Optional[str]:
         """Return the latest autoland-to-mozilla-central merge at or before `before`."""
         subjects = " OR ".join(f'"{subject}"' for subject in LANDING_MERGE_SUBJECTS)

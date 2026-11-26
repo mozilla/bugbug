@@ -453,6 +453,7 @@ async def test_load_skill_fetch_failure(caplog):
     client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
     with (
         patch.object(data_types, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
         caplog.at_level(logging.ERROR, logger=langchain_tools.logger.name),
     ):
         result = await tool.ainvoke({"name": "mozilla-style"})
@@ -871,13 +872,17 @@ def test_expand_context_does_not_read_latest_when_base_lookup_fails(monkeypatch)
 
 
 def test_expand_context_reports_github_error_without_reading_latest(monkeypatch):
-    patch, _ = make_phabricator_stack(
+    patch, requests = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
         repo_files={(CENTRAL, "c.txt"): 503},
     )
+    monkeypatch.setattr(
+        phab_platform.PhabricatorPatch._get_file_from_repo.retry, "sleep", AsyncMock()
+    )
     result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
     assert result.startswith("Warning: could not retrieve c.txt")
+    assert requests.count(f"{GITHUB}/{CENTRAL}/c.txt") == 4
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
 
@@ -1728,7 +1733,6 @@ async def test_load_external_content_for_diff_file_load():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, review_context_branch="release"
@@ -1770,7 +1774,6 @@ async def test_load_external_content_for_diff_no_match():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(diff, review_context_repo)
 
@@ -1785,7 +1788,7 @@ async def test_load_external_content_for_diff_rules_fetch_failure():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, "mozilla-firefox/firefox"
@@ -1824,7 +1827,6 @@ load = [{ type = "file", path = "skills/guide.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
 
@@ -1860,7 +1862,6 @@ load = [{ type = "file", path = "skills/high.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1894,7 +1895,6 @@ load = [{ type = "file", repo = "whatwg/html", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1928,7 +1928,6 @@ load = [{ type = "file", repo = "mozilla/cubeb", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -2032,7 +2031,6 @@ async def test_content_override_used_instead_of_fetch():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -2058,7 +2056,6 @@ async def test_external_content_manifest_and_prompt_body():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -2124,7 +2121,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             diff_js,
@@ -2161,7 +2157,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,

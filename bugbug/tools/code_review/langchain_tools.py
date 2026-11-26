@@ -11,12 +11,12 @@ from logging import getLogger
 from typing import Annotated, Literal, Optional
 
 import httpx
-import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
 from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
+from bugbug.tools.core.connection import retry_transient_errors
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
@@ -24,12 +24,7 @@ from bugbug.tools.core.validators import StripEnumQuotes
 
 logger = getLogger(__name__)
 
-_retry = tenacity.retry(
-    stop=tenacity.stop_after_attempt(3),
-    wait=tenacity.wait_exponential(multiplier=1, min=1, max=4),
-    retry=tenacity.retry_if_exception_type(SearchfoxNetworkError),
-    reraise=True,
-)
+_retry = retry_transient_errors(lambda e: isinstance(e, SearchfoxNetworkError))
 
 
 def _tool_error(message: str, *, fatal: bool = False) -> str:

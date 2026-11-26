@@ -2,10 +2,9 @@ import re
 from typing import Annotated
 
 import httpx
-import tenacity
 from pydantic import BaseModel, Field, PrivateAttr
 
-from bugbug.tools.core.connection import get_http_client
+from bugbug.tools.core.connection import get_http_client, retry_transient_errors
 from bugbug.tools.core.data_types import (
     CommentCategory,
     CommentSeverity,
@@ -138,8 +137,7 @@ class Skill(BaseModel):
             return self._cached_body
 
         try:
-            response = await get_http_client().get(self.url, timeout=30)
-            response.raise_for_status()
+            response = await _fetch_url(self.url)
         except httpx.HTTPError as e:
             raise SkillLoadError(
                 f"Could not load skill '{self.name}' from {self.url}"
@@ -153,22 +151,9 @@ class ExternalContentLoadError(Exception):
     """Raised when an ExternalContent body cannot be loaded."""
 
 
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code
-        # 429: rate limited; 5xx: temporary server error
-        return status == 429 or status >= 500
-    return isinstance(exc, httpx.TransportError)
-
-
-@tenacity.retry(
-    stop=tenacity.stop_after_attempt(3),
-    wait=tenacity.wait_exponential(multiplier=1, min=1),
-    retry=tenacity.retry_if_exception(_is_retryable),
-    reraise=True,
-)
-async def _fetch_url(url: str) -> httpx.Response:
-    response = await get_http_client().get(url, timeout=30)
+@retry_transient_errors()
+async def _fetch_url(url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+    response = await get_http_client().get(url, headers=headers, timeout=30)
     response.raise_for_status()
     return response
 
