@@ -33,18 +33,30 @@ def main() -> None:
     os.nice(10)
 
     # The test tasks among which configs are selected are updated much more often than the rest,
-    # so that the selected configs run on tasks renamed since the latest backstop push.
+    # so that the selected configs run on tasks renamed since the latest backstop push, and the
+    # commits more often too, so that few are left to mine by the jobs which need the latest ones.
     next_refresh = time.monotonic() + boot.REFRESH_INTERVAL
+    next_commits_refresh = time.monotonic() + boot.COMMITS_REFRESH_INTERVAL
     while True:
         time.sleep(boot.CONFIG_SELECTION_TASKS_REFRESH_INTERVAL)
         if time.monotonic() >= next_refresh:
+            # Including the commits and the config selection tasks.
             boot.refresh_data()
             next_refresh = time.monotonic() + boot.REFRESH_INTERVAL
-        else:
+            next_commits_refresh = time.monotonic() + boot.COMMITS_REFRESH_INTERVAL
+            continue
+
+        if time.monotonic() >= next_commits_refresh:
             try:
-                boot.refresh_config_selection_tasks()
+                boot.refresh_commits()
             except Exception:
-                logger.exception("Failed to refresh the config selection tasks")
+                logger.exception("Failed to refresh the commits")
+            next_commits_refresh = time.monotonic() + boot.COMMITS_REFRESH_INTERVAL
+
+        try:
+            boot.refresh_config_selection_tasks()
+        except Exception:
+            logger.exception("Failed to refresh the config selection tasks")
 
 
 if __name__ == "__main__":
