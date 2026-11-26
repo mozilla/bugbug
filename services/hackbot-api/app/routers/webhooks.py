@@ -245,9 +245,9 @@ async def bugzilla_webhook(
             "comment": detected.comment,
         },
         dedupe_key=f"ni{detected.flag_id}",
-        source="bugzilla",
+        source=Source.bugzilla,
         identity=Identity(
-            identity_provider="bugzilla",
+            identity_provider=IdentityProvider.bugzilla,
             user_id=str(detected.user_id),
             username=nick,
         ),

@@ -33,7 +33,13 @@ from app.phabricator_webhook import (
 )
 from app.routers import webhooks
 from fastapi.testclient import TestClient
-from hackbot_client import Identity, RunStatus, TriggeredRun
+from hackbot_client import (
+    Identity,
+    IdentityProvider,
+    RunStatus,
+    Source,
+    TriggeredRun,
+)
 from sqlalchemy.dialects import postgresql
 
 SECRET = "test-secret"
@@ -906,9 +912,9 @@ def test_bugzilla_route_triggers_run(client, bugzilla_authorizer):
     ]
     assert fake_api.identities == [
         (
-            "bugzilla",
+            Source.bugzilla,
             Identity(
-                identity_provider="bugzilla",
+                identity_provider=IdentityProvider.bugzilla,
                 user_id="560562",
                 username="sparky",
             ),
