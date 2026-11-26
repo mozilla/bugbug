@@ -30,11 +30,21 @@ def get_user_agent() -> str:
     return os.getenv("USER_AGENT", "bugbug")
 
 
-@cache
-def get_github_api_headers() -> dict[str, str]:
-    """Return headers authenticating GitHub API requests, if a token is configured."""
-    token = os.getenv("GITHUB_TOKEN", "")
-    return {"Authorization": f"Bearer {token}"} if token else {}
+# Hosts the GitHub token authenticates to. raw.githubusercontent.com is included
+# because unauthenticated raw file downloads are rate limited much more strictly.
+GITHUB_HOSTS = frozenset({"api.github.com", "raw.githubusercontent.com"})
+
+
+class GitHubTokenAuth(httpx.Auth):
+    """Authenticate requests to GitHub hosts with a token, and only those."""
+
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+    def auth_flow(self, request: httpx.Request):
+        if request.url.host in GITHUB_HOSTS:
+            request.headers["Authorization"] = f"Bearer {self.token}"
+        yield request
 
 
 def is_transient_http_error(exc: BaseException) -> bool:
@@ -79,7 +89,9 @@ def retry_transient_errors(
 @cache
 def get_http_client() -> httpx.AsyncClient:
     """Get the shared HTTP client instance."""
+    token = os.getenv("GITHUB_TOKEN")
     http_client = httpx.AsyncClient(
+        auth=GitHubTokenAuth(token) if token else None,
         follow_redirects=True,
         timeout=HTTP_TIMEOUT,
         headers={

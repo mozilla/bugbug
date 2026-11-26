@@ -49,7 +49,6 @@ from bugbug.tools.code_review.review_context_schema import (
     parse_review_context_toml,
     tomllib,
 )
-from bugbug.tools.core.connection import get_github_api_headers
 
 logger = getLogger(__name__)
 
@@ -358,10 +357,7 @@ async def _fetch_revision(
         try:
             response = await _fetch_url(
                 f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-                headers={
-                    "Accept": "application/vnd.github.diff",
-                    **get_github_api_headers(),
-                },
+                headers={"Accept": "application/vnd.github.diff"},
             )
             source = f"{repo}@{commit_hash}"
             return (

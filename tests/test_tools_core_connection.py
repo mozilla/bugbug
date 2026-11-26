@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from bugbug.tools.core.connection import (
+    GitHubTokenAuth,
     close_http_client,
     get_http_client,
     is_transient_http_error,
@@ -97,4 +98,31 @@ async def test_http_client_timeouts() -> None:
     await close_http_client()
     timeout = get_http_client().timeout
     assert (timeout.connect, timeout.read) == (10, 60)
+    await close_http_client()
+
+
+@pytest.mark.parametrize(
+    "url, authenticated",
+    [
+        ("https://api.github.com/repos/a/b/commits/c", True),
+        ("https://raw.githubusercontent.com/a/b/c/file.md", True),
+        ("https://phabricator.services.mozilla.com/api/conduit.ping", False),
+        ("https://searchfox.org/", False),
+    ],
+)
+def test_github_token_auth_only_authenticates_github(url, authenticated) -> None:
+    request = next(GitHubTokenAuth("token").auth_flow(httpx.Request("GET", url)))
+    assert request.headers.get("Authorization") == (
+        "Bearer token" if authenticated else None
+    )
+
+
+@pytest.mark.asyncio
+async def test_http_client_authenticates_with_github_token(monkeypatch) -> None:
+    await close_http_client()
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    assert isinstance(get_http_client().auth, GitHubTokenAuth)
+    await close_http_client()
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert not isinstance(get_http_client().auth, GitHubTokenAuth)
     await close_http_client()

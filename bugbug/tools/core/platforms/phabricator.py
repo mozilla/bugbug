@@ -19,7 +19,6 @@ from libmozdata.phabricator import ConduitError, PhabricatorRevisionNotFoundExce
 from tqdm import tqdm
 
 from bugbug.tools.core.connection import (
-    get_github_api_headers,
     get_http_client,
     get_user_agent,
     retry_transient_errors,
@@ -605,10 +604,7 @@ class PhabricatorPatch(Patch):
         client = get_http_client()
         r = await client.get(
             f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-            headers={
-                "Accept": "application/vnd.github.sha",
-                **get_github_api_headers(),
-            },
+            headers={"Accept": "application/vnd.github.sha"},
         )
         # GitHub answers 422 for a well-formed SHA it doesn't know.
         if r.status_code in (404, 422):
@@ -630,7 +626,6 @@ class PhabricatorPatch(Patch):
                 "sort": "committer-date",
                 "order": "desc",
             },
-            headers=get_github_api_headers(),
         )
         r.raise_for_status()
 
