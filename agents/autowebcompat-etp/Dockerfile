@@ -31,7 +31,7 @@ FROM base AS agent
 # The agent needs Node.js + npm to run the Firefox DevTools MCP server (an npm
 # package; the python base ships neither) and the shared libraries Firefox
 # requires. The Firefox binary itself is downloaded at agent startup via
-# mozdownload/mozinstall (see browser.py). Unlike autowebcompat-repro there is
+# mozdownload/mozinstall (see autowebcompat_tools.browser). Unlike autowebcompat-repro there is
 # no Chrome: the comparison is Firefox Standard vs Strict ETP, so the image also
 # runs natively on arm64.
 RUN apt-get update \

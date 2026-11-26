@@ -16,13 +16,13 @@ from typing import Any, Literal, get_args
 
 import json5
 import requests
+from autowebcompat_tools.browser import install_firefox
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.inputs import AutoWebcompatInput, BugDataInput, BugIdInput
 from autowebcompat_tools.task import RunTracker, Task, TaskConfig
 from claude_agent_sdk import McpServerConfig
 from pydantic import model_validator
 
-from .browser import install_firefox_nightly
 from .config import BUGZILLA_READ_TOOLS, DEVTOOLS_TOOLS, PRIVILEGED_TOOLS
 from .exceptions import (
     EXCEPTIONS_SERVER_NAME,
@@ -346,7 +346,7 @@ async def run_autowebcompat_etp(
         if not config.headless:
             env.start_xvfb()
 
-        firefox_path = install_firefox_nightly()
+        firefox_path = install_firefox("nightly")
         screenshot_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-screenshots-"))
         log_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-logs-"))
         content_blocking_log_file = log_dir / CONTENT_BLOCKING_LOG_FILE

@@ -15,10 +15,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, get_args
 
+from autowebcompat_tools.browser import install_firefox
 from autowebcompat_tools.environment import Environment
 from autowebcompat_tools.task import RunTracker, Task, TaskConfig
 from claude_agent_sdk.types import McpStdioServerConfig
-from hackbot_agents.autowebcompat_etp.browser import install_firefox_nightly
 from hackbot_agents.autowebcompat_etp.config import DEVTOOLS_TOOLS
 from hackbot_agents.autowebcompat_etp.mcp_servers import (
     build_firefox_devtools_server,
@@ -177,7 +177,7 @@ async def run_autowebcompat_etp_compare(
         if not config.headless:
             env.start_xvfb()
 
-        firefox_path = install_firefox_nightly()
+        firefox_path = install_firefox("nightly")
         work_dir = Path(tempfile.mkdtemp(prefix="autowebcompat-etp-compare-"))
         screenshot_dir = work_dir / "screenshots"
         recheck_dir = work_dir / "recheck"

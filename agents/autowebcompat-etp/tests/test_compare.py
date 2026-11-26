@@ -153,7 +153,7 @@ def test_identical_screenshots_skip_the_agent(tmp_path):
         return key
 
     with (
-        mock.patch.object(agent, "install_firefox_nightly"),
+        mock.patch.object(agent, "install_firefox"),
         mock.patch.object(agent, "build_firefox_devtools_server"),
         mock.patch.object(agent, "capture_configurations", return_value=captures),
         mock.patch.object(agent, "EtpComparison") as task,

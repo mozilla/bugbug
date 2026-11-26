@@ -12,8 +12,6 @@ dependencies = [
     "claude-agent-sdk>=0.1.30",
     "json5",
     "mcp>=1.0.0",
-    "mozdownload",
-    "mozinstall",
     "pillow",
     "requests>=2.32.0",
     "starlette>=0.36.0",
