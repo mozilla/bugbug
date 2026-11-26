@@ -5,6 +5,7 @@
 
 """Code review agent implementation."""
 
+import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -246,7 +247,9 @@ class CodeReviewTool(GenerativeModelTool):
 
         messages = [
             HumanMessage(
-                self.generate_initial_prompt(patch, patch_summary, external_context)
+                await asyncio.to_thread(
+                    self.generate_initial_prompt, patch, patch_summary, external_context
+                )
             )
         ]
         for attempt in range(2):
@@ -304,7 +307,10 @@ class CodeReviewTool(GenerativeModelTool):
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
-        patch_summary = self.patch_summarizer.run(patch)
+        # The summarizer, the example lookups and the filterer are synchronous
+        # and slow (LLM and embedding calls). Run them off the event loop so they
+        # don't stall concurrent reviews, whose pending requests would time out.
+        patch_summary = await asyncio.to_thread(self.patch_summarizer.run, patch)
 
         agent_response, external_content_manifest = await self.generate_review_comments(
             patch, patch_summary
@@ -313,7 +319,9 @@ class CodeReviewTool(GenerativeModelTool):
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 
-        filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
+        filtered_suggestions = await asyncio.to_thread(
+            self.suggestion_filterer.run, unfiltered_suggestions
+        )
 
         # The patch-scope suggestion is a deliberate, meta-level comment, so it
         # bypasses the suggestion filterer, is always sorted last, and always
