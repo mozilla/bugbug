@@ -75,9 +75,11 @@ async def expand_context(
 ) -> str:
     """Retrieve the content of a file, optionally restricted to a line range.
 
-    Omit start_line and end_line to get the full file. When specifying a range,
-    be careful to not fill your context window with too much data — request the
-    minimum necessary, but do not split a continuous range into multiple requests.
+    Omit start_line and end_line to get the full file. For source code, when
+    specifying a range, be careful to not fill your context window with too much
+    data — request the minimum necessary, but do not split a continuous range
+    into multiple requests. Always read documentation, guidelines and skill
+    files (e.g. Markdown) in full.
 
     Args:
         file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.h'.
