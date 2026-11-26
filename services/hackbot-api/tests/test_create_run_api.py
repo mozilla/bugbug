@@ -78,6 +78,14 @@ def test_create_run_records_the_account_and_source(client, db):
     assert db.added.source == "bugzilla"
 
 
+@pytest.mark.parametrize("header", ["X-Source", "X-Identity-Provider"])
+def test_create_run_rejects_an_unknown_source_or_identity_provider(client, header):
+    resp = client.post(
+        "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers={header: "pulse"}
+    )
+    assert resp.status_code == 422
+
+
 @pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])
 def test_create_run_leaves_run_unattributed_without_header(client, db, headers):
     # Automation (e.g. the Phabricator webhook) omits the header entirely; a

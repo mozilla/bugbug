@@ -9,7 +9,9 @@ from hackbot_client import (
     HackbotClient,
     HackbotInvalidResponseError,
     Identity,
+    IdentityProvider,
     RunStatus,
+    Source,
 )
 from hackbot_client import client as client_module
 
@@ -123,9 +125,9 @@ async def test_trigger_run_sends_who_triggered_the_run_and_from_where(monkeypatc
     await _client().trigger_run(
         "bug-fix",
         {"bug_id": 1234},
-        source="bugzilla",
+        source=Source.bugzilla,
         identity=Identity(
-            identity_provider="bugzilla",
+            identity_provider=IdentityProvider.bugzilla,
             user_id="560562",
             username="alice@example.com",
         ),

@@ -5,10 +5,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Account
+from app.schemas import IdentityProvider
 
 
 async def find_or_create_account(
-    db: AsyncSession, identity_provider: str, external_id: str, username: str | None
+    db: AsyncSession,
+    identity_provider: IdentityProvider,
+    external_id: str,
+    username: str | None,
 ) -> int:
     """Return the ID of this person's account, creating it on first sight.
 

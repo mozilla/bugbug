@@ -26,11 +26,13 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
+    IdentityProvider,
     RunActionDoc,
     RunDoc,
     RunRef,
     RunStatus,
     RunSummary,
+    Source,
 )
 
 log = logging.getLogger(__name__)
@@ -115,14 +117,14 @@ async def create_run(
         ),
     ] = None,
     source: Annotated[
-        str | None,
+        Source | None,
         Header(
             alias="X-Source",
             description="Where the run was triggered from, e.g. `bugzilla`.",
         ),
     ] = None,
     identity_provider: Annotated[
-        str | None,
+        IdentityProvider | None,
         Header(
             alias="X-Identity-Provider",
             description="The service `X-User-Id` belongs to, e.g. `bugzilla`.",
