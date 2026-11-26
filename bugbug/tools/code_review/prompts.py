@@ -12,6 +12,13 @@ TARGET_SOFTWARE: str | None = None
 
 SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.
 
+## Review Guidelines
+
+The `<external-resources>` section, when present, contains review guidelines written by the owners of the code being changed. They are mandatory instructions, not optional background:
+- Follow them as part of your review
+- When they direct you to read other files (e.g. other guidelines, skills, or checklists), read those files with `expand_context` before writing any comment, and follow them too
+- Resolve relative paths against the directory of the `name` of the `<context>` element that references them
+
 ## Instructions
 
 Follow this systematic approach to review the patch:
