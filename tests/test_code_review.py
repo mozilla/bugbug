@@ -513,7 +513,9 @@ def _guideline_runtime(monkeypatch, source):
         langchain_tools,
         "get_runtime",
         lambda _: SimpleNamespace(
-            context=SimpleNamespace(patch=None, review_context_source=source)
+            context=SimpleNamespace(
+                patch=None, review_context_source=source, content_overrides=None
+            )
         ),
     )
 
@@ -557,6 +559,29 @@ def test_read_review_guideline_reports_missing_file(monkeypatch):
     assert result == (
         "Warning: docs/missing.md does not exist in mozilla-firefox/firefox@autoland."
     )
+
+
+def test_read_review_guideline_prefers_content_overrides(monkeypatch):
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(
+            context=SimpleNamespace(
+                patch=None,
+                review_context_source=("mozilla-firefox/firefox", "autoland"),
+                content_overrides={"docs/guide.md": "Local guide\n"},
+            )
+        ),
+    )
+    fetch = AsyncMock()
+    monkeypatch.setattr(review_context, "_fetch_url", fetch)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/guide.md")
+    )
+
+    assert result == "Local guide\n"
+    fetch.assert_not_awaited()
 
 
 def test_read_review_guideline_without_review_context(monkeypatch):

@@ -99,7 +99,7 @@ async def test_read_review_guideline_reads_from_inferred_source(
         )
     assert result.content[0].text == "Checklist"
     fetch.assert_awaited_once_with(
-        ("inferred/repo", "release"), "accessible/docs/HCMCSSChecklist.md"
+        ("inferred/repo", "release"), "accessible/docs/HCMCSSChecklist.md", None
     )
 
 

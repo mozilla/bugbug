@@ -44,6 +44,21 @@ def _revision_id_from_url(patch_url: str) -> int:
     raise ValueError(f"Unsupported patch URL: {patch_url}")
 
 
+def _parse_content_overrides(content_overrides: str | None) -> dict[str, str] | None:
+    if content_overrides is None:
+        return None
+    try:
+        overrides = json.loads(content_overrides)
+        if not isinstance(overrides, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in overrides.items()
+        ):
+            raise ValueError("expected an object of strings")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("content_overrides must be a JSON object of strings") from exc
+    return overrides
+
+
 @mcp.prompt()
 async def patch_review(
     patch_url: str,
@@ -54,21 +69,7 @@ async def patch_review(
 ) -> str:
     """Review a code patch from Phabricator."""
     revision_id = _revision_id_from_url(patch_url)
-
-    overrides = None
-    if content_overrides is not None:
-        try:
-            overrides = json.loads(content_overrides)
-            if not isinstance(overrides, dict) or not all(
-                isinstance(key, str) and isinstance(value, str)
-                for key, value in overrides.items()
-            ):
-                raise ValueError("expected an object of strings")
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                "content_overrides must be a JSON object of strings"
-            ) from exc
-
+    overrides = _parse_content_overrides(content_overrides)
     patch = PhabricatorPatch(revision_id=revision_id)
     await patch.load()
 
@@ -252,12 +253,14 @@ async def read_review_guideline(
     ],
     review_context_repo: str | None = None,
     review_context_branch: str | None = None,
+    content_overrides: str | None = None,
 ) -> str:
     """Read a file that the review guidelines of the patch_review prompt point to.
 
     The file is read at the same version as the guidelines, which can be newer
-    than the code the patch is based on. Pass the same review_context_repo and
-    review_context_branch as to the patch_review prompt, if any.
+    than the code the patch is based on. Pass the same review_context_repo,
+    review_context_branch and content_overrides as to the patch_review prompt,
+    if any.
     """
     from bugbug.tools.code_review.review_context import (
         fetch_review_guideline,
@@ -272,7 +275,9 @@ async def read_review_guideline(
     if source is None:
         raise ToolError("No review guidelines are configured for this patch.")
     try:
-        return await fetch_review_guideline(source, file_path)
+        return await fetch_review_guideline(
+            source, file_path, _parse_content_overrides(content_overrides)
+        )
     except FileNotFoundError as e:
         raise ToolError(str(e)) from e
 

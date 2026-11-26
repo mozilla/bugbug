@@ -625,11 +625,18 @@ async def resolve_review_context_source(
     return review_context_repo, review_context_branch or "main"
 
 
-async def fetch_review_guideline(source: tuple[str, str], file_path: str) -> str:
+async def fetch_review_guideline(
+    source: tuple[str, str],
+    file_path: str,
+    content_overrides: dict[str, str] | None = None,
+) -> str:
     """Return a file the review guidelines point to, from the guidelines' (repo, branch).
 
-    Raises FileNotFoundError if the file does not exist there.
+    content_overrides replaces files by repository path, like it does for the
+    files rules load. Raises FileNotFoundError if the file does not exist.
     """
+    if content_overrides and file_path in content_overrides:
+        return content_overrides[file_path]
     repo, branch = source
     try:
         response = await _fetch_url(_github_raw_url(repo, branch, file_path))

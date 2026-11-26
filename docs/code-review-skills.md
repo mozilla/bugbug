@@ -399,6 +399,11 @@ python3 -c "import json,sys; print(json.dumps({'.claude/skills/dom-audio/SKILL.m
 
 Then paste the output as the `content_overrides` value.
 
+`content_overrides` also replaces the files your guidelines point to when the
+reviewer reads them with `read_review_guideline` (pass the same
+`content_overrides` to that MCP tool), so you can test new reference documents
+too.
+
 This simulates the state as if your changes had already landed — no push
 required. If a skill is missing, verify the rule conditions match the patch's
 changed files (`any_file` / `all_files` against the actual `+++ b/` paths in

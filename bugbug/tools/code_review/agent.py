@@ -253,7 +253,11 @@ class CodeReviewTool(GenerativeModelTool):
                 extra_context_toml=self._extra_context_toml,
                 content_overrides=self._content_overrides,
             )
-        context = CodeReviewContext(patch=patch, review_context_source=source)
+        context = CodeReviewContext(
+            patch=patch,
+            review_context_source=source,
+            content_overrides=self._content_overrides,
+        )
 
         messages = [
             HumanMessage(

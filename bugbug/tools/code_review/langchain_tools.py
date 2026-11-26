@@ -47,6 +47,8 @@ class CodeReviewContext:
     patch: Patch
     # (repo, branch) the review guidelines were loaded from, if any.
     review_context_source: Optional[tuple[str, str]] = None
+    # Content replacing review context files, keyed by repository path.
+    content_overrides: Optional[dict[str, str]] = None
 
 
 @cache
@@ -162,12 +164,14 @@ async def read_review_guideline(file_path: str) -> str:
     Returns:
         The file content.
     """
-    source = get_runtime(CodeReviewContext).context.review_context_source
-    if source is None:
+    context = get_runtime(CodeReviewContext).context
+    if context.review_context_source is None:
         return _tool_error("no review guidelines were loaded for this patch")
 
     try:
-        return await fetch_review_guideline(source, file_path)
+        return await fetch_review_guideline(
+            context.review_context_source, file_path, context.content_overrides
+        )
     except FileNotFoundError as e:
         return f"Warning: {e}."
     except httpx.HTTPError as e:
