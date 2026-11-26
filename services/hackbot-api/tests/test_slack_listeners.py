@@ -20,8 +20,10 @@ from app.slack.listeners.actions.start_agent_run import (
 from hackbot_client import (
     ApplyActionsResponse,
     Identity,
+    IdentityProvider,
     RunAction,
     RunStatus,
+    Source,
     TriggeredRun,
 )
 from pydantic import ValidationError
@@ -163,9 +165,11 @@ class TestStartAgentRun:
         await self._call()
 
         kwargs = self.fake_client.trigger_run.await_args.kwargs
-        assert kwargs["source"] == "slack"
+        assert kwargs["source"] == Source.slack
         assert kwargs["identity"] == Identity(
-            identity_provider="slack", user_id="U0CLICKER", username="clicker"
+            identity_provider=IdentityProvider.slack,
+            user_id="U0CLICKER",
+            username="clicker",
         )
 
     async def test_the_click_is_acknowledged(self):

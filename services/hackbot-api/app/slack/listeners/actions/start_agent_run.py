@@ -4,7 +4,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from hackbot_client import HackbotClient, Identity
+from hackbot_client import HackbotClient, Identity, IdentityProvider, Source
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, Json, validate_call
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
@@ -155,9 +155,9 @@ async def start_agent_run_callback(
         value.agent_name,
         value.inputs,
         dedupe_key=value.dedupe_key,
-        source="slack",
+        source=Source.slack,
         identity=Identity(
-            identity_provider="slack",
+            identity_provider=IdentityProvider.slack,
             user_id=body.user.id,
             username=body.user.username,
         ),
