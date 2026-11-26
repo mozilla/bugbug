@@ -1231,12 +1231,12 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
         fit_confidences, targets
     )
     assert model.calibration is not None
-    assert model.calibration[0] == list(
-        testselect.compute_confidence_thresholds(
-            fit_confidences, {str(c): c for c in testselect.CALIBRATION_COUNTS}
-        ).values()
-    )
-    assert len(model.calibration[1]) == len(testselect.CALIBRATION_COUNTS) + 1
+    # (Bands with the same threshold are merged.)
+    band_thresholds = testselect.compute_confidence_thresholds(
+        fit_confidences, {str(c): c for c in testselect.CALIBRATION_COUNTS}
+    ).values()
+    assert model.calibration[0] == sorted(set(band_thresholds), reverse=True)
+    assert len(model.calibration[1]) == len(model.calibration[0]) + 1
     # The manifest and the gtest task close to the modified file are always selected.
     assert model.forced_runnables(recent_commits[:1], runnables) == (
         {"dom/base/test/mochitest.toml"}
@@ -1335,6 +1335,22 @@ def test_fit_band_rates() -> None:
     ]
     # An empty first band.
     assert testselect.fit_band_rates([0.99], totals, failures)[0] == 0.0
+
+
+def test_merge_tied_bands(monkeypatch) -> None:
+    monkeypatch.setattr(testselect, "CALIBRATION_COUNTS", (1.0, 2.0, 5.0, 11.0))
+    # The bands of the counts 2 and 5 (1 and 3 runnables per push) get the same threshold, and so
+    # do the ones of the counts 1 and 2 when the first two thresholds are equal.
+    assert testselect.merge_tied_bands(
+        [0.9, 0.7, 0.7, 0.5], [0.4, 0.1, 0.02, 0.01, 0.001]
+    ) == ([0.9, 0.7, 0.5], [0.4, pytest.approx(0.04), 0.01, 0.001])
+    assert testselect.merge_tied_bands(
+        [0.9, 0.9, 0.7, 0.5], [0.4, 0.1, 0.02, 0.01, 0.001]
+    ) == ([0.9, 0.7, 0.5], [pytest.approx(0.25), 0.02, 0.01, 0.001])
+    # Without ties, the bands are unchanged.
+    assert testselect.merge_tied_bands(
+        [0.9, 0.8, 0.7, 0.5], [0.4, 0.1, 0.02, 0.01, 0.001]
+    ) == ([0.9, 0.8, 0.7, 0.5], [0.4, 0.1, 0.02, 0.01, 0.001])
 
 
 def test_calibrated_probabilities() -> None:

@@ -487,6 +487,34 @@ def compute_confidence_thresholds(
     return thresholds
 
 
+def merge_tied_bands(
+    thresholds: Sequence[float], rates: Sequence[float]
+) -> tuple[list[float], list[float]]:
+    """Merge the calibration bands with the same threshold (see fit_band_rates).
+
+    `thresholds` are the thresholds of the CALIBRATION_COUNTS, and `rates` the failure rates of
+    their bands. When thresholds are computed on another model than the rates, bands which were
+    distinct can get the same threshold, and only the first one would be used: their rates are
+    averaged instead, weighted by the number of runnables per push in each band.
+    """
+    counts = [0.0, *CALIBRATION_COUNTS]
+    merged_thresholds: list[float] = []
+    merged_rates: list[float] = []
+    merged_weights: list[float] = []
+    for i, (threshold, rate) in enumerate(zip(thresholds, rates)):
+        weight = counts[i + 1] - counts[i]
+        if merged_thresholds and merged_thresholds[-1] == threshold:
+            merged_rates[-1] = (
+                merged_rates[-1] * merged_weights[-1] + rate * weight
+            ) / (merged_weights[-1] + weight)
+            merged_weights[-1] += weight
+        else:
+            merged_thresholds.append(threshold)
+            merged_rates.append(rate)
+            merged_weights.append(weight)
+    return merged_thresholds, merged_rates + [rates[-1]]
+
+
 def top_fit_confidences(
     confidences: Mapping[str, float], excluded: Collection[str]
 ) -> list[float]:
@@ -998,7 +1026,7 @@ class TestSelectModel(Model):
                 band_thresholds,
                 self.calibration[0],
             )
-            self.calibration = (band_thresholds, self.calibration[1])
+            self.calibration = merge_tied_bands(band_thresholds, self.calibration[1])
 
     def get_confidences(
         self,
