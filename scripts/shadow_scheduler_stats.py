@@ -5,18 +5,24 @@
 
 import argparse
 import concurrent.futures
+import contextlib
+import fnmatch
+import gzip
+import json
 import logging
 import math
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
 import matplotlib.pyplot as plt
 import mozci.errors
 import mozci.push
+import requests
 from dateutil.relativedelta import relativedelta
-from mozci.task import get_configuration as mozci_get_configuration
+from mozci.task import get_configuration
+from mozci.util.taskcluster import get_artifact_url
 from pandas import DataFrame, DatetimeIndex, Series
 from tqdm import tqdm
 
@@ -32,7 +38,7 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    6,
+    7,
 )
 
 # Maximum number of pushes being analyzed at the same time. Shadow scheduler
@@ -45,21 +51,6 @@ PUSH_MEMOIZED_ATTRIBUTES = (
     "_scheduled_task_labels",
     "_get_shadow_scheduler_tasks",
 )
-
-
-def get_configuration(task: dict) -> str:
-    # mozci reads the test variants from "test-settings", but the task graph
-    # calls it "test-setting", so variants (e.g. "-swr") would be lost.
-    extra = task["task"]["extra"]
-    if "test-setting" in extra and "test-settings" not in extra:
-        task = {
-            **task,
-            "task": {
-                **task["task"],
-                "extra": {**extra, "test-settings": extra["test-setting"]},
-            },
-        }
-    return mozci_get_configuration(task)
 
 
 # Granularities at which tasks, rather than groups, are evaluated:
@@ -116,6 +107,201 @@ def get_push_data_regressions(granularity: str, revs: set[str]) -> dict[str, set
     return regressions_by_rev
 
 
+def is_backstop(push: mozci.push.Push) -> bool | None:
+    """Whether the push is a backstop push, or None if it's unknown.
+
+    On backstop pushes, the taskgraph doesn't restrict the manifests of the test
+    tasks to the ones selected by bugbug, so the chunks of the tasks the shadow
+    schedulers select include all manifests, and they schedule many more groups.
+    """
+    try:
+        parameters = push.decision_task.get_artifact("public/parameters.yml")
+    except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
+        return None
+
+    return bool(parameters.get("backstop"))
+
+
+# Schedulers which we create from bugbug's reply on the push (the decision task's
+# bugbug-push-schedules.json), rather than from shadow scheduler tasks: they run
+# the groups selected by bugbug at the given confidence level on exactly the
+# configs it selected for them, without what the taskgraph adds (e.g. the other
+# groups of the tasks running them).
+PLAIN_BUGBUG_SCHEDULERS = {
+    "bugbug_plain_config_selection_very_low": "very_low",
+    "bugbug_plain_config_selection_low": "low",
+    "bugbug_plain_config_selection_medium": "medium",
+    "bugbug_plain_config_selection_high": "high",
+}
+
+# The thresholds the taskgraph uses for the confidence levels when bugbug doesn't
+# return the ones matching its current models. There is none for the "very_low"
+# level, which only exists with the thresholds computed when training the models:
+# its scheduler doesn't run on pushes whose reply doesn't have them.
+DEFAULT_CONFIDENCE_THRESHOLDS = {"low": 0.7, "medium": 0.8, "high": 0.9}
+
+
+def get_bugbug_push_schedules(push: mozci.push.Push) -> dict | None:
+    """Return bugbug's reply on the push, as used by the taskgraph, if available."""
+    try:
+        return push.decision_task.get_artifact("public/bugbug-push-schedules.json")
+    except mozci.errors.TaskNotFound, mozci.errors.ArtifactNotFound:
+        return None
+
+
+def without_chunk(label: str) -> str:
+    """Return a task label without its chunk number, as the taskgraph matches it with bugbug's reply."""
+    parts = label.split("-")
+    return "-".join(parts[:-1] if parts[-1].isdigit() else parts)
+
+
+def get_tasks_by_group(
+    push: mozci.push.Push,
+) -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Return the test tasks (labels without chunk number) running each group on the push.
+
+    Also return the label of one of the chunks of each of them.
+    """
+    target_tasks = set(push.decision_task.get_artifact("public/target-tasks.json"))
+    content = push.decision_task.get_artifact(
+        "public/manifests-by-task.json.gz"
+    ).content
+    # The content might have been decompressed already, depending on the response's encoding.
+    with contextlib.suppress(gzip.BadGzipFile):
+        content = gzip.decompress(content)
+
+    tasks_by_group: dict[str, set[str]] = {}
+    chunk_labels: dict[str, str] = {}
+    for label, manifests in json.loads(content).items():
+        if label not in target_tasks or not label.startswith("test-"):
+            continue
+
+        task = without_chunk(label)
+        chunk_labels.setdefault(task, label)
+        for manifest in manifests:
+            tasks_by_group.setdefault(translate_group(manifest), set()).add(task)
+
+    return tasks_by_group, chunk_labels
+
+
+def get_task_configurations(
+    push: mozci.push.Push, chunk_labels: dict[str, str]
+) -> dict[str, str]:
+    """Return the configurations of some test tasks of the push, by label without chunk number.
+
+    `chunk_labels` gives the label of one of the chunks of each task (see get_tasks_by_group).
+    The definitions of the tasks come from the push's task graph, or from its full task graph
+    for the tasks which didn't run on the push.
+    """
+    definitions: dict[str, dict] = {}
+    task_graph = push.decision_task.get_artifact("public/task-graph.json")
+    for task in task_graph.values():
+        definitions.setdefault(without_chunk(task["label"]), task)
+    del task_graph
+
+    missing = {chunk_labels[task] for task in chunk_labels.keys() - definitions.keys()}
+    if missing:
+        r = requests.get(
+            get_artifact_url(push.decision_task.id, "public/full-task-graph.json"),
+            timeout=(30, 300),
+        )
+        r.raise_for_status()
+        for label, task in test_scheduling.get_full_graph_tasks(
+            r.content, missing
+        ).items():
+            definitions[without_chunk(label)] = task
+
+    configurations = {}
+    for task in chunk_labels:
+        if task not in definitions:
+            continue
+
+        try:
+            configurations[task] = get_configuration(
+                definitions[task], push.branch, push.rev
+            )
+        except Exception:
+            logger.warning("Failed to get the configuration of %s", task, exc_info=True)
+
+    return configurations
+
+
+def plain_bugbug_schedulers(
+    bugbug_data: dict,
+    tasks_by_group: dict[str, set[str]],
+    get_configurations: Callable[[set[str]], dict[str, str]],
+    group_candidates: set[str],
+    config_group_candidates: set[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """What the plain bugbug schedulers select on a push (see PLAIN_BUGBUG_SCHEDULERS).
+
+    The groups bugbug selects run on the push's tasks running them (`tasks_by_group`, see
+    get_tasks_by_group) whose labels match the ones bugbug gives for them, as the taskgraph
+    matches them: recent replies give the labels (without chunk number) of the tasks of the
+    selected configs, older ones gave the configs as patterns over the labels.
+
+    The configurations of the tasks, to compare with the ones of the regressions, are only
+    retrieved (with `get_configurations`) for the tasks running groups with regressions.
+    """
+    groups = bugbug_data.get("groups", {})
+    config_groups = bugbug_data.get("config_groups", {})
+    thresholds = bugbug_data.get("confidence_thresholds", {}).get("groups", {})
+
+    selections = {}
+    for name, level in PLAIN_BUGBUG_SCHEDULERS.items():
+        threshold = thresholds.get(level, DEFAULT_CONFIDENCE_THRESHOLDS.get(level))
+        if threshold is None:
+            continue
+
+        selected: dict[str, set[str]] = {}
+        for group, confidence in groups.items():
+            if confidence <= threshold:
+                continue
+
+            tasks = {
+                task
+                for task in tasks_by_group.get(group, ())
+                if any(
+                    fnmatch.fnmatch(task, pattern)
+                    for pattern in config_groups.get(group, [])
+                )
+            }
+            if tasks:
+                selected[group] = tasks
+        selections[name] = selected
+
+    candidate_groups = {group for config, group in config_group_candidates}
+    tasks_to_check = {
+        task
+        for selected in selections.values()
+        for group, tasks in selected.items()
+        if group in candidate_groups
+        for task in tasks
+    }
+    configurations = get_configurations(tasks_to_check) if tasks_to_check else {}
+
+    return [
+        {
+            "name": name,
+            "num_groups": len(selected),
+            # The number of tasks running each group is (almost always) the number of
+            # configurations running it, as the shadow schedulers count them.
+            "num_config_groups": sum(len(tasks) for tasks in selected.values()),
+            "scheduled_regression_groups": sorted(group_candidates & selected.keys()),
+            "scheduled_regression_config_groups": sorted(
+                config_group_candidates
+                & {
+                    (configurations[task], group)
+                    for group, tasks in selected.items()
+                    for task in tasks
+                    if task in configurations
+                }
+            ),
+        }
+        for name, selected in selections.items()
+    ]
+
+
 def analyze_shadow_schedulers(
     push: mozci.push.Push,
     group_candidates: set[str],
@@ -143,6 +329,20 @@ def analyze_shadow_schedulers(
             # The push has no decision task (e.g. DONTBUILD pushes).
             names = []
 
+        backstop = is_backstop(push) if names else None
+        bugbug_data = get_bugbug_push_schedules(push) if names else None
+        if bugbug_data is not None:
+            tasks_by_group, chunk_labels = get_tasks_by_group(push)
+            schedulers += plain_bugbug_schedulers(
+                bugbug_data,
+                tasks_by_group,
+                lambda tasks: get_task_configurations(
+                    push, {task: chunk_labels[task] for task in tasks}
+                ),
+                group_candidates,
+                config_group_candidates,
+            )
+
         # The task graph is not needed anymore.
         for attr in PUSH_MEMOIZED_ATTRIBUTES:
             push.__dict__.pop(attr, None)
@@ -157,7 +357,7 @@ def analyze_shadow_schedulers(
                 push.__dict__.pop("_get_shadow_scheduler_tasks", None)
 
             config_groups = {
-                (get_configuration(task), group)
+                (get_configuration(task, push.branch, push.rev), group)
                 for task in tasks
                 for group in task["attributes"].get("test_manifests", [])
             }
@@ -203,6 +403,7 @@ def analyze_shadow_schedulers(
     return {
         "id": push.rev,
         "date": push.date,
+        "backstop": backstop,
         "schedulers": schedulers,
         **{
             f"{granularity}_regressions": sorted(regression_labels[granularity])
@@ -450,13 +651,19 @@ TASK_SCHEDULERS = {
 
 def is_evaluated(granularity: str, name: str) -> bool:
     """Whether the scheduler is evaluated at the given granularity."""
-    return granularity in TASK_GRANULARITIES or name not in TASK_SCHEDULERS
+    if granularity in TASK_GRANULARITIES:
+        return name not in PLAIN_BUGBUG_SCHEDULERS
+
+    return name not in TASK_SCHEDULERS
 
 
-def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series]:
+def get_stats_dataframes(
+    granularity: str,
+) -> tuple[DataFrame, DataFrame, Series, Series]:
     """Return, for each push, the number of scheduled and caught regressions by scheduler.
 
-    Values are NaN when a scheduler didn't run on a push.
+    Values are NaN when a scheduler didn't run on a push. The last series tells
+    whether each push is a backstop push (None if it's unknown).
     """
     regressions_by_rev = get_likely_regressions_by_rev(granularity)
 
@@ -464,6 +671,7 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
     scheduled_data = []
     caught_data = []
     num_regressions = []
+    backstop = []
 
     for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
@@ -481,6 +689,7 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
 
         dates.append(datetime.utcfromtimestamp(scheduler_stat["date"]))
         num_regressions.append(len(regressions))
+        backstop.append(scheduler_stat.get("backstop"))
         scheduled_data.append(
             {
                 scheduler["name"]: get_num_scheduled(granularity, scheduler)
@@ -501,7 +710,12 @@ def get_stats_dataframes(granularity: str) -> tuple[DataFrame, DataFrame, Series
     caught_df = DataFrame(caught_data, index=index).sort_index(axis=1)
     regressions = Series(num_regressions, index=index)
 
-    return scheduled_df, caught_df, regressions
+    return (
+        scheduled_df,
+        caught_df,
+        regressions,
+        Series(backstop, index=index, dtype=object),
+    )
 
 
 def compute_summary(
@@ -511,17 +725,23 @@ def compute_summary(
     ran = scheduled_df.notna()
     regressing = ran.mul(regressions > 0, axis=0)
     total_regressions = ran.mul(regressions, axis=0).sum()
+    # Schedulers without regressions on the pushes have no percentages caught.
+    num_regressing = regressing.sum()
 
     summary = DataFrame(
         {
             "pushes": ran.sum(),
             "avg scheduled": scheduled_df.mean(),
             "median scheduled": scheduled_df.median(),
-            "pushes with regressions": regressing.sum(),
+            "pushes with regressions": num_regressing,
             "% regressing pushes caught": (
-                (caught_df > 0)[regressing].sum() / regressing.sum() * 100
+                (caught_df > 0)[regressing].sum()
+                / num_regressing.replace(0, float("nan"))
+                * 100
             ),
-            "% regressions caught": caught_df.sum() / total_regressions * 100,
+            "% regressions caught": (
+                caught_df.sum() / total_regressions.replace(0, float("nan")) * 100
+            ),
         }
     )
     summary.index.name = "scheduler"
@@ -536,11 +756,25 @@ def format_summary(summary: DataFrame) -> str:
 
 
 def write_summary_table(
-    granularity: str, summary: DataFrame, from_date: datetime, to_date: datetime
+    granularity: str,
+    summary: DataFrame,
+    summaries_by_push_type: dict[str, DataFrame],
+    from_date: datetime,
+    to_date: datetime,
 ) -> None:
     perf = summary.index.map(is_perf_scheduler)
 
     unit = get_unit(granularity)
+    plain_note = (
+        """The bugbug_plain_* schedulers are not shadow schedulers: they run the groups
+selected by bugbug on exactly the configs it selected for them (from the
+decision task's bugbug-push-schedules.json), without what the taskgraph adds
+on top (in particular the other groups of the tasks running them).
+
+"""
+        if summary.index.isin(list(PLAIN_BUGBUG_SCHEDULERS)).any()
+        else ""
+    )
     content = f"""# Shadow schedulers at the {unit} level
 
 Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions are considered.
@@ -552,7 +786,32 @@ Pushes from {from_date:%Y-%m-%d} to {to_date:%Y-%m-%d}. Only likely regressions 
 
 ## Test selection schedulers
 
+{plain_note}Results on non-backstop and backstop pushes are also reported separately below
+(pushes whose type is unknown are only in the first table):
+
+- on non-backstop pushes, only some {unit}s run, so regressions are only known
+  where they ran (or were retriggered or backfilled): schedulers selecting {unit}s
+  like the ones that ran are favored;
+- backstop pushes run everything, so their regressions are known for all
+  {unit}s and the schedulers can be compared fairly. However, their test tasks
+  run all manifests rather than only the ones selected by bugbug, so the
+  schedulers select (and catch, through the other manifests of the tasks they
+  select) more {unit}s than they would on other pushes.
+
 {format_summary(summary[~perf])}
+"""
+
+    for push_type, push_type_summary in summaries_by_push_type.items():
+        if len(push_type_summary) == 0:
+            continue
+
+        push_type_summary = push_type_summary[
+            ~push_type_summary.index.map(is_perf_scheduler)
+        ]
+        content += f"""
+### {push_type.capitalize()} pushes
+
+{format_summary(push_type_summary)}
 """
 
     if perf.any():
@@ -699,7 +958,7 @@ def plot_weekly_trend(
 
 
 def report(granularity: str, weeks: int) -> None:
-    scheduled_df, caught_df, regressions = get_stats_dataframes(granularity)
+    scheduled_df, caught_df, regressions, backstop = get_stats_dataframes(granularity)
 
     if len(scheduled_df) == 0:
         logger.warning("No data to report at the %s level", granularity)
@@ -713,7 +972,23 @@ def report(granularity: str, weeks: int) -> None:
         scheduled_df[recent], caught_df[recent], regressions[recent]
     )
     summary = summary[summary["pushes"] > 0]
-    write_summary_table(granularity, summary, from_date, to_date)
+
+    summaries_by_push_type = {}
+    for push_type, is_push_type in (
+        ("non-backstop", backstop.map(lambda b: b is False)),
+        ("backstop", backstop.map(lambda b: b is True)),
+    ):
+        pushes = recent & is_push_type.to_numpy(dtype=bool)
+        push_type_summary = compute_summary(
+            scheduled_df[pushes], caught_df[pushes], regressions[pushes]
+        )
+        summaries_by_push_type[push_type] = push_type_summary[
+            push_type_summary["pushes"] > 0
+        ]
+
+    write_summary_table(
+        granularity, summary, summaries_by_push_type, from_date, to_date
+    )
 
     test_selection = [name for name in summary.index if not is_perf_scheduler(name)]
 

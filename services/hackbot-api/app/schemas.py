@@ -219,6 +219,13 @@ class GeckoTriageInputs(AgentInputs):
     effort: str | None = None
 
 
+class PerfTriageInputs(AgentInputs):
+    bug_id: int
+    model: str | None = None
+    max_turns: int | None = None
+    effort: str | None = None
+
+
 class TestPlanGeneratorInputs(AgentInputs):
     feature_name: str
     feature_description: str
@@ -243,6 +250,13 @@ class GitUpliftSource(BaseModel):
     # Full git commit SHA the agent fetches and cherry-picks onto the branch.
     commit: str = Field(
         pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
+    )
+
+    # The Phabricator revision the commit landed from, so the agent can name it
+    # by its D-number rather than by its position in the stack.
+    revision_id: int | None = Field(
+        default=None,
+        description="Phabricator revision id (the D-number) the commit landed from.",
     )
 
 

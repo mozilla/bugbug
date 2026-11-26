@@ -68,7 +68,7 @@ def test_a_resolved_uplift_reapplies_to_a_clean_target(tmp_path, git_in):
 
     # The conflict the agent is spun up to deal with.
     git_in(checkout, "fetch", "-q", "origin", to_uplift)
-    git_in(checkout, "cherry-pick", "-x", to_uplift, check=False)
+    git_in(checkout, "cherry-pick", to_uplift, check=False)
     assert git_in(checkout, "diff", "--name-only", "--diff-filter=U") == "f.txt", (
         "The setup should leave a real conflict, or this proves nothing."
     )
@@ -107,7 +107,7 @@ def test_an_uncommitted_resolution_is_flagged_as_wrapped(tmp_path, git_in):
     base = git_in(checkout, "rev-parse", "HEAD")
 
     git_in(checkout, "fetch", "-q", "origin", to_uplift)
-    git_in(checkout, "cherry-pick", "-x", to_uplift, check=False)
+    git_in(checkout, "cherry-pick", to_uplift, check=False)
     (checkout / "f.txt").write_text(RESOLVED)
 
     change_set = changes.collect(checkout, base, REPO_URL)
@@ -135,7 +135,7 @@ async def test_a_run_uplift_resolution_reapplies(
     async def session(reporter, options, prompt):
         repo = Path(options.cwd)
         git_in(repo, "fetch", "-q", "origin", to_uplift)
-        git_in(repo, "cherry-pick", "-x", to_uplift, check=False)
+        git_in(repo, "cherry-pick", to_uplift, check=False)
         assert git_in(repo, "diff", "--name-only", "--diff-filter=U") == "f.txt", (
             "The uplift should conflict, or the run has nothing to resolve."
         )
@@ -161,7 +161,14 @@ async def test_a_run_uplift_resolution_reapplies(
 
     monkeypatch.setattr(agent, "run_session", session)
     result = await agent.run_uplift(
-        bugbug_mcp_server={"type": "http", "url": "http://localhost:8080/mcp"},
+        bugzilla_mcp_server={
+            "type": "http",
+            "url": "http://localhost:8765/bugzilla/mcp",
+        },
+        phabricator_mcp_server={
+            "type": "http",
+            "url": "http://localhost:8765/phabricator/mcp",
+        },
         broker_url="http://localhost:8765",
         source_repo=checkout,
         target_branch="stable",

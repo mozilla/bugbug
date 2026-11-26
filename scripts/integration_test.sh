@@ -61,7 +61,7 @@ sleep 1
 redis-cli -n 4 FLUSHDB
 
 # Start the http server
-gunicorn -b 127.0.0.1:8000 bugbug_http.app --preload --timeout 30 -w 3 &
+gunicorn -c python:bugbug_http.gunicorn_conf -b 127.0.0.1:8000 bugbug_http.app --preload --timeout 30 -w 3 &
 gunicorn_pid=$!
 
 # Start the background worker

@@ -1,0 +1,54 @@
+services:
+  perf-triage-broker:
+    build:
+      context: ../..
+      dockerfile: agents/perf-triage/Dockerfile
+      target: broker
+      args:
+        SOURCE_REF: ${SOURCE_REF:-dev}
+    env_file:
+      - path: ../../.env
+        required: false
+    # The broker is the only container that holds the Bugzilla credential; the
+    # agent reaches Bugzilla through it.
+    environment:
+      BUGZILLA_API_URL: ${BUGZILLA_API_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY}
+      # Evaluation only (hackbot_agents/perf_triage/blind.py). Passed through only when set.
+      BLIND_BUG_ID:
+    expose:
+      - "8765"
+
+  perf-triage-agent:
+    build:
+      context: ../..
+      dockerfile: agents/perf-triage/Dockerfile
+      target: agent
+      args:
+        SOURCE_REF: ${SOURCE_REF:-dev}
+    env_file:
+      - path: ../../.env
+        required: false
+    # EVERY AgentInputs field must be listed here; Docker silently drops the rest.
+    environment:
+      - RUN_ID
+      - BUG_ID
+      - MODEL
+      - MAX_TURNS
+      - EFFORT
+      # Unset or empty means the installed calculator package.
+      - PERF_TRIAGE_PATH
+      # Production clones the internal perf plugin with GITHUB_TOKEN; locally the
+      # host checkout in $PERF_PLUGIN_DIR is mounted below instead.
+      # PERF_TRIAGE_TOP_SITES is deliberately not passed: a host path is wrong in
+      # here, and the plugin supplies the rankings.
+      - PERF_PLUGIN_DIR=/plugins/perf
+      - BROKER_URL=http://perf-triage-broker:8765
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?error}
+      - ARTIFACTS_DIR=/artifacts
+    volumes:
+      - ${HOME}/hackbot/artifacts:/artifacts
+      - ${PERF_PLUGIN_DIR:?set PERF_PLUGIN_DIR to an internal-aidev-plugins checkout's plugins/perf}:/plugins/perf:ro
+    depends_on:
+      perf-triage-broker:
+        condition: service_started

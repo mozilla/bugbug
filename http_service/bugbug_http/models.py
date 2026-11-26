@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
 
+import hglib
 import orjson
 import requests
 import zstandard
@@ -28,33 +29,16 @@ from bugbug.models.perf_regression_predictor import (
 from bugbug.perf.calibration import Calibration, load_calibrations
 from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
-from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
+from bugbug.utils import get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = [
-    "defectenhancementtask",
-    "component",
-    "componentspecific",
-    "invalidcompatibilityreport",
-    "needsdiagnosis",
-    "regression",
-    "stepstoreproduce",
-    "spambug",
-    "testlabelselect",
-    "testgroupselect",
-    "testconfigselectvalue",
-    "accessibility",
-    "performancebug",
-    "worksforme",
-    "fenixcomponent",
-    "perfregressionpredictor",
-    "regressor",
-]
-
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
+# The commits of a bug are looked up again more often than predictions expire,
+# as more commits can land for the bug.
+BUG_COMMITS_EXPIRATION_TTL = 15 * 60
 
 TREEHERDER_API_URL = "https://treeherder.mozilla.org/api"
 # "expected fail", "intermittent", "infra", "autoclassified intermittent" and
@@ -115,11 +99,16 @@ RISK_CALIBRATIONS = RiskCalibrations(timedelta(hours=6))
 cctx = zstandard.ZstdCompressor(level=10)
 
 
-def setkey(key: str, value: bytes, compress: bool = False) -> None:
+def setkey(
+    key: str,
+    value: bytes,
+    compress: bool = False,
+    expiration: int = DEFAULT_EXPIRATION_TTL,
+) -> None:
     LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
-    redis.set(key, value, ex=DEFAULT_EXPIRATION_TTL)
+    redis.set(key, value, ex=expiration)
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
@@ -470,14 +459,73 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     return "OK"
 
 
-# Models that classify a push (branch + revision) rather than a bug or an
-# issue, keyed by the model name accepted by the push prediction endpoint.
-PUSH_CLASSIFIERS = {
-    PERF_REGRESSION_PREDICTOR: classify_perf_regression,
-}
+def _get_commits(
+    revs: Sequence[bytes],
+    branch: str | None,
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> list[repository.CommitDict]:
+    """Get the commits among `revs` (full hashes) on `branch`, in the same order.
 
-# Models that classify single commits (see classify_commits).
-COMMIT_MODELS = ["regressor"]
+    The commits which are already in the commits DB are taken from it, as they can't be mined again
+    (see repository.get_commits_from_db). The other commits are mined in the same way as for the
+    commits DB, but without storing them (or their contribution to the experience features). Merges,
+    which are not mined, and the commits excluded by the filters (see repository.filter_commits)
+    are not returned.
+    """
+    from bugbug_http import REPO_DIR
+
+    db_commits = repository.get_commits_from_db(rev.decode("ascii") for rev in revs)
+    LOGGER.info("%d of %d commits found in the commits DB", len(db_commits), len(revs))
+    if db_commits:
+        # Commits can be added to .hg-annotate-ignore-revs, or backed out, after
+        # they are mined.
+        with hglib.open(REPO_DIR) as hg:
+            ignore_revs = repository.get_ignore_revs(hg, REPO_DIR)
+            backedoutby = repository.get_backedoutby(
+                hg, [node.encode("ascii") for node in db_commits]
+            )
+        for commit in db_commits.values():
+            commit["ignored"] = repository.is_ignored(
+                commit["node"], commit["desc"], ignore_revs
+            )
+            commit["backedoutby"] = (
+                backedoutby.get(commit["node"]) or commit["backedoutby"]
+            )
+
+    to_mine = [rev for rev in revs if rev.decode("ascii") not in db_commits]
+    mined_commits = (
+        repository.download_commits(
+            REPO_DIR,
+            revs=to_mine,
+            branch=branch,
+            save=False,
+            include_no_bug=include_no_bug,
+            include_backouts=include_backouts,
+            include_ignored=include_ignored,
+        )
+        if to_mine
+        else ()
+    )
+
+    commits_by_node = {
+        commit["node"]: commit
+        for commit in (
+            *repository.filter_commits(
+                db_commits.values(),
+                include_no_bug=include_no_bug,
+                include_backouts=include_backouts,
+                include_ignored=include_ignored,
+            ),
+            *mined_commits,
+        )
+    }
+    return [
+        commits_by_node[rev.decode("ascii")]
+        for rev in revs
+        if rev.decode("ascii") in commits_by_node
+    ]
 
 
 def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
@@ -485,6 +533,13 @@ def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
         return "backout"
     if commit["ignored"]:
         return "ignored"
+    return None
+
+
+def _get_scored_reason(commit: repository.CommitDict) -> str | None:
+    """Get the reason to flag a commit which is scored anyway."""
+    if commit["backedoutby"]:
+        return "backedout"
     return None
 
 
@@ -496,7 +551,8 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     and mined from the service's local clone, so their features are computed in
     the same way as during training. Backouts and commits ignored during
     training (e.g. reformatting commits) are listed with their `ignored_reason`
-    but not scored, unknown revisions and merges are marked as not available.
+    but not scored. Backed-out commits are scored, with `ignored_reason` set to
+    "backedout". Unknown revisions and merges are marked as not available.
     """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
@@ -520,13 +576,9 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     if not nodes:
         return "OK"
 
-    # The commits are mined in the same way as for the commits DB, but without
-    # storing them (or their contribution to the experience features).
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=[node.encode("ascii") for node in nodes],
+    commits = _get_commits(
+        [node.encode("ascii") for node in nodes],
         branch=None,
-        save=False,
         include_no_bug=True,
         include_backouts=True,
         include_ignored=True,
@@ -551,7 +603,7 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
                 "index": index,
                 "class": class_,
                 "risk_band": model.find_risk_band(prob[1]),
-                "ignored_reason": None,
+                "ignored_reason": _get_scored_reason(commit),
             }
 
     for node in nodes:
@@ -584,6 +636,59 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     return "OK"
 
 
+def get_bug_commits(bug_ids: Sequence[int]) -> str:
+    """Find the autoland commits of bugs, and store their full hashes in Redis.
+
+    The latest autoland commits are added to the commits DB first (see
+    bugbug_http.boot.refresh_commits), so that the commits of the bugs are all found through the
+    index of the DB. The result is {"commits": [<node>, ...], "backedout": [<node>, ...]} for each
+    bug, with its commits in the order of the DB, and the ones which are backed out. As commits can
+    be backed out after they are classified, whose results are cached for longer, their backouts
+    are looked up again each time. The result expires sooner than predictions, as more commits can
+    land. Nothing is stored when the latest commits can't be added to the DB.
+    """
+    from bugbug_http import REPO_DIR, boot
+    from bugbug_http.app import JobInfo
+
+    LOGGER.info("Finding the commits of bugs %s...", bug_ids)
+
+    if not boot.refresh_commits():
+        # The commits of the bugs which are not in the DB would be missing. Without results, the
+        # bugs are looked up again on the next request.
+        LOGGER.error("The commits of bugs %s can't be found", bug_ids)
+        return "NOK"
+
+    bug_nodes = repository.get_bug_nodes_in_db(dict.fromkeys(bug_ids))
+    nodes = list(dict.fromkeys(node for nodes in bug_nodes.values() for node in nodes))
+    # The backouts which landed after the commits were mined are only in the local repository, and
+    # the ones found when they were mined only in the DB, when they are too far from the commits
+    # for the repository to find them (see backoutsearchlimit in infra/hgrc).
+    db_commits = repository.get_commits_from_db(nodes)
+    with hglib.open(REPO_DIR) as hg:
+        backedoutby = repository.get_backedoutby(
+            hg, [node.encode("ascii") for node in nodes]
+        )
+    backedout = {
+        node
+        for node in nodes
+        if backedoutby.get(node) or db_commits[node]["backedoutby"]
+    }
+
+    for bug_id, nodes in bug_nodes.items():
+        setkey(
+            JobInfo(get_bug_commits, bug_id).result_key,
+            orjson.dumps(
+                {
+                    "commits": nodes,
+                    "backedout": [node for node in nodes if node in backedout],
+                }
+            ),
+            expiration=BUG_COMMITS_EXPIRATION_TTL,
+        )
+
+    return "OK"
+
+
 @lru_cache(maxsize=None)
 def get_known_tasks() -> tuple[str, ...]:
     with open("known_tasks", "r") as f:
@@ -600,12 +705,36 @@ CONFIG_SELECTION_THRESHOLD = 0.00015
 
 
 @lru_cache(maxsize=None)
+def _get_config_selection_tasks() -> dict:
+    """The test tasks among which configs are selected (see boot.update_config_selection_tasks)."""
+    try:
+        with open("config_selection_tasks.json", "rb") as f:
+            return orjson.loads(f.read())
+    except FileNotFoundError:
+        return {"tasks": {}, "new_tasks": {}}
+
+
+@lru_cache(maxsize=None)
+def get_live_tasks() -> dict[str, dict[str, list[str]]]:
+    """The test tasks scheduled on autoland running each group, by config."""
+    return testconfigselect.live_tasks(
+        {
+            label: testconfigselect.LiveTask(task["config"], task["manifests"])
+            for label, task in _get_config_selection_tasks()["tasks"].items()
+        }
+    )
+
+
+@lru_cache(maxsize=None)
+def get_new_tasks() -> dict[str, str]:
+    """The test tasks of the latest pushes which aren't in get_live_tasks, with their configs."""
+    return _get_config_selection_tasks()["new_tasks"]
+
+
+@lru_cache(maxsize=None)
 def get_live_config_candidates() -> dict[str, list[str]]:
     """The configs of the tasks scheduled on autoland that run each group."""
-    with open("manifests_by_task.json", "rb") as f:
-        manifests_by_task = orjson.loads(f.read())
-    model = MODEL_CACHE.get(CONFIG_SELECTION_MODEL)
-    return testconfigselect.live_candidates(manifests_by_task, model.known_configs)
+    return testconfigselect.live_candidates(get_live_tasks())
 
 
 @lru_cache(maxsize=None)
@@ -672,9 +801,9 @@ def schedule_tests(branch: str, rev: str) -> str:
     repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision
-    LOGGER.info("Loading commits to analyze using automationrelevance...")
+    LOGGER.info("Loading the commits to analyze...")
     try:
-        revs = get_hgmo_stack(branch, rev)
+        revs = repository.get_stack(REPO_DIR, branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning("Push not found for %s @ %s!", branch, rev)
         return "NOK"
@@ -884,14 +1013,7 @@ def _analyze_patch(
     """
     from bugbug_http import REPO_DIR
 
-    all_commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=branch,
-        save=False,
-        include_no_bug=True,
-        include_backouts=True,
-    )
+    all_commits = _get_commits(revs, branch, include_no_bug=True, include_backouts=True)
     commits = [commit for commit in all_commits if not commit["backsout"]]
 
     # On backouts, select the tasks and manifests which failed recently, as they
@@ -1047,7 +1169,19 @@ def _analyze_patch(
     data = {
         "tasks": tasks,
         "groups": groups,
-        "config_groups": config_groups,
+        # The taskgraph matches the labels (without chunk number) of its tasks with the ones of the
+        # tasks of the selected configs (a group without any runs on all configs, see
+        # select_configs).
+        "config_groups": {
+            group: (
+                "*" not in configs
+                and testconfigselect.task_labels(
+                    get_live_tasks(), group, configs, get_new_tasks()
+                )
+            )
+            or ["*"]
+            for group, configs in config_groups.items()
+        },
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": known_tasks,

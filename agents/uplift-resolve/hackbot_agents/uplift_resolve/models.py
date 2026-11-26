@@ -58,6 +58,13 @@ class GitSource(BaseModel):
         pattern=FULL_SHA_PATTERN, description="Full git commit SHA to cherry-pick."
     )
 
+    # The Phabricator revision the commit landed from, so the agent can name it
+    # by its D-number rather than by its position in the stack.
+    revision_id: int | None = Field(
+        default=None,
+        description="Phabricator revision id (the D-number) the commit landed from.",
+    )
+
     async def fetch_diff(
         self, client: PhabricatorClient, scratch_out: Path
     ) -> FetchedDiff | None:
@@ -65,8 +72,13 @@ class GitSource(BaseModel):
         return None
 
     def render_work_item(self, index: int, fetched: FetchedDiff | None) -> str:
-        """Describe this source as a numbered work item for the prompt."""
-        return f"{index}. git commit `{self.commit}` — cherry-pick it."
+        """Describe this source as a numbered work item for the prompt.
+
+        Leads with the revision's D-number when there is one, which is how the
+        agent refers to the source in its report.
+        """
+        name = f"D{self.revision_id}" if self.revision_id else f"`{self.commit[:12]}`"
+        return f"{index}. {name} — git commit `{self.commit}`; cherry-pick it."
 
 
 class PhabricatorSource(BaseModel):
@@ -165,7 +177,7 @@ class PhabricatorSource(BaseModel):
                 f"D{self.revision_id}: diff must be fetched before it is rendered"
             )
         return (
-            f"{index}. Phabricator revision D{self.revision_id} — the diff is at "
+            f"{index}. D{self.revision_id} — Phabricator revision, the diff is at "
             f"`{fetched.path}`, {self.render_base(fetched)}. Commit it on "
             f"its own."
         )

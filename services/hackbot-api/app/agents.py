@@ -15,6 +15,7 @@ from app.schemas import (
     DatasetEvalInputs,
     FrontendTriageInputs,
     GeckoTriageInputs,
+    PerfTriageInputs,
     TestPlanGeneratorInputs,
     TestRepairFixInputs,
     TestRepairInputs,
@@ -54,6 +55,12 @@ class AgentSpec:
     expects_actions: bool = False
     # How long an execution may run; the API-wide default when unset.
     execution_timeout_seconds: int | None = None
+    # The one GitHub repository ("owner/repo") this agent's `github.submit_patch`
+    # actions may open pull requests on; unset, they are refused. It is set here,
+    # not taken from the run, because the run's artifact is agent-written. It must
+    # be the repository of the agent's `[source].repo_url`, since its commit is
+    # built on that checkout.
+    github_repository: str | None = None
 
 
 def model_to_env(inputs: BaseModel) -> dict[str, str]:
@@ -156,6 +163,19 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         # Set `auto_apply_actions=True` to let vouched runs (`findings.auto_apply`)
         # reach the bug with nobody in between.
         auto_apply_actions=False,
+        auto_apply_requires_consent=True,
+    ),
+    "perf-triage": AgentSpec(
+        name="perf-triage",
+        description=(
+            "Rate a Firefox performance bug with the Performance Impact "
+            "Calculator, analysing a linked profile, and set Performance Impact."
+        ),
+        job_name="hackbot-agent-perf-triage",
+        input_schema=PerfTriageInputs,
+        # Writes cf_performance_impact unattended, but only for runs whose rating
+        # held under every value of the inputs the bug left open (findings.auto_apply).
+        auto_apply_actions=True,
         auto_apply_requires_consent=True,
     ),
     "test-repair": AgentSpec(

@@ -1,17 +1,18 @@
 import asyncio
+import contextlib
 import inspect
 import logging
 import os
 import sys
 import traceback
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 from typing import NoReturn
 
 import sentry_sdk
 from pydantic import ValidationError
 
-from hackbot_runtime import anthropic_wif, openai_wif, wandb_wif
+from hackbot_runtime import wif
 from hackbot_runtime.config import HackbotConfig, load_config
 from hackbot_runtime.context import HackbotContext
 from hackbot_runtime.results import HackbotAgentResult
@@ -36,19 +37,19 @@ _SUMMARY_NAME = "summary.json"
 _AGENT_LOG_KEY = "logs/agent.log"
 
 
-def _configure_auth() -> None:
-    """Set up the model-provider and observability credentials before the run.
+@contextlib.contextmanager
+def _configure_auth() -> Iterator[None]:
+    """Set up the model-provider credentials for the run.
 
-    Anthropic and OpenAI (model access) and W&B (Weave tracing) all support GCP
-    Workload Identity Federation, so in deployment none needs a long-lived key in
-    the agent container; each falls back to its API-key env var locally.
+    Anthropic and OpenAI both support GCP Workload Identity Federation, so in
+    deployment neither needs a long-lived key in the agent container; each falls
+    back to its API-key env var locally.
     """
-    if anthropic_wif.configure():
-        log.info("Configured Anthropic WIF authentication")
-    if openai_wif.configure():
-        log.info("Configured OpenAI WIF authentication")
-    if wandb_wif.configure():
-        log.info("Configured W&B WIF authentication")
+    anthropic_config = wif.AnthropicWifSettings.from_env()
+    openai_config = wif.OpenAIWifSettings.from_env()
+
+    with wif.configure(anthropic_config), wif.configure(openai_config):
+        yield
 
 
 def _configure_sentry(entrypoint: Callable) -> None:
@@ -210,11 +211,11 @@ def run(entrypoint: AgentMain, config: ConfigArg = None) -> NoReturn:
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
-        _configure_auth()
-        if ctx.parent_run_id:
-            ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
-            outcome: object = entrypoint(ctx)
+        with _configure_auth():
+            if ctx.parent_run_id:
+                ctx.fetch_parent_artifacts()
+            with trace_agent(entrypoint, ctx.run_id):
+                outcome: object = entrypoint(ctx)
     except Exception as exc:
         log.exception("Agent raised an exception")
         outcome = exc
@@ -231,11 +232,11 @@ def run_async(entrypoint: AsyncAgentMain, config: ConfigArg = None) -> NoReturn:
     sentry_sdk.set_tag("run_id", ctx.run_id)
 
     try:
-        _configure_auth()
-        if ctx.parent_run_id:
-            ctx.fetch_parent_artifacts()
-        with trace_agent(entrypoint, ctx.run_id):
-            outcome: object = asyncio.run(entrypoint(ctx))
+        with _configure_auth():
+            if ctx.parent_run_id:
+                ctx.fetch_parent_artifacts()
+            with trace_agent(entrypoint, ctx.run_id):
+                outcome: object = asyncio.run(entrypoint(ctx))
     except Exception as exc:
         log.exception("Agent raised an exception")
         outcome = exc

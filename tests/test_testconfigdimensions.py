@@ -149,7 +149,7 @@ def mock_data(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         testconfigdimensions,
         "load_regressions",
-        lambda with_patches=True: (regressions, {LINUX, LINUX_DEBUG, WINDOWS, MAC}, {}),
+        lambda with_patches=True: (regressions, {}),
     )
 
 
@@ -224,7 +224,7 @@ def test_class_model_class_only_in_test_set(monkeypatch) -> None:
     monkeypatch.setattr(
         testconfigdimensions,
         "load_regressions",
-        lambda with_patches=True: (regressions, {LINUX, WINDOWS, MAC, android}, {}),
+        lambda with_patches=True: (regressions, {}),
     )
     model = testconfigdimensions.TestConfigSelectClassModel()
     classes, class_names = model.get_labels()

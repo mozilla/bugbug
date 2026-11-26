@@ -635,7 +635,12 @@ async def test_other_agents_do_not_auto_apply():
     # only when the run vouched for itself, build-repair and test-repair only their
     # notifications, and everyone else stays human-gated.
     auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
-    assert auto_apply == {"autowebcompat-intervention", "bug-fix", "frontend-triage"}
+    assert auto_apply == {
+        "autowebcompat-intervention",
+        "bug-fix",
+        "frontend-triage",
+        "perf-triage",
+    }
     assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
         "email.send",
         "slack.post_message",

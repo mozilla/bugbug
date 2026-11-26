@@ -36,6 +36,7 @@ from hackbot_agents.gecko_triage.config import (  # noqa: E402
 from hackbot_agents.gecko_triage.hooks import install_hooks  # noqa: E402
 from hackbot_agents.gecko_triage.investigations import Investigations  # noqa: E402
 from hackbot_agents.gecko_triage.state import TriageState  # noqa: E402
+from hackbot_agents.gecko_triage.teamconfig import LeftToOwner  # noqa: E402
 from hackbot_runtime.actions import ActionsRecorder  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -145,6 +146,23 @@ def comments_returning() -> list[dict]:
 @pytest.fixture
 def new_state(bug_new, comments_new) -> TriageState:
     return TriageState(bug=bug_new, comments=comments_new, now=NOW)
+
+
+# What the `left_to_owner` fixture lists. The fixture bug's own component leaves only
+# severity to its owners, and a move target leaves both fields.
+LEFT_TO_OWNER = {
+    "severity": ["Core :: Audio/Video: Playback", "core :: widget: cocoa"],
+    "priority": ["Core :: Widget: Cocoa"],
+}
+
+
+@pytest.fixture
+def left_to_owner(monkeypatch):
+    """`left_to_owner` as `LEFT_TO_OWNER`, for the hooks and the prompts."""
+    left = LeftToOwner.model_validate(LEFT_TO_OWNER)
+    terms = config.TERMS.model_copy(update={"left_to_owner": left})
+    monkeypatch.setattr(hooks, "TERMS", terms)
+    monkeypatch.setattr(agent, "TERMS", terms)
 
 
 @pytest.fixture
