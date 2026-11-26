@@ -19,7 +19,7 @@ from unidiff import PatchSet
 from unidiff.errors import UnidiffParseError
 
 from bugbug.tools.code_review.data_types import GeneratedReviewComment
-from bugbug.tools.code_review.review_context import parse_diff_files
+from bugbug.tools.code_review.review_context import parse_changed_files
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     format_patch_set,
@@ -286,10 +286,10 @@ async def test_get_file_after_stack_follows_rename_to_source():
     assert content == "a\nB\n"
 
 
-def test_parse_diff_files_skips_removed_files():
+def test_parse_changed_files_includes_removed_files():
     diff = MODIFIED_DIFF + ADDED_DIFF + REMOVED_DIFF + RENAME_DIFF
 
-    assert parse_diff_files(diff) == {"dom/base/f.cpp", "new.txt"}
+    assert set(parse_changed_files(diff)) == {"dom/base/f.cpp", "new.txt", "gone.txt"}
 
 
 def test_format_patch_set_uses_prefixed_target_file():

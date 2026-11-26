@@ -76,6 +76,56 @@ def test_render_sources_describes_a_mixed_stack():
     )
 
 
+def test_render_sources_names_each_source_by_its_d_number():
+    """Reviewers read the report on the revisions, so sources are named by revision."""
+    sources = [
+        GitSource(commit=COMMIT, revision_id=4342),
+        GitSource(commit=COMMIT),
+        PhabricatorSource(revision_id=88, diff_id=500),
+    ]
+
+    named, unnamed, phab = render_sources(sources, fetched_for(*sources)).splitlines()
+
+    assert named.startswith("1. D4342 "), (
+        "A git source with a revision should lead with its D-number."
+    )
+    assert unnamed.startswith(f"2. `{COMMIT[:12]}` "), (
+        "A git source with no revision should fall back to its short commit hash."
+    )
+    assert phab.startswith("3. D88 "), (
+        "A Phabricator source should lead with its D-number, like a git source."
+    )
+
+
+def test_git_source_revision_id_is_optional():
+    assert GitSource(commit=COMMIT).revision_id is None, (
+        "Callers that don't know the revision can still send a bare commit."
+    )
+    assert GitSource(commit=COMMIT, revision_id=4342).revision_id == 4342, (
+        "A revision ID sent with the commit should be kept."
+    )
+
+
+def test_the_workflow_tells_the_agent_to_name_sources_by_d_number():
+    prompt = load_workflow()
+
+    assert "D-number" in prompt, "The report should name sources by D-number."
+    assert '"patch 1"' in prompt, (
+        "The workflow should tell the agent not to number sources as patches."
+    )
+
+
+def test_the_workflow_cherry_picks_without_a_trailer():
+    prompt = load_workflow()
+
+    assert "git cherry-pick <commit>" in prompt, (
+        "The agent should cherry-pick git sources without `-x`."
+    )
+    assert "cherry-pick -x" not in prompt, (
+        '`-x` would add a "(cherry picked from commit ...)" line to the uplift\'s message.'
+    )
+
+
 def test_render_sources_says_what_phabricator_did_not_record():
     """A base commit is not guaranteed, and guessing one lands a bad patch."""
     sources = [PhabricatorSource(revision_id=88)]

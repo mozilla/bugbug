@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any, Collection, Sequence
 from urllib.parse import urlparse
 
+import hglib
 import orjson
 import requests
 import zstandard
@@ -28,7 +29,7 @@ from bugbug.models.perf_regression_predictor import (
 from bugbug.perf.calibration import Calibration, load_calibrations
 from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
-from bugbug.utils import get_hgmo_stack, get_hgmo_stack_changesets
+from bugbug.utils import get_hgmo_stack_changesets
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -450,11 +451,87 @@ def classify_perf_regression(branch: str, rev: str) -> str:
     return "OK"
 
 
+def _get_commits(
+    revs: Sequence[bytes],
+    branch: str | None,
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> list[repository.CommitDict]:
+    """Get the commits among `revs` (full hashes) on `branch`, in the same order.
+
+    The commits which are already in the commits DB are taken from it, as they can't be mined again
+    (see repository.get_commits_from_db). The other commits are mined in the same way as for the
+    commits DB, but without storing them (or their contribution to the experience features). Merges,
+    which are not mined, and the commits excluded by the filters (see repository.filter_commits)
+    are not returned.
+    """
+    from bugbug_http import REPO_DIR
+
+    db_commits = repository.get_commits_from_db(rev.decode("ascii") for rev in revs)
+    LOGGER.info("%d of %d commits found in the commits DB", len(db_commits), len(revs))
+    if db_commits:
+        # Commits can be added to .hg-annotate-ignore-revs, or backed out, after
+        # they are mined.
+        with hglib.open(REPO_DIR) as hg:
+            ignore_revs = repository.get_ignore_revs(hg, REPO_DIR)
+            backedoutby = repository.get_backedoutby(
+                hg, [node.encode("ascii") for node in db_commits]
+            )
+        for commit in db_commits.values():
+            commit["ignored"] = repository.is_ignored(
+                commit["node"], commit["desc"], ignore_revs
+            )
+            commit["backedoutby"] = (
+                backedoutby.get(commit["node"]) or commit["backedoutby"]
+            )
+
+    to_mine = [rev for rev in revs if rev.decode("ascii") not in db_commits]
+    mined_commits = (
+        repository.download_commits(
+            REPO_DIR,
+            revs=to_mine,
+            branch=branch,
+            save=False,
+            include_no_bug=include_no_bug,
+            include_backouts=include_backouts,
+            include_ignored=include_ignored,
+        )
+        if to_mine
+        else ()
+    )
+
+    commits_by_node = {
+        commit["node"]: commit
+        for commit in (
+            *repository.filter_commits(
+                db_commits.values(),
+                include_no_bug=include_no_bug,
+                include_backouts=include_backouts,
+                include_ignored=include_ignored,
+            ),
+            *mined_commits,
+        )
+    }
+    return [
+        commits_by_node[rev.decode("ascii")]
+        for rev in revs
+        if rev.decode("ascii") in commits_by_node
+    ]
+
+
 def _get_ignored_reason(commit: repository.CommitDict) -> str | None:
     if commit["backsout"]:
         return "backout"
     if commit["ignored"]:
         return "ignored"
+    return None
+
+
+def _get_scored_reason(commit: repository.CommitDict) -> str | None:
+    """Get the reason to flag a commit which is scored anyway."""
+    if commit["backedoutby"]:
+        return "backedout"
     return None
 
 
@@ -466,7 +543,8 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     and mined from the service's local clone, so their features are computed in
     the same way as during training. Backouts and commits ignored during
     training (e.g. reformatting commits) are listed with their `ignored_reason`
-    but not scored, unknown revisions and merges are marked as not available.
+    but not scored. Backed-out commits are scored, with `ignored_reason` set to
+    "backedout". Unknown revisions and merges are marked as not available.
     """
     from bugbug_http import REPO_DIR
     from bugbug_http.app import JobInfo
@@ -490,13 +568,9 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
     if not nodes:
         return "OK"
 
-    # The commits are mined in the same way as for the commits DB, but without
-    # storing them (or their contribution to the experience features).
-    commits = repository.download_commits(
-        REPO_DIR,
-        revs=[node.encode("ascii") for node in nodes],
+    commits = _get_commits(
+        [node.encode("ascii") for node in nodes],
         branch=None,
-        save=False,
         include_no_bug=True,
         include_backouts=True,
         include_ignored=True,
@@ -521,7 +595,7 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
                 "index": index,
                 "class": class_,
                 "risk_band": model.find_risk_band(prob[1]),
-                "ignored_reason": None,
+                "ignored_reason": _get_scored_reason(commit),
             }
 
     for node in nodes:
@@ -666,9 +740,9 @@ def schedule_tests(branch: str, rev: str) -> str:
     repository.pull(REPO_DIR, branch, rev, update=False)
 
     # Load the full stack of patches leading to that revision
-    LOGGER.info("Loading commits to analyze using automationrelevance...")
+    LOGGER.info("Loading the commits to analyze...")
     try:
-        revs = get_hgmo_stack(branch, rev)
+        revs = repository.get_stack(REPO_DIR, branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning("Push not found for %s @ %s!", branch, rev)
         return "NOK"
@@ -878,14 +952,7 @@ def _analyze_patch(
     """
     from bugbug_http import REPO_DIR
 
-    all_commits = repository.download_commits(
-        REPO_DIR,
-        revs=revs,
-        branch=branch,
-        save=False,
-        include_no_bug=True,
-        include_backouts=True,
-    )
+    all_commits = _get_commits(revs, branch, include_no_bug=True, include_backouts=True)
     commits = [commit for commit in all_commits if not commit["backsout"]]
 
     # On backouts, select the tasks and manifests which failed recently, as they

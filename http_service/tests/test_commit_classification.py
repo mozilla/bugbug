@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import contextlib
 import gzip
 
 import hglib
@@ -202,33 +203,85 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         "ignored": "2" * 40,
         "scored": "3" * 40,
         "merge": "4" * 40,
+        # Added to .hg-annotate-ignore-revs after it was added to the commits DB.
+        "newly_ignored": "5" * 40,
+        "backedout": "6" * 40,
+        # Backed out after it was added to the commits DB.
+        "newly_backedout": "7" * 40,
+        # Backed out when it was mined.
+        "mined_backedout": "8" * 40,
     }
     monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
+    monkeypatch.setattr(models.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+    monkeypatch.setattr(
+        models.repository,
+        "get_ignore_revs",
+        lambda hg, repo_dir: {nodes["newly_ignored"]},
+    )
+
+    db_names = ("backout", "scored", "newly_ignored", "backedout", "newly_backedout")
+
+    def get_backedoutby(hg, revs):
+        assert sorted(revs) == sorted(nodes[name].encode() for name in db_names)
+        # Backouts which are not in the local repository yet are not known.
+        return {
+            rev.decode(): "9" * 40 if rev == nodes["newly_backedout"].encode() else ""
+            for rev in revs
+        }
+
+    monkeypatch.setattr(models.repository, "get_backedoutby", get_backedoutby)
+
+    def commit(name):
+        return {
+            "node": nodes[name],
+            "bug_id": 1,
+            "desc": name,
+            "backsout": ["0" * 40] if name == "backout" else [],
+            "ignored": name == "ignored",
+            "backedoutby": "9" * 40 if name in ("backedout", "mined_backedout") else "",
+        }
+
+    # The commits already in the commits DB are not mined again.
+    def get_commits_from_db(db_nodes):
+        return {nodes[name]: commit(name) for name in db_names}
 
     def download_commits(repo_dir, revs, **kwargs):
+        assert revs == [
+            nodes["ignored"].encode(),
+            nodes["merge"].encode(),
+            nodes["mined_backedout"].encode(),
+        ]
         # Merge commits are not mined.
-        return tuple(
-            {
-                "node": node,
-                "bug_id": 1,
-                "backsout": ["0" * 40] if name == "backout" else [],
-                "ignored": name == "ignored",
-            }
-            for name, node in nodes.items()
-            if name != "merge"
-        )
+        return (commit("ignored"), commit("mined_backedout"))
 
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
     monkeypatch.setattr(models.repository, "download_commits", download_commits)
     model = MockRegressorModel()
     monkeypatch.setattr(models.MODEL_CACHE, "get", lambda model_name: model)
 
     assert models.classify_commits("regressor", "try", list(nodes.values())) == "OK"
 
-    assert [commit["node"] for commit in model.classified] == [nodes["scored"]]
-    for reason in ("backout", "ignored"):
-        result = _get_result(nodes[reason], "try")
+    assert [commit["node"] for commit in model.classified] == [
+        nodes["scored"],
+        nodes["backedout"],
+        nodes["newly_backedout"],
+        nodes["mined_backedout"],
+    ]
+    for name, reason in (
+        ("backout", "backout"),
+        ("ignored", "ignored"),
+        ("newly_ignored", "ignored"),
+    ):
+        result = _get_result(nodes[name], "try")
         assert result["ignored_reason"] == reason
         assert result["prob"] is None
         assert result["risk_band"] is None
     assert _get_result(nodes["scored"], "try")["prob"] == [0.25, 0.75]
+    assert _get_result(nodes["scored"], "try")["ignored_reason"] is None
+    # Backed-out commits are scored anyway.
+    for name in ("backedout", "newly_backedout", "mined_backedout"):
+        result = _get_result(nodes[name], "try")
+        assert result["ignored_reason"] == "backedout"
+        assert result["prob"] == [0.25, 0.75]
+        assert result["risk_band"] == "h"
     assert _get_result(nodes["merge"], "try") == {"available": False}

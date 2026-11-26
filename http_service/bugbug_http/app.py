@@ -758,7 +758,8 @@ def model_prediction_commit(model_name: str, branch: str, rev: str):
         The answer is {"available": False} when the commit can't be found on
         the branch (or is a merge commit). Backouts and commits ignored by the
         model (e.g. reformatting commits) are not scored, and have their
-        ignored_reason set.
+        ignored_reason set. Backed-out commits are scored, and have their
+        ignored_reason set to "backedout".
       summary: Classify a single commit
       parameters:
       - name: model_name

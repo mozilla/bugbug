@@ -417,8 +417,20 @@ def retrieve_build_platforms() -> None:
     logger.info("Retrieved the files built on %s.", ", ".join(sorted(built)))
 
 
-def update_commits() -> None:
-    """Mine the autoland commits after the last one in the commits DB, and update the DBs derived from them."""
+def get_autoland_head() -> str:
+    """The node of the latest autoland commit on the default branch."""
+    # Unlike "tip", which is the latest commit on any branch.
+    r = utils.get_session("hgmo").get(
+        "https://hg.mozilla.org/integration/autoland/json-rev/default",
+        headers={"User-Agent": utils.get_user_agent()},
+        timeout=REQUEST_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()["node"]
+
+
+def update_commits(autoland_head: str) -> None:
+    """Mine the autoland commits up to `autoland_head` after the last one in the commits DB, and update the DBs derived from them."""
     # The last commits of the DB, from the newest. They aren't filtered (like get_commits does), as
     # the commits after the last one are the ones to mine: starting from an older one would mine
     # again (and add to the DB) the last commits if they are filtered out (e.g. backouts).
@@ -432,11 +444,16 @@ def update_commits() -> None:
         # we mined commits, but is not yet on autoland.
         for node in nodes:
             try:
-                revs = repository.get_revs(hg, rev_start=f"children({node})")
+                revs = repository.get_new_revs(hg, node, autoland_head)
                 break
             except hglib.error.CommandError as e:
                 if b"abort: unknown revision" not in e.err:
                     raise
+
+    # Some of the commits can already be in the DB, e.g. when the last commit of the DB is a parent
+    # of a merge, the commits of its other parent.
+    in_db = repository.get_nodes_in_db(rev.decode("ascii") for rev in revs)
+    revs = [rev for rev in revs if rev.decode("ascii") not in in_db]
 
     logger.info("Updating commits DB...")
     try:
@@ -461,9 +478,15 @@ def update_commits() -> None:
 
 
 def refresh_commits() -> None:
-    """Pull the latest autoland commits, and add them to the commits DB (see update_commits)."""
-    repository.pull(REPO_DIR, "integration/autoland", "tip")
-    update_commits()
+    """Pull the latest autoland commits, and add them to the commits DB (see update_commits).
+
+    The latest commit on the default branch is pulled by node, rather than as "tip", to know which
+    commits were pulled from autoland, as the clone can also contain commits from other repositories
+    (e.g. try).
+    """
+    autoland_head = get_autoland_head()
+    repository.pull(REPO_DIR, "integration/autoland", autoland_head)
+    update_commits(autoland_head)
 
 
 def refresh_data() -> None:
@@ -559,6 +582,10 @@ def boot_worker() -> None:
         try:
             utils.extract_file(f"{repository.COMMITS_DB}.zst")
             logger.info("Commits DB extracted.")
+            # The index of a previous DB would be wrong.
+            repository.delete_commits_index()
+            repository.update_commits_index()
+            logger.info("Commits DB indexed.")
             return True
         except FileNotFoundError:
             logger.info("Commits DB not extracted, but missing models are allowed.")
@@ -595,7 +622,12 @@ def boot_worker() -> None:
             logger.info("Waiting autoland to be cloned...")
             clone_autoland_future.result()
 
-            update_commits()
+            try:
+                refresh_commits()
+            except Exception:
+                # It's not ideal, but better not to crash the service! The commits DB will be
+                # updated by the next refresh.
+                logger.exception("Failed to refresh the commits")
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()
