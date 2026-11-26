@@ -18,8 +18,8 @@ from app.actions_applier import (
     on_run_completed,
     resolve_placeholders,
 )
-from app.agents import AGENT_REGISTRY
-from app.schemas import RunStatus
+from app.agents import AGENT_REGISTRY, AgentSpec
+from app.schemas import AgentInputs, RunStatus
 from sqlalchemy.dialects import postgresql
 
 _CLIENT = object()
@@ -629,23 +629,16 @@ async def test_succeeded_run_only_applies_eligible_action_types(monkeypatch):
     assert applied_types == ["bugzilla.update_bug"]
 
 
-async def test_other_agents_do_not_auto_apply():
-    # Opting an agent in is a deliberate edit, so spell out who is in today: bug-fix
-    # and autowebcompat-intervention auto-apply unconditionally, frontend-triage
-    # only when the run vouched for itself, build-repair and test-repair only their
-    # notifications, and everyone else stays human-gated.
-    auto_apply = {n for n, s in AGENT_REGISTRY.items() if s.auto_apply_actions}
-    assert auto_apply == {
-        "autowebcompat-intervention",
-        "bug-fix",
-        "frontend-triage",
-        "perf-triage",
-    }
-    assert AGENT_REGISTRY["test-repair"].always_apply_actions == {
-        "email.send",
-        "slack.post_message",
-        "agents.start_run",
-    }
+def test_agents_do_not_auto_apply_unless_they_opt_in():
+    # Auto-apply is opt-in: an agent whose registry entry leaves it unset records
+    # its actions for a human to apply, even when the run vouches for itself.
+    spec = AgentSpec(
+        name="new-agent",
+        description="An agent that doesn't opt in to auto-apply.",
+        job_name="hackbot-agent-new-agent",
+        input_schema=AgentInputs,
+    )
+    assert not _auto_applies(spec, _run_with_findings(auto_apply=True))
 
 
 async def test_apply_all_pending_always_applies(monkeypatch):
