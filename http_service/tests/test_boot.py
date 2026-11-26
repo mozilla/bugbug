@@ -127,7 +127,7 @@ def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def sleep(seconds: float) -> None:
         assert seconds == boot.CONFIG_SELECTION_TASKS_REFRESH_INTERVAL
-        if len(calls) == 7:
+        if len(calls) == 11:
             raise Stop()
         now[0] += seconds
 
@@ -136,21 +136,40 @@ def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
         if len(calls) == 1:
             raise Exception("pushlog unavailable")
 
-    monkeypatch.setattr(boot, "REFRESH_INTERVAL", 30)
+    def refresh_commits() -> None:
+        calls.append("commits")
+        if len(calls) == 2:
+            raise Exception("hg.mozilla.org unavailable")
+
+    monkeypatch.setattr(boot, "REFRESH_INTERVAL", 60)
+    monkeypatch.setattr(boot, "COMMITS_REFRESH_INTERVAL", 20)
     monkeypatch.setattr(boot, "CONFIG_SELECTION_TASKS_REFRESH_INTERVAL", 10)
     monkeypatch.setattr(refresh.os, "nice", lambda increment: None)
     monkeypatch.setattr(refresh.time, "sleep", sleep)
     monkeypatch.setattr(refresh.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(boot, "refresh_data", lambda: calls.append("refresh"))
+    monkeypatch.setattr(boot, "refresh_commits", refresh_commits)
     monkeypatch.setattr(
         boot, "refresh_config_selection_tasks", refresh_config_selection_tasks
     )
 
-    # The config selection tasks are refreshed often (also after a failure), the rest of the data
-    # (including them) once per REFRESH_INTERVAL.
+    # The config selection tasks are refreshed often and the commits less often (also after a
+    # failure), the rest of the data (including them) once per REFRESH_INTERVAL.
     with pytest.raises(Stop):
         refresh.main()
-    assert calls == ["tasks", "tasks", "refresh", "tasks", "tasks", "refresh", "tasks"]
+    assert calls == [
+        "tasks",
+        "commits",
+        "tasks",
+        "tasks",
+        "commits",
+        "tasks",
+        "tasks",
+        "refresh",
+        "tasks",
+        "commits",
+        "tasks",
+    ]
 
 
 def _task(

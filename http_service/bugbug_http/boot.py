@@ -25,9 +25,13 @@ logger = logging.getLogger(__name__)
 # The number of recent autoland pushes whose target tasks are the known tasks. They include backstop
 # pushes, which target all tasks (one every 20 pushes or 4 hours).
 AUTOLAND_PUSHES = 50
-# How often the data about the current tasks, build platforms and commits is retrieved again (in
-# seconds, see bugbug_http.refresh).
+# How often the data about the current tasks and build platforms is retrieved again (in seconds,
+# see bugbug_http.refresh).
 REFRESH_INTERVAL = 24 * 60 * 60
+# How often the latest autoland commits are added to the commits DB (in seconds, see
+# bugbug_http.refresh), so that few commits are left to mine when they are needed (see
+# refresh_commits).
+COMMITS_REFRESH_INTERVAL = 30 * 60
 # How often the test tasks among which configs are selected are updated with the latest pushes (in
 # seconds, see bugbug_http.refresh and update_config_selection_tasks).
 CONFIG_SELECTION_TASKS_REFRESH_INTERVAL = 10 * 60
