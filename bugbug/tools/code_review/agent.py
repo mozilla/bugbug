@@ -231,7 +231,8 @@ class CodeReviewTool(GenerativeModelTool):
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
-    ) -> tuple[AgentResponse, list[dict]]:
+    ) -> tuple[AgentResponse, list[dict], list[dict]]:
+        """Return the agent's response, external content manifest and tool calls."""
         from bugbug.tools.code_review.review_context import (
             load_external_context_for_review,
             resolve_review_context_source,
@@ -265,7 +266,12 @@ class CodeReviewTool(GenerativeModelTool):
             result = await self._invoke_review_agent(context, messages)
 
             if result is not None and result.get("structured_response") is not None:
-                return result["structured_response"], manifest
+                tool_calls = [
+                    {"name": call["name"], "args": call["args"]}
+                    for message in result["messages"]
+                    for call in getattr(message, "tool_calls", None) or []
+                ]
+                return result["structured_response"], manifest, tool_calls
 
             if attempt == 0 and result is not None:
                 logger.warning("Review agent returned no structured response; retrying")
@@ -284,6 +290,7 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> dict | None:
         """Run the review agent and return its final streamed state."""
         result = None
+        logged = len(messages)
         try:
             async for chunk in self.agent.astream(
                 {"messages": messages},
@@ -291,6 +298,15 @@ class CodeReviewTool(GenerativeModelTool):
                 stream_mode="values",
                 config={"recursion_limit": 500},
             ):
+                for message in chunk["messages"][logged:]:
+                    for call in getattr(message, "tool_calls", None) or []:
+                        logger.info(
+                            "Review agent tool call for patch %s: %s %s",
+                            context.patch.patch_id,
+                            call["name"],
+                            json.dumps(call["args"]),
+                        )
+                logged = len(chunk["messages"])
                 result = chunk
         except GraphRecursionError as e:
             raise RecursionLimitError("The model could not complete the review") from e
@@ -323,9 +339,11 @@ class CodeReviewTool(GenerativeModelTool):
         # don't stall concurrent reviews, whose pending requests would time out.
         patch_summary = await asyncio.to_thread(self.patch_summarizer.run, patch)
 
-        agent_response, external_content_manifest = await self.generate_review_comments(
-            patch, patch_summary
-        )
+        (
+            agent_response,
+            external_content_manifest,
+            tool_calls,
+        ) = await self.generate_review_comments(patch, patch_summary)
         unfiltered_suggestions = agent_response.comments
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
@@ -358,6 +376,7 @@ class CodeReviewTool(GenerativeModelTool):
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),
                 "num_scope_suggestions": len(scope_suggestions),
                 "external_content": external_content_manifest,
+                "tool_calls": tool_calls,
             },
         )
 

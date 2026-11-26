@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from langchain.messages import AIMessage
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
@@ -2311,6 +2312,7 @@ def test_run_appends_scope_suggestion_last():
         return_value=(
             AgentResponse(comments=[regular], general_comment="Looks sound."),
             [],
+            [],
         )
     )
     tool.suggestion_filterer = MagicMock()
@@ -2382,8 +2384,11 @@ def _make_review_tool(review_context_repo=None):
     tool._extra_context_toml = None
     tool._content_overrides = None
 
-    async def fake_astream(*args, **kwargs):
-        yield {"structured_response": AgentResponse(comments=[], general_comment="")}
+    async def fake_astream(input, **kwargs):
+        yield {
+            "messages": input["messages"],
+            "structured_response": AgentResponse(comments=[], general_comment=""),
+        }
 
     tool.agent = SimpleNamespace(astream=fake_astream)
     return tool
@@ -2464,7 +2469,7 @@ def test_generate_review_comments_retries_missing_structured_response():
             }
 
     tool.agent = SimpleNamespace(astream=fake_astream)
-    response, manifest = asyncio.run(
+    response, manifest, _ = asyncio.run(
         tool.generate_review_comments(fake_patch, "summary")
     )
 
@@ -2473,6 +2478,33 @@ def test_generate_review_comments_retries_missing_structured_response():
     assert len(calls) == 2
     assert len(calls[1]["messages"]) == 2
     assert "AgentResponse" in calls[1]["messages"][-1].content
+
+
+def test_generate_review_comments_returns_and_logs_tool_calls(caplog):
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
+    fake_patch.patch_id = "1234"
+    call = {"name": "expand_context", "args": {"file_path": "a.txt"}, "id": "1"}
+
+    async def fake_astream(input, **kwargs):
+        messages = [*input["messages"], AIMessage(content="", tool_calls=[call])]
+        yield {"messages": messages, "structured_response": None}
+        yield {
+            "messages": messages,
+            "structured_response": AgentResponse(comments=[], general_comment=""),
+        }
+
+    tool.agent = SimpleNamespace(astream=fake_astream)
+    with caplog.at_level("INFO"):
+        _, _, tool_calls = asyncio.run(
+            tool.generate_review_comments(fake_patch, "summary")
+        )
+
+    assert tool_calls == [{"name": "expand_context", "args": {"file_path": "a.txt"}}]
+    logged = [r.getMessage() for r in caplog.records if "tool call" in r.getMessage()]
+    assert logged == [
+        'Review agent tool call for patch 1234: expand_context {"file_path": "a.txt"}'
+    ]
 
 
 def test_generate_review_comments_reports_missing_structured_response():
