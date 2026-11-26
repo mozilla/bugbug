@@ -976,6 +976,12 @@ def test_compute_confidence_thresholds() -> None:
     assert testselect.compute_confidence_thresholds([[0.456]], {"high": 1}) == {
         "high": 0.45
     }
+    # Confidences which are already rounded down are kept (0.29, 0.57 and 0.58 times 100 are
+    # slightly lower than their number of hundredths).
+    for confidence in (0.29, 0.57, 0.58):
+        assert testselect.compute_confidence_thresholds(
+            [[confidence]], {"high": 1}
+        ) == {"high": confidence}
     # Targets larger than the number of runnables use the lowest confidence.
     assert testselect.compute_confidence_thresholds([[0.7, 0.3]], {"low": 5}) == {
         "low": 0.3

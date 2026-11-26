@@ -481,7 +481,9 @@ def compute_confidence_thresholds(
     thresholds = {}
     for level, target in targets.items():
         k = min(len(confidences), max(1, round(target * len(push_confidences))))
-        thresholds[level] = math.floor(confidences[k - 1] * 100) / 100
+        # Rounded before flooring, as confidences which are already rounded down can be slightly
+        # lower than their number of hundredths when multiplied (e.g. 0.57 * 100 is 56.99...).
+        thresholds[level] = math.floor(round(confidences[k - 1] * 100, 6)) / 100
     return thresholds
 
 
