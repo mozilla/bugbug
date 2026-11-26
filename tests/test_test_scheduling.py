@@ -1570,6 +1570,104 @@ def test_find_manifests_for_paths_rebuilt_when_needed(tmp_path) -> None:
     assert manifest_by_path() is not initial
 
 
+def test_approximate_manifests_for_paths() -> None:
+    groups = [
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+        "dom/base/test/mochitest.toml",
+        "toolkit/content/tests/browser/browser.toml",
+        "testing/web-platform/tests/css/css-grid",
+        "testing/web-platform/tests/css/css-grid/subgrid",
+        "testing/web-platform/mozilla/tests/css/css-grid",
+    ]
+
+    def approximate(paths: list[str]) -> set[str]:
+        return test_scheduling.approximate_manifests_for_paths(paths, groups)
+
+    # The manifests in test subfolders close to a modified file.
+    assert approximate(["dom/battery/BatteryManager.cpp"]) == {
+        "dom/battery/test/mochitest.toml",
+        "dom/battery/test/chrome.toml",
+    }
+    # The manifests in the directory of a modified test (or of a modified manifest).
+    assert approximate(["dom/base/test/test_document.html"]) == {
+        "dom/base/test/mochitest.toml"
+    }
+    assert approximate(["toolkit/content/tests/browser/browser.toml"]) == {
+        "toolkit/content/tests/browser/browser.toml"
+    }
+    # Root-level files, and files far from any test, don't schedule anything.
+    assert approximate(["mach"]) == set()
+    assert approximate(["netwerk/base/nsIOService.cpp"]) == set()
+    # Not more than MAX_SIBLING_MANIFESTS manifests close to a modified file.
+    many = [
+        f"hub/component{i}/test/mochitest.toml"
+        for i in range(test_scheduling.MAX_SIBLING_MANIFESTS + 1)
+    ]
+    assert (
+        test_scheduling.approximate_manifests_for_paths(["hub/moz.build"], many)
+        == set()
+    )
+    assert test_scheduling.approximate_manifests_for_paths(
+        ["hub/moz.build"], many[:-1]
+    ) == set(many[:-1])
+
+    # The closest web-platform test directory containing a modified test or its expectations.
+    assert approximate(
+        ["testing/web-platform/tests/css/css-grid/subgrid/line-names-001.html"]
+    ) == {"testing/web-platform/tests/css/css-grid/subgrid"}
+    assert approximate(
+        ["testing/web-platform/meta/css/css-grid/grid-items/item-001.html.ini"]
+    ) == {"testing/web-platform/tests/css/css-grid"}
+    assert approximate(
+        ["testing/web-platform/mozilla/tests/css/css-grid/grid-001.html"]
+    ) == {"testing/web-platform/mozilla/tests/css/css-grid"}
+    assert approximate(["testing/web-platform/meta/css/css-grid/META.yml"]) == set()
+
+
+def test_get_gtest_folders(tmp_path) -> None:
+    for folder in ("dom/media/gtest", "xpcom/tests/gtest", "dom/media/webrtc"):
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "moz.build").touch()
+    # Without a moz.build file.
+    (tmp_path / "gfx" / "tests" / "gtest").mkdir(parents=True)
+
+    assert test_scheduling.get_gtest_folders(str(tmp_path)) == (
+        "dom/media/gtest",
+        "xpcom/tests/gtest",
+    )
+
+
+def test_approximate_tasks_for_paths() -> None:
+    tasks = [
+        "test-linux2404-64/opt-gtest-1proc",
+        "test-linux2404-64/opt-cppunit-1proc",
+        "build-linux64-rusttests/opt",
+        "test-linux2404-64/opt-mochitest-plain",
+    ]
+    gtest_folders = ("dom/media/gtest", "xpcom/tests/gtest")
+
+    def approximate(paths: list[str]) -> set[str]:
+        return test_scheduling.approximate_tasks_for_paths(paths, tasks, gtest_folders)
+
+    # A file in a gtest folder, or in a folder close to one.
+    assert approximate(["gfx/tests/gtest/TestColor.cpp"]) == {
+        "test-linux2404-64/opt-gtest-1proc"
+    }
+    assert approximate(["dom/media/CubebUtils.cpp"]) == {
+        "test-linux2404-64/opt-gtest-1proc"
+    }
+    assert approximate(["xpcom/base/nsCOMPtr.h"]) == set()
+    assert approximate(["mach"]) == set()
+    # A Rust file, and the cppunit infrastructure.
+    assert approximate(["servo/components/style/lib.rs"]) == {
+        "build-linux64-rusttests/opt"
+    }
+    assert approximate(["testing/runcppunittests.py"]) == {
+        "test-linux2404-64/opt-cppunit-1proc"
+    }
+
+
 def test_find_tasks_for_paths(tmp_path) -> None:
     find = _Finder(tmp_path)
     known_tasks = (

@@ -34,7 +34,6 @@ from bugbug import (
     utils,
 )
 from bugbug.model import Model
-from bugbug.model_calibration import fit_isotonic_breakpoints
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -415,6 +414,9 @@ TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth":
 # Groups at the "very_high" level run on a config of each OS family (see the HTTP service's config
 # selection): in offline evaluations, failing pushes caught at the same cost were ~2.3 points
 # higher with one such group per push, and about as high with 0.5 to 3.
+# The counts don't include the runnables which the HTTP service always selects: the manifests including
+# the modified tests and the tasks running the tests close to the modified files (see
+# test_scheduling.find_manifests_for_paths and find_tasks_for_paths).
 CONFIDENCE_LEVEL_TARGETS = {
     "label": {"very_low": 78.0, "low": 26.0, "medium": 15.0, "high": 5.5},
     "group": {
@@ -433,23 +435,36 @@ CONFIDENCE_LEVEL_TARGETS = {
 CONFIDENCE_LEVEL_MIN_CAUGHT = {"label": 0.6, "group": 0.85}
 
 
-def fit_calibration(
-    totals: Sequence[int], failures: Sequence[int]
-) -> tuple[list[float], list[float]] | None:
-    """Isotonic regression of the failure rate on the confidence, from counts per confidence (0, 0.01, ..., 1).
+# Numbers of runnables per push delimiting the bands of confidences in which the probability of failing is
+# considered constant (see fit_band_rates): in offline evaluations, the config selection catches as many
+# failures as with an isotonic regression of the failure rate on the confidence, and much fewer with the
+# CONFIDENCE_LEVEL_TARGETS counts only.
+CALIBRATION_COUNTS = (0.25, 0.5, 1.0, 2.0, 5.0, 11.0, 20.0, 36.0, 103.0, 309.0)
 
-    The confidences are not probabilities (the models are trained with class-balancing weights), but they rank
-    runnables well: the regression maps them to probabilities without changing their order. Returns the
-    regression's breakpoints, to interpolate, or None if there are no failures.
+# Minimum number of recent pushes on which to compute the confidence thresholds of the trained model (see
+# TestSelectModel.post_training).
+MIN_RECENT_PUSHES = 100
+
+
+def fit_band_rates(
+    thresholds: Sequence[float], totals: Sequence[float], failures: Sequence[float]
+) -> list[float]:
+    """The failure rate in each band of confidences, from counts per confidence (0, 0.01, ..., 1).
+
+    The bands are delimited by the (decreasing) `thresholds`: band i holds the confidences from
+    thresholds[i] up to the previous threshold, and the last band the confidences below the last
+    threshold. An empty band gets the rate of the band above it (or 0, for the first band).
     """
-    points = [(i / 100, n, f) for i, (n, f) in enumerate(zip(totals, failures)) if n]
-    if not any(f for _, _, f in points):
-        return None
-    return fit_isotonic_breakpoints(
-        [x for x, _, _ in points],
-        [f / n for _, n, f in points],
-        [n for _, n, _ in points],
-    )
+    rates: list[float] = []
+    upper = len(totals)
+    for lower in [round(t * 100) for t in thresholds] + [0]:
+        total = sum(totals[lower:upper])
+        if total:
+            rates.append(sum(failures[lower:upper]) / total)
+        else:
+            rates.append(rates[-1] if rates else 0.0)
+        upper = min(upper, lower)
+    return rates
 
 
 def compute_confidence_thresholds(
@@ -466,8 +481,73 @@ def compute_confidence_thresholds(
     thresholds = {}
     for level, target in targets.items():
         k = min(len(confidences), max(1, round(target * len(push_confidences))))
-        thresholds[level] = math.floor(confidences[k - 1] * 100) / 100
+        # Rounded before flooring, as confidences which are already rounded down can be slightly
+        # lower than their number of hundredths when multiplied (e.g. 0.57 * 100 is 56.99...).
+        thresholds[level] = math.floor(round(confidences[k - 1] * 100, 6)) / 100
     return thresholds
+
+
+def merge_tied_bands(
+    thresholds: Sequence[float], rates: Sequence[float]
+) -> tuple[list[float], list[float]]:
+    """Merge the calibration bands with the same threshold (see fit_band_rates).
+
+    `thresholds` are the thresholds of the CALIBRATION_COUNTS, and `rates` the failure rates of
+    their bands. When thresholds are computed on another model than the rates, bands which were
+    distinct can get the same threshold, and only the first one would be used: their rates are
+    averaged instead, weighted by the number of runnables per push in each band.
+    """
+    counts = [0.0, *CALIBRATION_COUNTS]
+    merged_thresholds: list[float] = []
+    merged_rates: list[float] = []
+    merged_weights: list[float] = []
+    for i, (threshold, rate) in enumerate(zip(thresholds, rates)):
+        weight = counts[i + 1] - counts[i]
+        if merged_thresholds and merged_thresholds[-1] == threshold:
+            merged_rates[-1] = (
+                merged_rates[-1] * merged_weights[-1] + rate * weight
+            ) / (merged_weights[-1] + weight)
+            merged_weights[-1] += weight
+        else:
+            merged_thresholds.append(threshold)
+            merged_rates.append(rate)
+            merged_weights.append(weight)
+    return merged_thresholds, merged_rates + [rates[-1]]
+
+
+def top_fit_confidences(
+    confidences: Mapping[str, float], excluded: Collection[str]
+) -> list[float]:
+    """The highest confidences of a push's runnables, except `excluded`, to compute thresholds.
+
+    Enough are kept for all the counts of CONFIDENCE_LEVEL_TARGETS and CALIBRATION_COUNTS.
+    """
+    n = int(
+        10
+        * max(
+            *CALIBRATION_COUNTS,
+            *(
+                t
+                for targets in CONFIDENCE_LEVEL_TARGETS.values()
+                for t in targets.values()
+            ),
+        )
+    )
+    return heapq.nlargest(
+        n, (c for name, c in confidences.items() if name not in excluded)
+    )
+
+
+def get_recent_pushes(after_rev: str) -> list[list[str]]:
+    """The changesets of the autoland pushes after the one including `after_rev`, oldest first."""
+    r = utils.get_session("hgmo").get(
+        "https://hg.mozilla.org/integration/autoland/json-pushes",
+        params={"version": "2", "fromchange": after_rev},
+        headers={"User-Agent": utils.get_user_agent()},
+    )
+    r.raise_for_status()
+    pushes = r.json()["pushes"]
+    return [pushes[push_id]["changesets"] for push_id in sorted(pushes, key=int)]
 
 
 def share_caught(pushes: Iterable[dict[str, Any]], threshold: float) -> float | None:
@@ -573,12 +653,16 @@ class TestSelectModel(Model):
                 test_scheduling.TOUCHED_TOGETHER_DB,
             )
 
-        # Confidence thresholds for the levels in CONFIDENCE_LEVEL_TARGETS, computed on the test
-        # pushes during the evaluation.
+        # Confidence thresholds for the levels in CONFIDENCE_LEVEL_TARGETS, computed on the trained
+        # model's confidences on recent pushes (see post_training).
         self.confidence_thresholds: dict[str, float] | None = None
-        # Mapping from confidences to probabilities of failing (see fit_calibration), computed on the
-        # test pushes during the evaluation.
+        # Probabilities of failing by band of confidences: the thresholds at which the trained model
+        # selects the CALIBRATION_COUNTS runnables per push (computed as confidence_thresholds), and
+        # the failure rate of each band during the evaluation (see fit_band_rates).
         self.calibration: tuple[list[float], list[float]] | None = None
+        # The gtest folders of the Firefox tree, to find the tasks which the HTTP service always selects
+        # (see forced_runnables).
+        self.gtest_folders: tuple[str, ...] = ()
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -835,16 +919,114 @@ class TestSelectModel(Model):
     ) -> dict[str, float]:
         """The probabilities of failing of runnables with the given confidences (unchanged if not calibrated).
 
-        The order of the runnables doesn't change, so selections by confidence are the same.
+        Each runnable gets the failure rate of its band of confidences (see calibration).
         """
         calibration = getattr(self, "calibration", None)
         if calibration is None:
             return dict(confidences)
-        names = list(confidences)
-        probabilities = np.interp(
-            [confidences[name] for name in names], calibration[0], calibration[1]
+        thresholds, rates = calibration
+        return {
+            name: next(
+                (rate for t, rate in zip(thresholds, rates) if confidence >= t),
+                rates[-1],
+            )
+            for name, confidence in confidences.items()
+        }
+
+    def forced_runnables(
+        self, commits: Sequence[repository.CommitDict], runnables: Collection[str]
+    ) -> set[str]:
+        """The runnables among `runnables` which the HTTP service selects whatever their confidence.
+
+        The manifests including the modified tests, and the tasks running the tests close to the
+        modified files (approximated, as the repository isn't available when training, see
+        test_scheduling.approximate_manifests_for_paths and approximate_tasks_for_paths).
+        """
+        paths = {path for commit in commits for path in commit["files"]}
+        if self.granularity == "group":
+            return test_scheduling.approximate_manifests_for_paths(paths, runnables)
+        if self.granularity == "label":
+            return test_scheduling.approximate_tasks_for_paths(
+                paths, runnables, self.gtest_folders
+            )
+        return set()
+
+    def post_training(self) -> None:
+        """Compute the confidence thresholds and calibration bands on the trained model's confidences.
+
+        After the evaluation, the model is retrained on all the pushes, which changes the scale of its
+        confidences, so the thresholds computed during the evaluation don't fit it. They are computed
+        again on the autoland pushes after the ones of the history (which the model wasn't trained on),
+        scored as the HTTP service does. The failure rates of the bands are the evaluation's.
+        """
+        targets = CONFIDENCE_LEVEL_TARGETS.get(self.granularity)
+        if not targets or self.confidence_thresholds is None:
+            return
+
+        ((last_revs, _),) = collections.deque(
+            test_scheduling.get_test_scheduling_history(self.granularity), maxlen=1
         )
-        return {name: float(p) for name, p in zip(names, probabilities)}
+        pushes = get_recent_pushes(last_revs[0])
+        revs = {rev for push in pushes for rev in push}
+        commits = {
+            commit["node"]: commit
+            for commit in repository.get_commits(
+                include_no_bug=True, include_backouts=True, include_ignored=True
+            )
+            if commit["node"] in revs
+        }
+
+        fit_confidences = []
+        for push in tqdm(pushes):
+            # The commits which aren't in the commits DB yet (e.g. not merged to mozilla-central).
+            if not all(rev in commits for rev in push):
+                continue
+            # The HTTP service doesn't score backouts and ignored commits.
+            push_commits = [
+                commits[rev]
+                for rev in push
+                if not commits[rev]["ignored"] and not commits[rev]["backsout"]
+            ]
+            if not push_commits:
+                continue
+            confidences = self.get_confidences(push_commits)
+            fit_confidences.append(
+                top_fit_confidences(
+                    confidences, self.forced_runnables(push_commits, confidences.keys())
+                )
+            )
+
+        if len(fit_confidences) < MIN_RECENT_PUSHES:
+            logger.warning(
+                "Only %d of %d recent pushes could be scored, keeping the confidence thresholds of the evaluation.",
+                len(fit_confidences),
+                len(pushes),
+            )
+            return
+
+        logger.info(
+            "Confidence thresholds of the evaluation: %s", self.confidence_thresholds
+        )
+        self.confidence_thresholds = compute_confidence_thresholds(
+            fit_confidences, targets
+        )
+        logger.info(
+            "Confidence thresholds (on %d recent pushes): %s",
+            len(fit_confidences),
+            self.confidence_thresholds,
+        )
+        if self.calibration is not None:
+            band_thresholds = list(
+                compute_confidence_thresholds(
+                    fit_confidences, {str(c): c for c in CALIBRATION_COUNTS}
+                ).values()
+            )
+            logger.info(
+                "Calibration band thresholds: %s (evaluation: %s)",
+                band_thresholds,
+                self.calibration[0],
+            )
+            self.calibration = merge_tied_bands(band_thresholds, self.calibration[1])
 
     def get_confidences(
         self,
@@ -957,9 +1139,9 @@ class TestSelectModel(Model):
 
         targets = CONFIDENCE_LEVEL_TARGETS.get(self.granularity)
         max_target = max(targets.values()) if targets else 0
-        # The highest confidences of the runnables on each test push, to compute the confidence
-        # thresholds.
-        top_confidences: list[list[tuple[str, float]]] = []
+        # The highest confidences of the runnables on each test push which the HTTP service doesn't
+        # always select, to compute the confidence thresholds.
+        fit_confidences: list[list[float]] = []
         # Test pushes too old for their past failures to be known (see below).
         clamped_pushes = []
         # Runnables and failing runnables per confidence (0, 0.01, ..., 1), for the calibration.
@@ -1001,8 +1183,11 @@ class TestSelectModel(Model):
                 continue
 
             confidences = self.get_confidences(commits, push_num)
+            forced = self.forced_runnables(commits, confidences.keys())
             failing = set(push["failures"])
             for name, confidence in confidences.items():
+                if name in forced:
+                    continue
                 calibration_totals[round(confidence * 100)] += 1
                 calibration_failures[round(confidence * 100)] += name in failing
             push["all_possibly_selected"] = {
@@ -1015,7 +1200,7 @@ class TestSelectModel(Model):
                 push["top_confidences"] = heapq.nlargest(
                     int(10 * max_target), confidences.items(), key=lambda x: x[1]
                 )
-                top_confidences.append(push["top_confidences"])
+                fit_confidences.append(top_fit_confidences(confidences, forced))
 
         for rev in clamped_pushes:
             del test_pushes[rev]
@@ -1026,33 +1211,35 @@ class TestSelectModel(Model):
             sum(1 for push in test_pushes.values() if len(push["failures"]) > 0),
         )
 
-        self.calibration = fit_calibration(calibration_totals, calibration_failures)
-        if self.calibration is not None:
-            logger.info(
-                "Calibration (confidence -> observed failure rate -> probability):"
-            )
-            for confidence in (0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99):
-                b = round(confidence * 100)
-                logger.info(
-                    "  %.2f -> %s -> %.4f",
-                    confidence,
-                    f"{calibration_failures[b] / calibration_totals[b]:.4f}"
-                    if calibration_totals[b]
-                    else "-",
-                    np.interp(confidence, *self.calibration),
-                )
-
         confidence_thresholds = [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]
-        if targets and top_confidences:
+        if targets and fit_confidences:
+            # Until post_training computes them on the trained model's confidences.
             self.confidence_thresholds = compute_confidence_thresholds(
-                [[confidence for _, confidence in top] for top in top_confidences],
-                targets,
+                fit_confidences, targets
             )
             logger.info(
                 "Confidence thresholds (on %d test pushes): %s",
-                len(top_confidences),
+                len(fit_confidences),
                 self.confidence_thresholds,
             )
+            band_thresholds = list(
+                compute_confidence_thresholds(
+                    fit_confidences, {str(c): c for c in CALIBRATION_COUNTS}
+                ).values()
+            )
+            rates = fit_band_rates(
+                band_thresholds, calibration_totals, calibration_failures
+            )
+            if any(rates):
+                self.calibration = (band_thresholds, rates)
+                logger.info(
+                    "Calibration (runnables per push: confidence threshold -> failure rate): %s",
+                    ", ".join(
+                        f"{c:g}: {t:.2f} -> {r:.4f}"
+                        for c, t, r in zip(CALIBRATION_COUNTS, band_thresholds, rates)
+                    )
+                    + f", below: {rates[-1]:.4f}",
+                )
             confidence_thresholds = sorted(
                 set(confidence_thresholds) | set(self.confidence_thresholds.values())
             )
@@ -1271,12 +1458,15 @@ class TestLabelSelectModel(TestSelectModel):
         # The directories with the tests of some suites come from a Firefox tree (only its moz.build
         # files are needed), and are stored with the model.
         suite_test_dirs = None
+        gtest_folders: tuple[str, ...] = ()
         if repo_dir:
             suite_test_dirs = test_scheduling.get_suite_test_dirs(repo_dir)
             logger.info(
                 "Test directories of the suites: %s",
                 {suite: len(dirs) for suite, dirs in suite_test_dirs.items()},
             )
+            gtest_folders = test_scheduling.get_gtest_folders(repo_dir)
+            logger.info("%d gtest folders", len(gtest_folders))
         else:
             logger.warning(
                 "No Firefox repository (repo_dir): the suite files features only include the "
@@ -1297,6 +1487,7 @@ class TestLabelSelectModel(TestSelectModel):
             # Android builds) better than skipping them (the previous failures_skip=60).
             positive_weight_k=5,
         )
+        self.gtest_folders = gtest_folders
 
 
 class TestGroupSelectModel(TestSelectModel):

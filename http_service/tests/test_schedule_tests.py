@@ -574,8 +574,8 @@ def test_schedule_config_selection_risk(
         def get(self, model_name):
             model = super().get(model_name)
             if model_name == "testgroupselect" and calibrated:
-                # Confidences 0.5 -> 0.01, 1 -> 0.21.
-                model.calibration = ([0.5, 1.0], [0.01, 0.21])
+                # Confidences >= 0.9 -> 0.2, >= 0.5 -> 0.05, below -> 0.01.
+                model.calibration = ([0.9, 0.5], [0.2, 0.05, 0.01])
             if model_name == "testgroupselect" and very_high is not None:
                 model.confidence_thresholds = {
                     "low": 0.5,
@@ -607,9 +607,7 @@ def test_schedule_config_selection_risk(
     # Groups are selected by confidence, configs weighted by the calibrated probabilities (the
     # confidences, if the group model isn't calibrated).
     if calibrated:
-        assert risks == pytest.approx(
-            {"test-group1": 0.206, "test-group2": 0.05, "test-group3": 1.0}
-        )
+        assert risks == {"test-group1": 0.2, "test-group2": 0.05, "test-group3": 1.0}
     else:
         assert risks == {"test-group1": 0.99, "test-group2": 0.6, "test-group3": 1.0}
     # The manifests including the modified tests, and the groups selected with at least the model's
