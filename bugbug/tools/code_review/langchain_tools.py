@@ -128,6 +128,7 @@ async def expand_context(
     except FileNotFoundError:
         return f"Warning: {file_path} does not exist in the requested patch view."
     except Exception as e:
+        logger.exception("Could not retrieve %s", file_path)
         return f"Warning: could not retrieve {file_path}: {e}."
 
     lines = file_content.splitlines()
