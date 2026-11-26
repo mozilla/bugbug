@@ -678,6 +678,21 @@ def test_download_component_mapping():
     )
     repository.close_component_mapping()
 
+    # The mapping is not built again from a file which didn't change.
+    with open("data/component_mapping.json", "w") as f:
+        json.dump({"AUTHORS": ["Core", "General"]}, f)
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "101"},
+    )
+    repository.download_component_mapping()
+    repository.get_component_mapping()
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    repository.close_component_mapping()
+
     responses.reset()
     responses.add(
         responses.HEAD,

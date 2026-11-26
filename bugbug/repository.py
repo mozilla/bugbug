@@ -1440,22 +1440,30 @@ def set_commits_to_ignore(
 
 
 def download_coverage_mapping() -> None:
+    # The DB is built from the whole file, which is large, so only when it changes.
+    is_built = os.path.exists("data/coverage_mapping.lmdb")
     commit_to_coverage = get_coverage_mapping(False)
 
     try:
-        utils.download_check_etag(
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
-            "data/coverage_mapping.json.zst",
-        )
+        if (
+            utils.download_check_etag(
+                "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+                "data/coverage_mapping.json.zst",
+            )
+            or not is_built
+        ):
+            zstd_decompress("data/coverage_mapping.json")
+            assert os.path.exists("data/coverage_mapping.json")
 
-        zstd_decompress("data/coverage_mapping.json")
-        assert os.path.exists("data/coverage_mapping.json")
+            with open("data/coverage_mapping.json", "r") as f:
+                data = json.load(f)
 
-        with open("data/coverage_mapping.json", "r") as f:
-            data = json.load(f)
-
-        for commit_hash, commit_stats in data.items():
-            commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+            for commit_hash, commit_stats in data.items():
+                commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(
+                    commit_stats
+                )
+        else:
+            logger.info("The commit->coverage mapping didn't change")
     except requests.exceptions.HTTPError as e:
         logger.error("Failure downloading commit->coverage mapping %s", e)
 
@@ -1502,18 +1510,26 @@ def set_commit_coverage(commits: Iterable[CommitDict]) -> None:
 
 
 def download_component_mapping():
+    # The DB is built from the whole file, which is large, so only when it changes.
+    is_built = os.path.exists("data/component_mapping.lmdb")
     path_to_component = get_component_mapping(False)
 
-    utils.download_check_etag(
-        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-        "data/component_mapping.json",
-    )
+    if (
+        utils.download_check_etag(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+            "data/component_mapping.json",
+        )
+        or not is_built
+    ):
+        with open("data/component_mapping.json", "r") as f:
+            data = json.load(f)
 
-    with open("data/component_mapping.json", "r") as f:
-        data = json.load(f)
-
-    for path, component in data.items():
-        path_to_component[path.encode("utf-8")] = "::".join(component).encode("utf-8")
+        for path, component in data.items():
+            path_to_component[path.encode("utf-8")] = "::".join(component).encode(
+                "utf-8"
+            )
+    else:
+        logger.info("The file->component mapping didn't change")
 
     close_component_mapping()
 
