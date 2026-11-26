@@ -357,6 +357,32 @@ def test_refresh_backouts_and_ignored(fake_hg_repo):
     assert commits[3]["ignored"] is False
 
 
+def test_get_backedoutby(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file0", "1\n")
+    commit(hg, "Bug 1 - Initial commit. r=moz")
+
+    add_file(hg, local, "file1", "1\n2\n3\n")
+    revision1 = commit(hg, "Bug 123 - Prova. r=moz")
+
+    add_file(hg, local, "file2", "1\n2\n3\n")
+    revision2 = commit(hg, "Bug 456 - Prova. r=moz")
+
+    hg.backout(
+        rev=revision1,
+        message=f"Backout {revision1[:12]}",
+        user="sheriff",
+        date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    )
+    revision3 = hg.log(limit=1)[0][1].decode("ascii")
+
+    assert repository.get_backedoutby(hg, []) == {}
+    assert repository.get_backedoutby(
+        hg, [revision1.encode("ascii"), revision2.encode("ascii")]
+    ) == {revision1: revision3, revision2: ""}
+
+
 def test_hg_log(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 

@@ -205,6 +205,11 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         "merge": "4" * 40,
         # Added to .hg-annotate-ignore-revs after it was added to the commits DB.
         "newly_ignored": "5" * 40,
+        "backedout": "6" * 40,
+        # Backed out after it was added to the commits DB.
+        "newly_backedout": "7" * 40,
+        # Backed out when it was mined.
+        "mined_backedout": "8" * 40,
     }
     monkeypatch.setattr(models.repository, "pull", lambda *args, **kwargs: None)
     monkeypatch.setattr(models.hglib, "open", lambda repo_dir: contextlib.nullcontext())
@@ -214,6 +219,18 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         lambda hg, repo_dir: {nodes["newly_ignored"]},
     )
 
+    db_names = ("backout", "scored", "newly_ignored", "backedout", "newly_backedout")
+
+    def get_backedoutby(hg, revs):
+        assert sorted(revs) == sorted(nodes[name].encode() for name in db_names)
+        # Backouts which are not in the local repository yet are not known.
+        return {
+            rev.decode(): "9" * 40 if rev == nodes["newly_backedout"].encode() else ""
+            for rev in revs
+        }
+
+    monkeypatch.setattr(models.repository, "get_backedoutby", get_backedoutby)
+
     def commit(name):
         return {
             "node": nodes[name],
@@ -221,18 +238,21 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
             "desc": name,
             "backsout": ["0" * 40] if name == "backout" else [],
             "ignored": name == "ignored",
+            "backedoutby": "9" * 40 if name in ("backedout", "mined_backedout") else "",
         }
 
     # The commits already in the commits DB are not mined again.
     def get_commits_from_db(db_nodes):
-        return {
-            nodes[name]: commit(name) for name in ("backout", "scored", "newly_ignored")
-        }
+        return {nodes[name]: commit(name) for name in db_names}
 
     def download_commits(repo_dir, revs, **kwargs):
-        assert revs == [nodes["ignored"].encode(), nodes["merge"].encode()]
+        assert revs == [
+            nodes["ignored"].encode(),
+            nodes["merge"].encode(),
+            nodes["mined_backedout"].encode(),
+        ]
         # Merge commits are not mined.
-        return (commit("ignored"),)
+        return (commit("ignored"), commit("mined_backedout"))
 
     monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
     monkeypatch.setattr(models.repository, "download_commits", download_commits)
@@ -241,7 +261,12 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
 
     assert models.classify_commits("regressor", "try", list(nodes.values())) == "OK"
 
-    assert [commit["node"] for commit in model.classified] == [nodes["scored"]]
+    assert [commit["node"] for commit in model.classified] == [
+        nodes["scored"],
+        nodes["backedout"],
+        nodes["newly_backedout"],
+        nodes["mined_backedout"],
+    ]
     for name, reason in (
         ("backout", "backout"),
         ("ignored", "ignored"),
@@ -252,4 +277,11 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         assert result["prob"] is None
         assert result["risk_band"] is None
     assert _get_result(nodes["scored"], "try")["prob"] == [0.25, 0.75]
+    assert _get_result(nodes["scored"], "try")["ignored_reason"] is None
+    # Backed-out commits are scored anyway.
+    for name in ("backedout", "newly_backedout", "mined_backedout"):
+        result = _get_result(nodes[name], "try")
+        assert result["ignored_reason"] == "backedout"
+        assert result["prob"] == [0.25, 0.75]
+        assert result["risk_band"] == "h"
     assert _get_result(nodes["merge"], "try") == {"available": False}
