@@ -9,10 +9,8 @@ Fetches review-context.toml from a GitHub repository, matches changed files
 against the rules, and pre-loads the referenced content.
 """
 
-import asyncio
 import fnmatch
 import hashlib
-import json
 import re
 import time
 from collections.abc import Mapping
@@ -50,7 +48,6 @@ from bugbug.tools.code_review.review_context_schema import (
     parse_review_context_toml,
     tomllib,
 )
-from bugbug.tools.core.connection import get_github_api_headers, get_http_client
 
 logger = getLogger(__name__)
 
@@ -338,15 +335,11 @@ async def _fetch_revision(
             return None
         rev_num = int(m.group(1))
         try:
-            from bugbug.tools.core.platforms.phabricator import get_phabricator_client
+            from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
-            def _load():
-                phab = get_phabricator_client()
-                revision = phab.load_revision(rev_id=rev_num)
-                diff_id = revision["fields"]["diffID"]
-                return phab.load_raw_diff(diff_id)
-
-            content = await asyncio.get_event_loop().run_in_executor(None, _load)
+            patch = PhabricatorPatch(revision_id=rev_num)
+            await patch.load()
+            content = patch.raw_diff
             name = f"Revision D{rev_num}"
             return (
                 name,
@@ -361,15 +354,10 @@ async def _fetch_revision(
 
     if repo and commit_hash:
         try:
-            response = await get_http_client().get(
+            response = await _fetch_url(
                 f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-                headers={
-                    "Accept": "application/vnd.github.diff",
-                    **get_github_api_headers(),
-                },
-                timeout=30,
+                headers={"Accept": "application/vnd.github.diff"},
             )
-            response.raise_for_status()
             source = f"{repo}@{commit_hash}"
             return (
                 f"{repo}@{commit_hash[:12]}",
@@ -611,19 +599,54 @@ def external_content_manifest(content_items: list[ExternalContentItem]) -> list[
 
 
 def format_external_content(content_items: list[ExternalContentItem]) -> str:
-    manifest = json.dumps(external_content_manifest(content_items), indent=2)
     content = "\n\n".join(
         f'<context name="{item.name}">\n{item.body.strip()}\n</context>'
         for item in content_items
     )
-    return (
-        "\n\n<external_content_manifest>\n"
-        f"{manifest}\n"
-        "</external_content_manifest>"
-        "\n\n<external_context>\n"
-        f"{content}\n"
-        "</external_context>"
-    )
+    return f"\n\n<external_context>\n{content}\n</external_context>"
+
+
+async def resolve_review_context_source(
+    patch,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+) -> tuple[str, str] | None:
+    """Return the (repo, branch) review context is loaded from, if any.
+
+    Without an explicit repository, it is inferred from the patch's repository.
+    """
+    if review_context_repo is None:
+        repo_ref = await patch.github_repo_ref()
+        if repo_ref:
+            review_context_repo, inferred_branch = repo_ref
+            review_context_branch = review_context_branch or inferred_branch
+    if not review_context_repo:
+        return None
+    return review_context_repo, review_context_branch or "main"
+
+
+async def fetch_review_guideline(
+    source: tuple[str, str],
+    file_path: str,
+    content_overrides: dict[str, str] | None = None,
+) -> str:
+    """Return a file the review guidelines point to, from the guidelines' (repo, branch).
+
+    content_overrides replaces files by repository path, like it does for the
+    files rules load. Raises FileNotFoundError if the file does not exist.
+    """
+    if content_overrides and file_path in content_overrides:
+        return content_overrides[file_path]
+    repo, branch = source
+    try:
+        response = await _fetch_url(_github_raw_url(repo, branch, file_path))
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise FileNotFoundError(
+                f"{file_path} does not exist in {repo}@{branch}"
+            ) from e
+        raise
+    return response.text
 
 
 async def resolve_external_context_for_review(
@@ -634,17 +657,15 @@ async def resolve_external_context_for_review(
     content_overrides: dict[str, str] | None = None,
 ) -> tuple[str, list[dict]]:
     """Resolve the context repository and load matching review context."""
-    if review_context_repo is None:
-        repo_ref = await patch.github_repo_ref()
-        if repo_ref:
-            review_context_repo, inferred_branch = repo_ref
-            review_context_branch = review_context_branch or inferred_branch
-    if not review_context_repo:
+    source = await resolve_review_context_source(
+        patch, review_context_repo, review_context_branch
+    )
+    if source is None:
         return "", []
     return await load_external_context_for_review(
         patch,
-        review_context_repo,
-        review_context_branch=review_context_branch or "main",
+        source[0],
+        review_context_branch=source[1],
         extra_context_toml=extra_context_toml,
         content_overrides=content_overrides,
     )

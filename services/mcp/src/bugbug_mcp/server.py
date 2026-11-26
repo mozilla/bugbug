@@ -34,6 +34,31 @@ def get_code_review_tool():
     return CodeReviewTool.create()
 
 
+def _revision_id_from_url(patch_url: str) -> int:
+    parsed_url = urlparse(patch_url)
+    if (
+        parsed_url.netloc == "phabricator.services.mozilla.com"
+        and parsed_url.path.startswith("/D")
+    ):
+        return int(parsed_url.path[2:])
+    raise ValueError(f"Unsupported patch URL: {patch_url}")
+
+
+def _parse_content_overrides(content_overrides: str | None) -> dict[str, str] | None:
+    if content_overrides is None:
+        return None
+    try:
+        overrides = json.loads(content_overrides)
+        if not isinstance(overrides, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in overrides.items()
+        ):
+            raise ValueError("expected an object of strings")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("content_overrides must be a JSON object of strings") from exc
+    return overrides
+
+
 @mcp.prompt()
 async def patch_review(
     patch_url: str,
@@ -43,30 +68,10 @@ async def patch_review(
     content_overrides: str | None = None,
 ) -> str:
     """Review a code patch from Phabricator."""
-    parsed_url = urlparse(patch_url)
-    if (
-        parsed_url.netloc == "phabricator.services.mozilla.com"
-        and parsed_url.path.startswith("/D")
-    ):
-        revision_id = int(parsed_url.path[2:])
-    else:
-        raise ValueError(f"Unsupported patch URL: {patch_url}")
-
-    overrides = None
-    if content_overrides is not None:
-        try:
-            overrides = json.loads(content_overrides)
-            if not isinstance(overrides, dict) or not all(
-                isinstance(key, str) and isinstance(value, str)
-                for key, value in overrides.items()
-            ):
-                raise ValueError("expected an object of strings")
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                "content_overrides must be a JSON object of strings"
-            ) from exc
-
+    revision_id = _revision_id_from_url(patch_url)
+    overrides = _parse_content_overrides(content_overrides)
     patch = PhabricatorPatch(revision_id=revision_id)
+    await patch.load()
 
     tool = get_code_review_tool()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
@@ -175,13 +180,13 @@ def bugzilla_quick_search(
     return result
 
 
-def _get_revision_md(revision_id: int) -> str:
+async def _get_revision_md(revision_id: int) -> str:
     patch = SanitizedPhabricatorPatch(revision_id=revision_id)
-    if not patch.is_accessible() or not patch.is_public():
+    if not await patch.is_accessible() or not patch.is_public():
         raise ToolError(
             f"Revision D{revision_id} was not found. It may not exist or may be private."
         )
-    return patch.to_md()
+    return await patch.to_md()
 
 
 @mcp.resource(
@@ -189,15 +194,15 @@ def _get_revision_md(revision_id: int) -> str:
     name="Phabricator Revision Content",
     mime_type="text/markdown",
 )
-def handle_revision_view_resource(revision_id: int) -> str:
+async def handle_revision_view_resource(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
-def get_phabricator_revision(revision_id: int) -> str:
+async def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 llms_txt = FileResource(
@@ -235,6 +240,46 @@ async def read_fx_doc_section(
         response.raise_for_status()
 
         return response.text
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+async def read_review_guideline(
+    patch_url: Annotated[
+        str, "The URL of the patch under review, as given to the patch_review prompt"
+    ],
+    file_path: Annotated[
+        str,
+        "Repository-relative path of a file the review guidelines point to, e.g. 'accessible/docs/HCMCSSChecklist.md'",
+    ],
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+    content_overrides: str | None = None,
+) -> str:
+    """Read a file that the review guidelines of the patch_review prompt point to.
+
+    The file is read at the same version as the guidelines, which can be newer
+    than the code the patch is based on. Pass the same review_context_repo,
+    review_context_branch and content_overrides as to the patch_review prompt,
+    if any.
+    """
+    from bugbug.tools.code_review.review_context import (
+        fetch_review_guideline,
+        resolve_review_context_source,
+    )
+
+    patch = PhabricatorPatch(revision_id=_revision_id_from_url(patch_url))
+    await patch.load()
+    source = await resolve_review_context_source(
+        patch, review_context_repo, review_context_branch
+    )
+    if source is None:
+        raise ToolError("No review guidelines are configured for this patch.")
+    try:
+        return await fetch_review_guideline(
+            source, file_path, _parse_content_overrides(content_overrides)
+        )
+    except FileNotFoundError as e:
+        raise ToolError(str(e)) from e
 
 
 def main():

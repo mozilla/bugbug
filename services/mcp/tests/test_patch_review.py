@@ -8,6 +8,7 @@ from fastmcp.client import Client
 @pytest.fixture
 def review_dependencies(mocker):
     patch = Mock()
+    patch.load = AsyncMock()
     patch.github_repo_ref = AsyncMock(return_value=("inferred/repo", "release"))
     mocker.patch("bugbug_mcp.server.PhabricatorPatch", return_value=patch)
     tool = Mock(target_software="Firefox")
@@ -78,3 +79,42 @@ async def test_patch_review_rejects_invalid_overrides(review_dependencies, overr
                 },
             )
     review_dependencies[1].assert_not_awaited()
+
+
+async def test_read_review_guideline_reads_from_inferred_source(
+    review_dependencies, mocker
+):
+    fetch = mocker.patch(
+        "bugbug.tools.code_review.review_context.fetch_review_guideline",
+        new_callable=AsyncMock,
+        return_value="Checklist",
+    )
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "read_review_guideline",
+            {
+                "patch_url": "https://phabricator.services.mozilla.com/D123",
+                "file_path": "accessible/docs/HCMCSSChecklist.md",
+            },
+        )
+    assert result.content[0].text == "Checklist"
+    fetch.assert_awaited_once_with(
+        ("inferred/repo", "release"), "accessible/docs/HCMCSSChecklist.md", None
+    )
+
+
+async def test_read_review_guideline_reports_missing_file(review_dependencies, mocker):
+    mocker.patch(
+        "bugbug.tools.code_review.review_context.fetch_review_guideline",
+        new_callable=AsyncMock,
+        side_effect=FileNotFoundError("docs/missing.md does not exist in a@b"),
+    )
+    async with Client(mcp) as client:
+        with pytest.raises(Exception, match="does not exist"):
+            await client.call_tool(
+                "read_review_guideline",
+                {
+                    "patch_url": "https://phabricator.services.mozilla.com/D123",
+                    "file_path": "docs/missing.md",
+                },
+            )

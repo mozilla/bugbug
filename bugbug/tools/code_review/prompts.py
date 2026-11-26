@@ -12,6 +12,10 @@ TARGET_SOFTWARE: str | None = None
 
 SYSTEM_PROMPT_TEMPLATE = """You are an expert {target_software} engineer tasked with analyzing a pull request and providing high-quality review comments. You will examine a code patch and generate constructive feedback focusing on potential issues in the changed code.
 
+## Review Guidelines
+
+The `<external-resources>` section, when present, contains review guidelines written by the owners of the code being changed. Follow them as part of your review, including the files they point to.
+
 ## Instructions
 
 Follow this systematic approach to review the patch:
@@ -125,6 +129,11 @@ Here is the patch you need to review:
 <patch>
 {patch}
 </patch>
+{external_context_instructions}"""
+
+
+EXTERNAL_CONTEXT_INSTRUCTIONS = """
+The owners of this code keep their detailed review checks in separate files, and the guidelines in `<external-resources>` point to them. Reading a file that a guideline points to is part of the review, not optional background: those files contain the checks that catch the issues the guidelines alone do not. Start the review by reading them, before you investigate the code: privately list every file a guideline directs you to read or apply that bears on what this patch changes, skipping only the files that serve steps you cannot perform here, such as running a build or a browser. Then, in your first response, call `read_review_guideline` for all of them at once, before calling any other tool. Resolve relative paths against the directory of the `<context>` that references them. Then review the patch against all of them.
 """
 
 

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from langchain.messages import AIMessage
 from unidiff import PatchSet
 
 from bugbug.tools.code_review import data_types, langchain_tools, review_context
@@ -249,6 +250,9 @@ def test_patch_stack_bails_on_nonlinear_graph():
         def __init__(self):
             pass
 
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {"phid": "PHID-D"}
@@ -262,16 +266,8 @@ def test_patch_stack_bails_on_nonlinear_graph():
                 "PHID-D": ["PHID-B", "PHID-C"],  # diamond
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    try:
-        _ = fake.patch_stack
-        raise AssertionError("expected ValueError")
-    except ValueError as e:
-        assert "not linear" in str(e)
+    with pytest.raises(ValueError, match="not linear"):
+        asyncio.run(FakePatch().get_stack_patches())
 
 
 def test_patch_stack_linear_despite_unrelated_diamond():
@@ -282,6 +278,9 @@ def test_patch_stack_linear_despite_unrelated_diamond():
     # the fixed code must return the 3-entry linear chain without any error.
     class FakePatch(PhabricatorPatch):
         def __init__(self, revision_phid=None):
+            pass
+
+        async def load(self):
             pass
 
         @property
@@ -298,12 +297,7 @@ def test_patch_stack_linear_despite_unrelated_diamond():
                 "PHID-E": ["PHID-C"],
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    stack = fake.patch_stack
+    stack = asyncio.run(FakePatch().get_stack_patches())
     assert len(stack) == 3  # A, C, E
 
 
@@ -453,6 +447,7 @@ async def test_load_skill_fetch_failure(caplog):
     client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
     with (
         patch.object(data_types, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
         caplog.at_level(logging.ERROR, logger=langchain_tools.logger.name),
     ):
         result = await tool.ainvoke({"name": "mozilla-style"})
@@ -513,6 +508,92 @@ def test_expand_context_fetches_from_stack_base(monkeypatch):
     base_patch.get_old_file.assert_awaited_once_with("file.txt")
 
 
+def _guideline_runtime(monkeypatch, source):
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(
+            context=SimpleNamespace(
+                patch=None, review_context_source=source, content_overrides=None
+            )
+        ),
+    )
+
+
+def test_read_review_guideline_reads_from_review_context_source(monkeypatch):
+    _guideline_runtime(monkeypatch, ("mozilla-firefox/firefox", "autoland"))
+    fetch = AsyncMock(return_value=SimpleNamespace(text="Checklist\n"))
+    monkeypatch.setattr(review_context, "_fetch_url", fetch)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine(
+            "accessible/docs/HCMCSSChecklist.md"
+        )
+    )
+
+    assert result == "Checklist\n"
+    fetch.assert_awaited_once_with(
+        "https://raw.githubusercontent.com/mozilla-firefox/firefox/refs/heads/"
+        "autoland/accessible/docs/HCMCSSChecklist.md"
+    )
+
+
+def test_read_review_guideline_reports_missing_file(monkeypatch):
+    _guideline_runtime(monkeypatch, ("mozilla-firefox/firefox", "autoland"))
+    request = httpx.Request("GET", "https://example.com")
+    response = httpx.Response(404, request=request)
+    monkeypatch.setattr(
+        review_context,
+        "_fetch_url",
+        AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Not found", request=request, response=response
+            )
+        ),
+    )
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/missing.md")
+    )
+
+    assert result == (
+        "Warning: docs/missing.md does not exist in mozilla-firefox/firefox@autoland."
+    )
+
+
+def test_read_review_guideline_prefers_content_overrides(monkeypatch):
+    monkeypatch.setattr(
+        langchain_tools,
+        "get_runtime",
+        lambda _: SimpleNamespace(
+            context=SimpleNamespace(
+                patch=None,
+                review_context_source=("mozilla-firefox/firefox", "autoland"),
+                content_overrides={"docs/guide.md": "Local guide\n"},
+            )
+        ),
+    )
+    fetch = AsyncMock()
+    monkeypatch.setattr(review_context, "_fetch_url", fetch)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/guide.md")
+    )
+
+    assert result == "Local guide\n"
+    fetch.assert_not_awaited()
+
+
+def test_read_review_guideline_without_review_context(monkeypatch):
+    _guideline_runtime(monkeypatch, None)
+
+    result = asyncio.run(
+        langchain_tools.read_review_guideline.coroutine("docs/guide.md")
+    )
+
+    assert result.startswith("Warning:")
+
+
 GITHUB = "https://raw.githubusercontent.com/mozilla-firefox/firefox"
 COMMITS_API = "https://api.github.com/repos/mozilla-firefox/firefox/commits"
 SEARCH_API = "https://api.github.com/search/commits"
@@ -553,6 +634,9 @@ def make_phabricator_stack(
         stack_graph = {phid: phids[i - 1 : i] for i, phid in enumerate(phids)}
 
     class FakeStackPatch(phab_platform.PhabricatorPatch):
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {
@@ -575,8 +659,7 @@ def make_phabricator_stack(
         def raw_diff(self):
             return by_phid[self._revision_phid][1]
 
-        @property
-        def _changesets(self):
+        async def _get_changesets(self):
             return [
                 {
                     "id": f"{self._revision_phid}:{pf.path}",
@@ -624,7 +707,7 @@ def make_phabricator_stack(
             return httpx.Response(200, json=body, request=request)
         return httpx.Response(200, text=body, request=request)
 
-    def conduit(method, ids):
+    async def conduit(method, ids):
         requests.append((method, ids))
         local_commits = {"local-node": {"firstPublicParent": first_public_parent}}
         return {
@@ -639,11 +722,7 @@ def make_phabricator_stack(
     monkeypatch.setattr(
         phab_platform, "get_http_client", lambda: SimpleNamespace(get=get)
     )
-    monkeypatch.setattr(
-        phab_platform,
-        "get_phabricator_client",
-        lambda: SimpleNamespace(request=conduit),
-    )
+    monkeypatch.setattr(phab_platform, "_conduit", conduit)
     return FakeStackPatch(revision_phid=phids[-1]), requests
 
 
@@ -871,13 +950,17 @@ def test_expand_context_does_not_read_latest_when_base_lookup_fails(monkeypatch)
 
 
 def test_expand_context_reports_github_error_without_reading_latest(monkeypatch):
-    patch, _ = make_phabricator_stack(
+    patch, requests = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
         repo_files={(CENTRAL, "c.txt"): 503},
     )
+    monkeypatch.setattr(
+        phab_platform.PhabricatorPatch._get_github_file.retry, "sleep", AsyncMock()
+    )
     result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
     assert result.startswith("Warning: could not retrieve c.txt")
+    assert requests.count(f"{GITHUB}/{CENTRAL}/c.txt") == 4
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
 
@@ -1728,7 +1811,6 @@ async def test_load_external_content_for_diff_file_load():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, review_context_branch="release"
@@ -1770,7 +1852,6 @@ async def test_load_external_content_for_diff_no_match():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(diff, review_context_repo)
 
@@ -1785,7 +1866,7 @@ async def test_load_external_content_for_diff_rules_fetch_failure():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, "mozilla-firefox/firefox"
@@ -1824,7 +1905,6 @@ load = [{ type = "file", path = "skills/guide.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
 
@@ -1860,7 +1940,6 @@ load = [{ type = "file", path = "skills/high.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1894,7 +1973,6 @@ load = [{ type = "file", repo = "whatwg/html", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1928,7 +2006,6 @@ load = [{ type = "file", repo = "mozilla/cubeb", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -2032,7 +2109,6 @@ async def test_content_override_used_instead_of_fetch():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -2058,7 +2134,6 @@ async def test_external_content_manifest_and_prompt_body():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -2086,7 +2161,7 @@ async def test_external_content_manifest_and_prompt_body():
     ]
 
     prompt_content = format_external_content(results)
-    assert "<external_content_manifest>" in prompt_content
+    assert "<external_content_manifest>" not in prompt_content
     assert "<external_context>" in prompt_content
     assert "Audio guidelines." in prompt_content
 
@@ -2124,7 +2199,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             diff_js,
@@ -2161,7 +2235,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -2254,6 +2327,7 @@ def test_run_appends_scope_suggestion_last():
 
     patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
     patch.raw_diff = "diff"
+    patch.load = AsyncMock()
 
     tool.count_tokens = MagicMock(return_value=10)
     tool._agent_model = "model-x"
@@ -2262,6 +2336,7 @@ def test_run_appends_scope_suggestion_last():
     tool.generate_review_comments = AsyncMock(
         return_value=(
             AgentResponse(comments=[regular], general_comment="Looks sound."),
+            [],
             [],
         )
     )
@@ -2334,8 +2409,11 @@ def _make_review_tool(review_context_repo=None):
     tool._extra_context_toml = None
     tool._content_overrides = None
 
-    async def fake_astream(*args, **kwargs):
-        yield {"structured_response": AgentResponse(comments=[], general_comment="")}
+    async def fake_astream(input, **kwargs):
+        yield {
+            "messages": input["messages"],
+            "structured_response": AgentResponse(comments=[], general_comment=""),
+        }
 
     tool.agent = SimpleNamespace(astream=fake_astream)
     return tool
@@ -2416,7 +2494,7 @@ def test_generate_review_comments_retries_missing_structured_response():
             }
 
     tool.agent = SimpleNamespace(astream=fake_astream)
-    response, manifest = asyncio.run(
+    response, manifest, _ = asyncio.run(
         tool.generate_review_comments(fake_patch, "summary")
     )
 
@@ -2425,6 +2503,33 @@ def test_generate_review_comments_retries_missing_structured_response():
     assert len(calls) == 2
     assert len(calls[1]["messages"]) == 2
     assert "AgentResponse" in calls[1]["messages"][-1].content
+
+
+def test_generate_review_comments_returns_and_logs_tool_calls(caplog):
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch(github_repo_ref_return=None)
+    fake_patch.patch_id = "1234"
+    call = {"name": "expand_context", "args": {"file_path": "a.txt"}, "id": "1"}
+
+    async def fake_astream(input, **kwargs):
+        messages = [*input["messages"], AIMessage(content="", tool_calls=[call])]
+        yield {"messages": messages, "structured_response": None}
+        yield {
+            "messages": messages,
+            "structured_response": AgentResponse(comments=[], general_comment=""),
+        }
+
+    tool.agent = SimpleNamespace(astream=fake_astream)
+    with caplog.at_level("INFO"):
+        _, _, tool_calls = asyncio.run(
+            tool.generate_review_comments(fake_patch, "summary")
+        )
+
+    assert tool_calls == [{"name": "expand_context", "args": {"file_path": "a.txt"}}]
+    logged = [r.getMessage() for r in caplog.records if "tool call" in r.getMessage()]
+    assert logged == [
+        'Review agent tool call for patch 1234: expand_context {"file_path": "a.txt"}'
+    ]
 
 
 def test_generate_review_comments_reports_missing_structured_response():

@@ -9,6 +9,7 @@ READ_ONLY_TOOLS = {
     "get_bugzilla_bug",
     "get_phabricator_revision",
     "read_fx_doc_section",
+    "read_review_guideline",
 }
 
 

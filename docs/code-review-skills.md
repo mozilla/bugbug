@@ -54,10 +54,12 @@ The `{external_context}` slot in `first_message.md` is filled by
 `format_external_content()` from `review_context.py` when rules match. It is an
 empty string otherwise, so no blank section appears in the prompt.
 
-Loaded content is preceded by an `<external_content_manifest>` block. The
-manifest excludes the body text and records each item's name, source, source
-type, matched rules, trust reason, byte count, and SHA-256 digest. The same
-manifest is also returned in `CodeReviewToolResponse.details["external_content"]`.
+Each loaded item is wrapped in a `<context name="...">` element inside an
+`<external_context>` block. An audit manifest, which excludes the body text and
+records each item's name, source, source type, matched rules, trust reason, byte
+count, and SHA-256 digest, is returned in
+`CodeReviewToolResponse.details["external_content"]`. It is not shown to the
+model.
 
 All currently injected external content is trusted:
 
@@ -397,6 +399,11 @@ python3 -c "import json,sys; print(json.dumps({'.claude/skills/dom-audio/SKILL.m
 
 Then paste the output as the `content_overrides` value.
 
+`content_overrides` also replaces the files your guidelines point to when the
+reviewer reads them with `read_review_guideline` (pass the same
+`content_overrides` to that MCP tool), so you can test new reference documents
+too.
+
 This simulates the state as if your changes had already landed — no push
 required. If a skill is missing, verify the rule conditions match the patch's
 changed files (`any_file` / `all_files` against the actual `+++ b/` paths in
@@ -454,6 +461,27 @@ curl --fail-with-body --silent --show-error \
   -H 'Accept: application/json, text/event-stream' \
   --data-binary @-
 ```
+
+### Evaluating guideline changes
+
+`scripts/code_review_context_eval.py` runs the production review pipeline on
+the revisions in `scripts/code_review_context_eval_cases.toml` and reports, for
+each review, the documents the reviewer read, its tool calls and comments, and
+whether it caught the issues human reviewers found that the guidelines cover.
+Each review's full transcript is saved, with summarized thinking, to see why the
+reviewer did or didn't read something. Compare runs before and after a change:
+
+```bash
+python scripts/code_review_context_eval.py run runs/before --trials 2
+python scripts/code_review_context_eval.py run runs/after --trials 2 \
+  --checkout ~/firefox --override '.claude/skills/desktop-theme*/**/*.md'
+python scripts/code_review_context_eval.py summarize runs/before runs/after
+```
+
+`--checkout` merges a local checkout's `review-context.toml` into the landed
+rules, and `--override` uses local files instead of the landed ones. Add cases
+for your area: a revision and diff Review Helper reviewed, and the issues it
+should have caught.
 
 ### Gotchas
 

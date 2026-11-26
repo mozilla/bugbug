@@ -11,12 +11,13 @@ from logging import getLogger
 from typing import Annotated, Literal, Optional
 
 import httpx
-import tenacity
 from langchain.tools import tool
 from langgraph.runtime import get_runtime
 from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
 from bugbug.tools.code_review.data_types import Skill, SkillLoadError
+from bugbug.tools.code_review.review_context import fetch_review_guideline
+from bugbug.tools.core.connection import retry_transient_errors
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
 from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
@@ -24,12 +25,7 @@ from bugbug.tools.core.validators import StripEnumQuotes
 
 logger = getLogger(__name__)
 
-_retry = tenacity.retry(
-    stop=tenacity.stop_after_attempt(3),
-    wait=tenacity.wait_exponential(multiplier=1, min=1, max=4),
-    retry=tenacity.retry_if_exception_type(SearchfoxNetworkError),
-    reraise=True,
-)
+_retry = retry_transient_errors(lambda e: isinstance(e, SearchfoxNetworkError))
 
 
 def _tool_error(message: str, *, fatal: bool = False) -> str:
@@ -49,6 +45,10 @@ Tests = Optional[Annotated[Literal["only", "exclude"], StripEnumQuotes]]
 @dataclass
 class CodeReviewContext:
     patch: Patch
+    # (repo, branch) the review guidelines were loaded from, if any.
+    review_context_source: Optional[tuple[str, str]] = None
+    # Content replacing review context files, keyed by repository path.
+    content_overrides: Optional[dict[str, str]] = None
 
 
 @cache
@@ -80,9 +80,11 @@ async def expand_context(
 ) -> str:
     """Retrieve the content of a file, optionally restricted to a line range.
 
-    Omit start_line and end_line to get the full file. When specifying a range,
-    be careful to not fill your context window with too much data — request the
-    minimum necessary, but do not split a continuous range into multiple requests.
+    Omit start_line and end_line to get the full file. For source code, when
+    specifying a range, be careful to not fill your context window with too much
+    data — request the minimum necessary, but do not split a continuous range
+    into multiple requests. Always read documentation, guidelines and skill
+    files (e.g. Markdown) in full.
 
     Args:
         file_path: Repository-relative path, e.g. 'dom/media/webaudio/AudioNode.h'.
@@ -101,7 +103,7 @@ async def expand_context(
     try:
         if isinstance(patch, PhabricatorPatch):
             try:
-                stack = patch._stack_patches
+                stack = await patch.get_stack_patches()
             except ValueError as e:
                 warning = f"Could not retrieve the full patch stack ({e}). File content reflects only this patch; please flag this in your review."
                 stack = [patch]
@@ -131,6 +133,7 @@ async def expand_context(
     except FileNotFoundError:
         return f"Warning: {file_path} does not exist in the requested patch view."
     except Exception as e:
+        logger.exception("Could not retrieve %s", file_path)
         return f"Warning: could not retrieve {file_path}: {e}."
 
     lines = file_content.splitlines()
@@ -144,6 +147,36 @@ async def expand_context(
     if warning:
         return f"Warning: {warning}\n\n{content}"
     return content
+
+
+@tool
+async def read_review_guideline(file_path: str) -> str:
+    """Read a file that the review guidelines in `<external-resources>` point to.
+
+    Use this, not expand_context, for the guidelines, skills, checklists and
+    reference documents the guidelines direct you to read. They are read at the
+    same version as the guidelines, which can be newer than the code this patch
+    is based on. Use expand_context for the code itself.
+
+    Args:
+        file_path: Repository-relative path, e.g. 'accessible/docs/HCMCSSChecklist.md'.
+
+    Returns:
+        The file content.
+    """
+    context = get_runtime(CodeReviewContext).context
+    if context.review_context_source is None:
+        return _tool_error("no review guidelines were loaded for this patch")
+
+    try:
+        return await fetch_review_guideline(
+            context.review_context_source, file_path, context.content_overrides
+        )
+    except FileNotFoundError as e:
+        return f"Warning: {e}."
+    except httpx.HTTPError as e:
+        logger.exception("Could not read review guideline %s", file_path)
+        return _tool_error(f"could not read {file_path}: {e!r}")
 
 
 def create_load_skill_tool(skills: list[Skill]):

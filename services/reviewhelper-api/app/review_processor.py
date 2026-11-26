@@ -69,7 +69,7 @@ async def process_review(
     else:
         raise ValueError(f"Unsupported platform: {review_request.platform}")
 
-    if not patch.is_accessible() or not patch.is_public():
+    if not await patch.is_accessible() or not patch.is_public():
         age = datetime.now(UTC) - review_request.created_at
         if age < VISIBILITY_TIMEOUT:
             raise RevisionNotYetPublicError(

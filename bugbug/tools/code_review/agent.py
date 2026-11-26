@@ -5,6 +5,7 @@
 
 """Code review agent implementation."""
 
+import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -32,10 +33,12 @@ from bugbug.tools.code_review.langchain_tools import (
     SEARCHFOX_TOOLS,
     CodeReviewContext,
     create_load_skill_tool,
+    read_review_guideline,
 )
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
     CODE_REVIEW_TODO_TOOL_DESCRIPTION,
+    EXTERNAL_CONTEXT_INSTRUCTIONS,
     FIRST_MESSAGE_TEMPLATE,
     PATCH_SCOPE_PROMPT,
     STATIC_COMMENT_EXAMPLES,
@@ -60,6 +63,14 @@ from bugbug.tools.core.llms import DEFAULT_ANTHROPIC_MODEL, get_tokenizer
 from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
+
+
+DEFAULT_REVIEW_LLM_KWARGS = {
+    "max_tokens": 40_000,
+    "temperature": None,
+    "thinking": {"type": "adaptive"},
+    "effort": "high",
+}
 
 
 def current_date_for_prompt() -> str:
@@ -108,7 +119,7 @@ class CodeReviewTool(GenerativeModelTool):
         self.patch_summarizer = patch_summarizer
         self.suggestion_filterer = suggestion_filterer
 
-        tools = list(SEARCHFOX_TOOLS)
+        tools = [*SEARCHFOX_TOOLS, read_review_guideline]
 
         if skills:
             tools.append(create_load_skill_tool(skills))
@@ -182,11 +193,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         if "llm" not in kwargs:
             kwargs["llm"] = init_chat_model(
-                DEFAULT_ANTHROPIC_MODEL,
-                max_tokens=40_000,
-                temperature=None,
-                thinking={"type": "adaptive"},
-                effort="high",
+                DEFAULT_ANTHROPIC_MODEL, **DEFAULT_REVIEW_LLM_KWARGS
             )
 
         if "patch_summarizer" not in kwargs:
@@ -219,37 +226,60 @@ class CodeReviewTool(GenerativeModelTool):
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
             external_context=external_context,
+            external_context_instructions=(
+                EXTERNAL_CONTEXT_INSTRUCTIONS if external_context else ""
+            ),
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str
-    ) -> tuple[AgentResponse, list[dict]]:
+    ) -> tuple[AgentResponse, list[dict], list[dict]]:
+        """Return the agent's response, external content manifest and tool calls."""
         from bugbug.tools.code_review.review_context import (
-            resolve_external_context_for_review,
+            load_external_context_for_review,
+            resolve_review_context_source,
         )
 
-        external_context, manifest = await resolve_external_context_for_review(
+        source = await resolve_review_context_source(
             patch,
             self._review_context_repo,
-            review_context_branch=(
-                self._review_context_branch if self._review_context_repo else None
-            ),
-            extra_context_toml=self._extra_context_toml,
+            self._review_context_branch if self._review_context_repo else None,
+        )
+        external_context = ""
+        manifest: list[dict] = []
+        if source is not None:
+            external_context, manifest = await load_external_context_for_review(
+                patch,
+                source[0],
+                review_context_branch=source[1],
+                extra_context_toml=self._extra_context_toml,
+                content_overrides=self._content_overrides,
+            )
+        context = CodeReviewContext(
+            patch=patch,
+            review_context_source=source,
             content_overrides=self._content_overrides,
         )
 
         messages = [
             HumanMessage(
-                self.generate_initial_prompt(patch, patch_summary, external_context)
+                await asyncio.to_thread(
+                    self.generate_initial_prompt, patch, patch_summary, external_context
+                )
             )
         ]
         for attempt in range(2):
-            result = await self._invoke_review_agent(patch, messages)
+            result = await self._invoke_review_agent(context, messages)
 
             if result is not None and result.get("structured_response") is not None:
-                return result["structured_response"], manifest
+                tool_calls = [
+                    {"name": call["name"], "args": call["args"]}
+                    for message in result["messages"]
+                    for call in getattr(message, "tool_calls", None) or []
+                ]
+                return result["structured_response"], manifest, tool_calls
 
             if attempt == 0 and result is not None:
                 logger.warning("Review agent returned no structured response; retrying")
@@ -263,16 +293,28 @@ class CodeReviewTool(GenerativeModelTool):
 
         raise ValueError("Review agent returned no structured response")
 
-    async def _invoke_review_agent(self, patch: Patch, messages: list) -> dict | None:
+    async def _invoke_review_agent(
+        self, context: CodeReviewContext, messages: list
+    ) -> dict | None:
         """Run the review agent and return its final streamed state."""
         result = None
+        logged = len(messages)
         try:
             async for chunk in self.agent.astream(
                 {"messages": messages},
-                context=CodeReviewContext(patch=patch),
+                context=context,
                 stream_mode="values",
                 config={"recursion_limit": 500},
             ):
+                for message in chunk["messages"][logged:]:
+                    for call in getattr(message, "tool_calls", None) or []:
+                        logger.info(
+                            "Review agent tool call for patch %s: %s %s",
+                            context.patch.patch_id,
+                            call["name"],
+                            json.dumps(call["args"]),
+                        )
+                logged = len(chunk["messages"])
                 result = chunk
         except GraphRecursionError as e:
             raise RecursionLimitError("The model could not complete the review") from e
@@ -296,19 +338,27 @@ class CodeReviewTool(GenerativeModelTool):
         return result["structured_response"].comments[:1]
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
+        await patch.load()
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
-        patch_summary = self.patch_summarizer.run(patch)
+        # The summarizer, the example lookups and the filterer are synchronous
+        # and slow (LLM and embedding calls). Run them off the event loop so they
+        # don't stall concurrent reviews, whose pending requests would time out.
+        patch_summary = await asyncio.to_thread(self.patch_summarizer.run, patch)
 
-        agent_response, external_content_manifest = await self.generate_review_comments(
-            patch, patch_summary
-        )
+        (
+            agent_response,
+            external_content_manifest,
+            tool_calls,
+        ) = await self.generate_review_comments(patch, patch_summary)
         unfiltered_suggestions = agent_response.comments
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
 
-        filtered_suggestions = self.suggestion_filterer.run(unfiltered_suggestions)
+        filtered_suggestions = await asyncio.to_thread(
+            self.suggestion_filterer.run, unfiltered_suggestions
+        )
 
         # The patch-scope suggestion is a deliberate, meta-level comment, so it
         # bypasses the suggestion filterer, is always sorted last, and always
@@ -334,6 +384,7 @@ class CodeReviewTool(GenerativeModelTool):
                 "num_unfiltered_suggestions": len(unfiltered_suggestions),
                 "num_scope_suggestions": len(scope_suggestions),
                 "external_content": external_content_manifest,
+                "tool_calls": tool_calls,
             },
         )
 
