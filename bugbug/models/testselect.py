@@ -413,12 +413,20 @@ TUNED_XGBOOST_PARAMS = {"n_estimators": 400, "learning_rate": 0.03, "max_depth":
 # "very_low" level, used by the taskgraph on expanded pushes, selects three times as many as "low".
 # Groups at the "very_high" level run on a config of each OS family (see the HTTP service's config
 # selection): in offline evaluations, failing pushes caught at the same cost were ~2.3 points
-# higher with one such group per push, and about as high with 0.5 to 3.
+# higher with one such group per push, and about as high with 0.5 to 3. Tasks at the "very_high" level
+# (one per push, as for groups) caught, with the tasks always selected, ~78% of the failing pushes in
+# offline evaluations, vs ~88% at the "high" level, with a fifth of the tasks.
 # The counts don't include the runnables which the HTTP service always selects: the manifests including
 # the modified tests and the tasks running the tests close to the modified files (see
 # test_scheduling.find_manifests_for_paths and find_tasks_for_paths).
 CONFIDENCE_LEVEL_TARGETS = {
-    "label": {"very_low": 78.0, "low": 26.0, "medium": 15.0, "high": 5.5},
+    "label": {
+        "very_low": 78.0,
+        "low": 26.0,
+        "medium": 15.0,
+        "high": 5.5,
+        "very_high": 1.0,
+    },
     "group": {
         "very_low": 309.0,
         "low": 103.0,
