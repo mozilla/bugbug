@@ -1,7 +1,5 @@
 from types import SimpleNamespace
 
-from unidiff import PatchSet
-
 from bugbug.tools.code_review import stack as stack_module
 from bugbug.tools.code_review.stack import (
     STACK_TOOLS_WARNING,
@@ -10,18 +8,16 @@ from bugbug.tools.code_review.stack import (
     format_stack_context,
     load_patch_stack,
 )
+from bugbug.tools.core.platforms.base import FileChange
 
 
-def make_diff(path, added=1):
-    added_lines = "".join(f"+line {number}\n" for number in range(added))
-    return PatchSet.from_string(
-        f"--- a/{path}\n+++ b/{path}\n@@ -1 +1,{added} @@\n-old\n{added_lines}"
-    )
+def make_changes(*paths, added=1):
+    return [FileChange(path, added, 1) for path in paths]
 
 
-def make_stack_patch(display_id, title, patch_set=None):
+def make_stack_patch(display_id, title):
     return SimpleNamespace(
-        display_id=display_id, patch_title=title, patch_set=patch_set
+        patch_id=display_id, display_id=display_id, patch_title=title
     )
 
 
@@ -34,19 +30,33 @@ class BrokenStackPatch:
         raise ValueError("Patch stack is not linear")
 
 
-def test_load_patch_stack_reads_titles_and_changes():
-    ancestor_diff = make_diff("a.py")
+def test_load_patch_stack_reads_titles_and_changes(monkeypatch):
+    monkeypatch.setattr(stack_module, "MAX_DETAILED_ANCESTORS", 1)
+    requested = []
+
+    def load_stack_file_changes(ancestors):
+        requested.extend(ancestor.patch_id for ancestor in ancestors)
+        return {"D2": make_changes("a.py")}
+
     patch = SimpleNamespace(
         patch_id="3",
-        stack_ancestors=[make_stack_patch("D1", "Add `matcher`", ancestor_diff)],
+        stack_ancestors=[
+            make_stack_patch("D1", "Add `pattern`"),
+            make_stack_patch("D2", "Add `matcher`"),
+        ],
         stack_descendants=[make_stack_patch("D4", "Use `matcher`")],
+        load_stack_file_changes=load_stack_file_changes,
     )
 
     stack = load_patch_stack(patch)
 
-    assert stack.ancestors == [StackEntry("D1", "Add `matcher`", ancestor_diff)], (
-        "Ancestors should keep their changes."
+    assert requested == ["D2"], (
+        "Only the nearest `MAX_DETAILED_ANCESTORS` should load their file changes."
     )
+    assert stack.ancestors == [
+        StackEntry("D1", "Add `pattern`"),
+        StackEntry("D2", "Add `matcher`", make_changes("a.py")),
+    ], "Ancestors should keep their file changes."
     assert stack.descendants == [StackEntry("D4", "Use `matcher`")], (
         "Descendants should be loaded by title only."
     )
@@ -74,8 +84,8 @@ def test_format_stack_context_is_empty_for_lone_patch():
 def test_format_stack_context_lists_ancestors_nearest_first():
     stack = PatchStack(
         ancestors=[
-            StackEntry("D1", "Bottom", make_diff("bottom.py")),
-            StackEntry("D2", "Add `matcher`", make_diff("python/path.py", added=3)),
+            StackEntry("D1", "Bottom", make_changes("bottom.py")),
+            StackEntry("D2", "Add `matcher`", make_changes("python/path.py", added=3)),
         ],
         descendants=[StackEntry("D4", "Use `matcher` everywhere")],
     )
@@ -98,17 +108,13 @@ def test_format_stack_context_lists_ancestors_nearest_first():
 
 
 def test_format_stack_context_truncates_deep_stacks(monkeypatch):
-    monkeypatch.setattr(stack_module, "MAX_DETAILED_ANCESTORS", 1)
     monkeypatch.setattr(stack_module, "MAX_LISTED_ANCESTORS", 2)
     monkeypatch.setattr(stack_module, "MAX_FILES_PER_ANCESTOR", 1)
-    two_files = PatchSet.from_string(
-        str(make_diff("first.py")) + str(make_diff("second.py"))
-    )
     stack = PatchStack(
         ancestors=[
-            StackEntry("D1", "Oldest", make_diff("oldest.py")),
-            StackEntry("D2", "Middle", make_diff("middle.py")),
-            StackEntry("D3", "Nearest", two_files),
+            StackEntry("D1", "Oldest", make_changes("oldest.py")),
+            StackEntry("D2", "Middle"),
+            StackEntry("D3", "Nearest", make_changes("first.py", "second.py")),
         ]
     )
 
@@ -116,10 +122,9 @@ def test_format_stack_context_truncates_deep_stacks(monkeypatch):
 
     assert "first.py" in context, "The nearest ancestor should list its files."
     assert "… and 1 more files" in context, "Long file lists should be truncated."
-    assert "middle.py" not in context, (
-        "Ancestors past `MAX_DETAILED_ANCESTORS` should be listed by title only."
+    assert "- D2: Middle\n- … and 1 older" in context, (
+        "Ancestors without file changes should be listed by title only."
     )
-    assert "D2: Middle" in context, "Listed ancestors should keep their titles."
     assert "Oldest" not in context, (
         "Ancestors past `MAX_LISTED_ANCESTORS` should be left out."
     )

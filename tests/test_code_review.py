@@ -56,6 +56,7 @@ from bugbug.tools.core.data_types import (
     CommentSeverity,
 )
 from bugbug.tools.core.platforms import phabricator as phab_platform
+from bugbug.tools.core.platforms.base import FileChange
 from bugbug.tools.core.platforms.patch_apply import (
     apply_patched_file,
     get_file_after_stack,
@@ -78,6 +79,7 @@ def make_patch(raw_diff):
         patch_stack=[patch_set],
         stack_ancestors=[],
         stack_descendants=[],
+        load_stack_file_changes=lambda ancestors: {},
     )
 
 
@@ -316,16 +318,59 @@ def make_graph_patch_class(stack_graph):
     class FakeGraphPatch(phab_platform.PhabricatorPatch):
         @property
         def _revision_metadata(self):
-            return {
-                "phid": self._revision_phid,
-                "id": int(self._revision_phid.removeprefix("PHID-")),
-                "fields": {"stackGraph": stack_graph},
-            }
+            if self.preloaded_revision_metadata is not None:
+                return self.preloaded_revision_metadata
+            return make_graph_revision(self._revision_phid, stack_graph)
 
     return FakeGraphPatch
 
 
-def test_stack_ancestors_and_descendants():
+def make_graph_revision(phid, stack_graph=None):
+    number = int(phid.removeprefix("PHID-"))
+    return {
+        "phid": phid,
+        "id": number,
+        "fields": {
+            "title": f"Revision {number}",
+            "diffID": number * 10,
+            "stackGraph": stack_graph or {},
+        },
+    }
+
+
+def fake_stack_conduit(monkeypatch):
+    """Answer revision searches and diff queries, recording each Conduit call."""
+    calls = []
+
+    def request(method, **payload):
+        calls.append(method)
+        if method == "differential.revision.search":
+            phids = payload["constraints"]["phids"]
+            return {"data": [make_graph_revision(phid) for phid in phids]}
+        assert method == "differential.querydiffs", f"Unexpected `{method}` call."
+        return {
+            str(diff_id): {
+                "changes": [
+                    {
+                        "currentPath": f"file{diff_id}.py",
+                        "oldPath": None,
+                        "addLines": "2",
+                        "delLines": "1",
+                    }
+                ]
+            }
+            for diff_id in payload["ids"]
+        }
+
+    monkeypatch.setattr(
+        phab_platform,
+        "get_phabricator_client",
+        lambda: SimpleNamespace(request=request),
+    )
+    return calls
+
+
+def test_stack_ancestors_and_descendants(monkeypatch):
     # 1 <- 2 <- 3 <- 4, and 5 also builds on 3.
     stack_graph = {
         "PHID-1": [],
@@ -334,20 +379,44 @@ def test_stack_ancestors_and_descendants():
         "PHID-4": ["PHID-3"],
         "PHID-5": ["PHID-3"],
     }
+    calls = fake_stack_conduit(monkeypatch)
     patch_class = make_graph_patch_class(stack_graph)
-    middle = patch_class(revision_phid="PHID-2")
+    middle = patch_class(revision_phid="PHID-3")
 
-    assert [ancestor.display_id for ancestor in middle.stack_ancestors] == ["D1"], (
-        "`stack_ancestors` should list the revisions below this one, oldest first."
-    )
+    assert [ancestor.patch_title for ancestor in middle.stack_ancestors] == [
+        "Revision 1",
+        "Revision 2",
+    ], "`stack_ancestors` should list the revisions below this one, oldest first."
     assert [descendant.display_id for descendant in middle.stack_descendants] == [
-        "D3",
         "D4",
         "D5",
     ], "`stack_descendants` should list every dependent revision, nearest first."
+    assert calls == ["differential.revision.search"] * 2, (
+        "Each side of the stack should load with one revision search."
+    )
 
 
-def test_stack_of_single_revision_is_empty():
+def test_load_stack_file_changes_uses_one_diff_query(monkeypatch):
+    calls = fake_stack_conduit(monkeypatch)
+    patch_class = make_graph_patch_class({})
+    ancestors = [
+        patch_class(revision_phid=phid, revision_metadata=make_graph_revision(phid))
+        for phid in ["PHID-1", "PHID-2"]
+    ]
+
+    file_changes = patch_class(revision_phid="PHID-3").load_stack_file_changes(
+        ancestors
+    )
+
+    assert file_changes == {
+        "10": [FileChange("file10.py", 2, 1)],
+        "20": [FileChange("file20.py", 2, 1)],
+    }, "File changes should be keyed by `patch_id`."
+    assert calls == ["differential.querydiffs"], "One diff query should load them."
+
+
+def test_stack_of_single_revision_is_empty(monkeypatch):
+    fake_stack_conduit(monkeypatch)
     patch_class = make_graph_patch_class({})
     single = patch_class(revision_phid="PHID-7")
 
@@ -1970,6 +2039,7 @@ def _make_review_patch(github_repo_ref_return=None):
         patch_set=patch_set,
         stack_ancestors=[],
         stack_descendants=[],
+        load_stack_file_changes=lambda ancestors: {},
         github_repo_ref=AsyncMock(return_value=github_repo_ref_return),
     )
 

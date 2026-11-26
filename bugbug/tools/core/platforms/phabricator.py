@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from logging import getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 import tenacity
 from async_lru import alru_cache
@@ -24,7 +24,7 @@ from bugbug.tools.core.connection import (
     get_user_agent,
 )
 from bugbug.tools.core.data_types import InlineComment
-from bugbug.tools.core.platforms.base import Patch, ReviewData
+from bugbug.tools.core.platforms.base import FileChange, Patch, ReviewData
 from bugbug.tools.core.platforms.bugzilla import Bug
 
 logger = getLogger(__name__)
@@ -149,6 +149,27 @@ def _repo_callsign(repository_phid: str) -> Optional[str]:
     if not data:
         return None
     return data[0]["fields"].get("callsign")
+
+
+# The most results `differential.revision.search` returns in one page.
+REVISION_SEARCH_LIMIT = 100
+
+
+def search_revisions(revision_phids: list[str]) -> dict[str, dict]:
+    """Return the revisions for `revision_phids`, keyed by PHID, in pages of 100."""
+    phabricator = get_phabricator_client()
+    revisions = {}
+    for start in range(0, len(revision_phids), REVISION_SEARCH_LIMIT):
+        logger.debug("Searching for %s revisions.", len(revision_phids) - start)
+        response = phabricator.request(
+            "differential.revision.search",
+            constraints={
+                "phids": revision_phids[start : start + REVISION_SEARCH_LIMIT]
+            },
+            limit=REVISION_SEARCH_LIMIT,
+        )
+        revisions.update({revision["phid"]: revision for revision in response["data"]})
+    return revisions
 
 
 @cache
@@ -384,6 +405,7 @@ class PhabricatorPatch(Patch):
         diff_id: Optional[str | int] = None,
         revision_phid: Optional[str] = None,
         revision_id: Optional[int] = None,
+        revision_metadata: Optional[dict] = None,
     ) -> None:
         super().__init__()
         assert diff_id or revision_phid or revision_id, (
@@ -393,6 +415,7 @@ class PhabricatorPatch(Patch):
         self._diff_id = diff_id
         self._revision_phid = revision_phid
         self._revision_id = revision_id
+        self.preloaded_revision_metadata = revision_metadata
 
     @property
     def patch_url(self) -> str:
@@ -673,6 +696,9 @@ class PhabricatorPatch(Patch):
 
     @cached_property
     def _revision_metadata(self) -> dict:
+        if self.preloaded_revision_metadata is not None:
+            return self.preloaded_revision_metadata
+
         phabricator = get_phabricator_client()
 
         # We pass either the revision PHID or the revision ID, not both.
@@ -888,9 +914,17 @@ class PhabricatorPatch(Patch):
     def stack_base_patch(self) -> PhabricatorPatch:
         return self._stack_patches[0]
 
-    @property
+    @cached_property
     def stack_ancestors(self) -> list[PhabricatorPatch]:
-        return self._stack_patches[:-1]
+        """Return the ancestors, with their revisions loaded in one search."""
+        ancestors = self._stack_patches[:-1]
+        revisions = search_revisions([ancestor.revision_phid for ancestor in ancestors])
+        for ancestor in ancestors:
+            if ancestor.preloaded_revision_metadata is None:
+                ancestor.preloaded_revision_metadata = revisions.get(
+                    ancestor.revision_phid
+                )
+        return ancestors
 
     @cached_property
     def stack_descendants(self) -> list[PhabricatorPatch]:
@@ -917,7 +951,37 @@ class PhabricatorPatch(Patch):
             ordered_phids.append(phid)
             queue.extend(children[phid])
 
-        return [self.__class__(revision_phid=phid) for phid in ordered_phids]
+        revisions = search_revisions(ordered_phids)
+        return [
+            self.__class__(revision_phid=phid, revision_metadata=revisions[phid])
+            for phid in ordered_phids
+            if phid in revisions
+        ]
+
+    def load_stack_file_changes(
+        self, ancestors: Sequence[Patch]
+    ) -> dict[str, list[FileChange]]:
+        """Return the files each of `ancestors` touches with one diff query."""
+        if not ancestors:
+            return {}
+
+        phabricator = get_phabricator_client()
+        logger.debug("Loading the file changes of %s diffs.", len(ancestors))
+        diffs = phabricator.request(
+            "differential.querydiffs",
+            ids=[int(ancestor.patch_id) for ancestor in ancestors],
+        )
+        return {
+            str(diff_id): [
+                FileChange(
+                    path=change["currentPath"] or change["oldPath"],
+                    added=int(change["addLines"]),
+                    removed=int(change["delLines"]),
+                )
+                for change in diff["changes"]
+            ]
+            for diff_id, diff in diffs.items()
+        }
 
     @property
     def display_id(self) -> str:

@@ -9,9 +9,7 @@ from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Optional
 
-from unidiff import PatchSet
-
-from bugbug.tools.core.platforms.base import Patch
+from bugbug.tools.core.platforms.base import FileChange, Patch
 
 logger = getLogger(__name__)
 
@@ -42,8 +40,8 @@ class StackEntry:
 
     title: str
 
-    # The changes of the patch, or `None` when they were not loaded.
-    patch_set: Optional[PatchSet] = None
+    # The files the patch touches, or `None` when they were not loaded.
+    file_changes: Optional[list[FileChange]] = None
 
 
 @dataclass(frozen=True)
@@ -76,9 +74,17 @@ def load_patch_stack(patch: Patch) -> PatchStack:
 
     logger.debug("Loading the ancestors of patch %s.", patch.patch_id)
     try:
+        stack_ancestors = patch.stack_ancestors
+        file_changes = patch.load_stack_file_changes(
+            stack_ancestors[-MAX_DETAILED_ANCESTORS:]
+        )
         ancestors = [
-            StackEntry(ancestor.display_id, ancestor.patch_title, ancestor.patch_set)
-            for ancestor in patch.stack_ancestors
+            StackEntry(
+                ancestor.display_id,
+                ancestor.patch_title,
+                file_changes.get(ancestor.patch_id),
+            )
+            for ancestor in stack_ancestors
         ]
     except Exception as error:
         logger.warning("Could not load the ancestors of %s: %s", patch.patch_id, error)
@@ -99,14 +105,16 @@ def load_patch_stack(patch: Patch) -> PatchStack:
     return PatchStack(ancestors, descendants, errors)
 
 
-def format_file_changes(patch_set: PatchSet) -> list[str]:
+def format_file_changes(file_changes: list[FileChange]) -> list[str]:
     """Return one line per file the patch touches, with its line counts."""
     lines = [
-        f"  - {patched_file.path} (+{patched_file.added} -{patched_file.removed})"
-        for patched_file in patch_set[:MAX_FILES_PER_ANCESTOR]
+        f"  - {change.path} (+{change.added} -{change.removed})"
+        for change in file_changes[:MAX_FILES_PER_ANCESTOR]
     ]
-    if len(patch_set) > MAX_FILES_PER_ANCESTOR:
-        lines.append(f"  - … and {len(patch_set) - MAX_FILES_PER_ANCESTOR} more files")
+    if len(file_changes) > MAX_FILES_PER_ANCESTOR:
+        lines.append(
+            f"  - … and {len(file_changes) - MAX_FILES_PER_ANCESTOR} more files"
+        )
     return lines
 
 
@@ -114,10 +122,10 @@ def format_ancestors(ancestors: list[StackEntry]) -> list[str]:
     """List the ancestors nearest first, with the files the nearest ones touch."""
     nearest_first = list(reversed(ancestors))
     lines = [f"{len(ancestors)} patches come before this one, nearest first:"]
-    for position, ancestor in enumerate(nearest_first[:MAX_LISTED_ANCESTORS]):
+    for ancestor in nearest_first[:MAX_LISTED_ANCESTORS]:
         lines.append(f"- {ancestor.display_id}: {ancestor.title}")
-        if position < MAX_DETAILED_ANCESTORS and ancestor.patch_set is not None:
-            lines.extend(format_file_changes(ancestor.patch_set))
+        if ancestor.file_changes is not None:
+            lines.extend(format_file_changes(ancestor.file_changes))
     if len(nearest_first) > MAX_LISTED_ANCESTORS:
         lines.append(f"- … and {len(nearest_first) - MAX_LISTED_ANCESTORS} older")
     return lines
