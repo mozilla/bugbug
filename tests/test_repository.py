@@ -2537,6 +2537,49 @@ def test_get_commits_from_db(monkeypatch):
     assert get(1) == {}
 
 
+def test_get_bug_nodes_in_db(monkeypatch):
+    # Small blocks, to read the DB in several of them, with commits spanning two blocks.
+    monkeypatch.setattr(repository, "COMMITS_INDEX_BLOCK_SIZE", 7)
+
+    def node(i):
+        return f"{i:040x}"
+
+    def write(commits, mode):
+        with open(repository.COMMITS_DB, mode) as f:
+            for c in commits:
+                f.write(json.dumps(c, separators=(",", ":")) + "\n")
+
+    def get(*bug_ids):
+        return repository.get_bug_nodes_in_db(bug_ids)
+
+    write(
+        [
+            {"node": node(0), "author": 'A "bug_id":2,', "bug_id": 1, "desc": "0"},
+            {"node": node(1), "author": "B", "bug_id": None, "desc": "1"},
+            {"node": node(2), "author": "C", "bug_id": 2, "desc": "2"},
+            # The bug ID is the last field.
+            {"node": node(3), "bug_id": 1},
+        ],
+        "w",
+    )
+    assert get(1, 2, 3) == {1: [node(0), node(3)], 2: [node(2)], 3: []}
+
+    # The commits appended to the DB are indexed on the next lookup, also when they don't start
+    # with their node, or have no bug ID.
+    write(
+        [
+            {"desc": "4", "node": node(4), "bug_id": 2},
+            {"node": node(5), "desc": "5"},
+            {"node": node(6), "author": "D", "bug_id": 1},
+        ],
+        "a",
+    )
+    assert get(1, 2) == {1: [node(0), node(3), node(6)], 2: [node(2), node(4)]}
+
+    os.remove(repository.COMMITS_DB)
+    assert get(1) == {1: []}
+
+
 def test_get_new_revs(tmp_path):
     repo_dir = str(tmp_path / "repo")
     hglib.init(repo_dir)

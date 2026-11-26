@@ -353,13 +353,42 @@ def get_last_commit(
     return last_commit[0] if last_commit else None
 
 
-# The offset of each commit in the commits DB, by node, to find them without reading the whole DB.
+# The offset of each commit in the commits DB, by node, and the nodes of the commits of each bug (by
+# "bug:<id>" keys, see _get_bug_key), to find them without reading the whole DB.
 COMMITS_INDEX_DB = "data/commits_index.lmdb"
 # The size of the part of the commits DB which is indexed.
 COMMITS_INDEX_SIZE_KEY = b"$indexed_size$"
-# The serialized commits start with their node (see Commit.to_dict).
+# The serialized commits start with their node, followed by their author and bug ID (see
+# Commit.to_dict). The key can't be found inside the author, as its quotes are escaped.
 COMMIT_LINE_PREFIX = b'{"node":"'
+COMMIT_BUG_ID_KEY = b',"bug_id":'
 COMMITS_INDEX_BLOCK_SIZE = 16 * 1024 * 1024
+
+
+def _get_bug_key(bug_id: int) -> bytes:
+    return b"bug:%d" % bug_id
+
+
+def _split_nodes(nodes: bytes) -> list[bytes]:
+    return [nodes[i : i + 40] for i in range(0, len(nodes), 40)]
+
+
+def _parse_commit_line(line: bytes) -> tuple[bytes, int | None]:
+    """Get the node and the bug ID of a serialized commit, without parsing it whole if possible."""
+    if line.startswith(COMMIT_LINE_PREFIX):
+        bug_id_start = line.find(COMMIT_BUG_ID_KEY)
+        if bug_id_start != -1:
+            value_start = bug_id_start + len(COMMIT_BUG_ID_KEY)
+            value_end = line.find(b",", value_start)
+            value = line[value_start : value_end if value_end != -1 else -1]
+            node_start = len(COMMIT_LINE_PREFIX)
+            return (
+                line[node_start : node_start + 40],
+                None if value == b"null" else int(value),
+            )
+
+    commit = orjson.loads(line)
+    return commit["node"].encode("ascii"), commit.get("bug_id")
 
 
 def _update_commits_index(index: LMDBDict) -> None:
@@ -375,12 +404,11 @@ def _update_commits_index(index: LMDBDict) -> None:
             start = 0
             # Only the complete lines are indexed, in case the DB is being written to.
             while (end := pending.find(b"\n", start)) != -1:
-                node_start = start + len(COMMIT_LINE_PREFIX)
-                if pending.startswith(COMMIT_LINE_PREFIX, start):
-                    node = pending[node_start : node_start + 40]
-                else:
-                    node = orjson.loads(pending[start:end])["node"].encode("ascii")
+                node, bug_id = _parse_commit_line(pending[start:end])
                 index[node] = str(pos + start).encode("ascii")
+                if bug_id is not None:
+                    bug_key = _get_bug_key(bug_id)
+                    index[bug_key] = bytes(index.get(bug_key, b"")) + node
                 start = end + 1
             pending = pending[start:]
             pos += start
@@ -417,6 +445,29 @@ def _get_commits_offsets(nodes: Iterable[str]) -> dict[str, int]:
             node: int(bytes(offset))
             for node in nodes
             if (offset := index.get(node.encode("ascii"))) is not None
+        }
+    finally:
+        index.close()
+
+
+def get_bug_nodes_in_db(bug_ids: Iterable[int]) -> dict[int, list[str]]:
+    """Return the nodes of the commits of each of `bug_ids` which are in the commits DB.
+
+    The nodes are in the order of the DB. The index of the DB is updated first with the commits
+    added to the DB since the last update.
+    """
+    if not os.path.exists(COMMITS_DB):
+        return {bug_id: [] for bug_id in bug_ids}
+
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+        return {
+            bug_id: [
+                node.decode("ascii")
+                for node in _split_nodes(bytes(index.get(_get_bug_key(bug_id), b"")))
+            ]
+            for bug_id in bug_ids
         }
     finally:
         index.close()
