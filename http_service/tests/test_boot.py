@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import fcntl
 import json
 import os
 import re
@@ -73,16 +74,27 @@ def test_refresh_commits(monkeypatch: pytest.MonkeyPatch) -> None:
         "pull",
         lambda repo_dir, branch, revision: calls.append(("pull", branch, revision)),
     )
-    monkeypatch.setattr(
-        boot,
-        "update_commits",
-        lambda autoland_head: calls.append(("update", autoland_head)),
-    )
 
-    boot.refresh_commits()
+    def update_commits(autoland_head):
+        # Other processes can't add commits to the DB at the same time.
+        with (
+            open(f"{boot.repository.COMMITS_DB}.lock", "w") as f,
+            pytest.raises(BlockingIOError),
+        ):
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        calls.append(("update", autoland_head))
+        return True
+
+    monkeypatch.setattr(boot, "update_commits", update_commits)
+
+    assert boot.refresh_commits()
 
     # The latest autoland commits are pulled before being mined.
     assert calls == [("pull", "integration/autoland", tip), ("update", tip)]
+
+    # The lock is released.
+    with open(f"{boot.repository.COMMITS_DB}.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,6 +112,8 @@ def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
             raise boot.hglib.error.CommandError(
                 [], 255, b"", b"abort: unknown revision"
             )
+        if base == new:
+            return [merge_parent.encode()]
         assert base == known
         # The other parent of a merge is not an ancestor of the last commit, but it is in the DB.
         return [merge_parent.encode(), new.encode()]
@@ -108,14 +122,33 @@ def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def download_commits(repo_dir, revs):
         mined.extend(revs)
+        if new.encode() not in revs:
+            raise Exception("Failed to download the coverage mapping")
         return ()
 
     monkeypatch.setattr(boot.repository, "get_new_revs", get_new_revs)
     monkeypatch.setattr(boot.repository, "download_commits", download_commits)
 
-    boot.update_commits("a" * 40)
-
+    assert boot.update_commits("a" * 40)
     assert mined == [new.encode()]
+
+    # Nothing is mined (and the data needed to mine is not retrieved) when all the commits are in
+    # the DB.
+    mined.clear()
+    with open(boot.repository.COMMITS_DB, "a") as f:
+        f.write(json.dumps({"node": new}) + "\n")
+    assert boot.update_commits("a" * 40)
+    assert mined == []
+
+    # A failure to mine the commits is reported.
+    newer = "5" * 40
+    monkeypatch.setattr(
+        boot.repository,
+        "get_new_revs",
+        lambda hg, base, head: [new.encode(), newer.encode()],
+    )
+    assert not boot.update_commits("a" * 40)
+    assert mined == [newer.encode()]
 
 
 def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:

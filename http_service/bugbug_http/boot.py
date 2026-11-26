@@ -5,6 +5,7 @@
 
 import concurrent.futures
 import contextlib
+import fcntl
 import json
 import logging
 import os
@@ -433,8 +434,11 @@ def get_autoland_head() -> str:
     return r.json()["node"]
 
 
-def update_commits(autoland_head: str) -> None:
-    """Mine the autoland commits up to `autoland_head` after the last one in the commits DB, and update the DBs derived from them."""
+def update_commits(autoland_head: str) -> bool:
+    """Mine the autoland commits up to `autoland_head` after the last one in the commits DB, and update the DBs derived from them.
+
+    Returns whether the commits DB has all the commits up to `autoland_head`.
+    """
     # The last commits of the DB, from the newest. They aren't filtered (like get_commits does), as
     # the commits after the last one are the ones to mine: starting from an older one would mine
     # again (and add to the DB) the last commits if they are filtered out (e.g. backouts).
@@ -458,13 +462,22 @@ def update_commits(autoland_head: str) -> None:
     # of a merge, the commits of its other parent.
     in_db = repository.get_nodes_in_db(rev.decode("ascii") for rev in revs)
     revs = [rev for rev in revs if rev.decode("ascii") not in in_db]
+    if not revs:
+        # Without retrieving the data needed to mine commits (see download_commits).
+        logger.info("The commits DB is up to date.")
+        return True
 
     logger.info("Updating commits DB...")
     try:
         commits = repository.download_commits(REPO_DIR, revs=revs)
-        logger.info("Commits DB updated.")
+    except Exception:
+        # It's not ideal, but better not to crash the service!
+        logger.exception("Exception while updating commits DB")
+        return False
+    logger.info("Commits DB updated.")
 
-        logger.info("Updating touched together DB...")
+    logger.info("Updating touched together DB...")
+    try:
         if len(commits) > 0:
             # Update the touched together DB.
             update_touched_together_gen = test_scheduling.update_touched_together()
@@ -476,21 +489,41 @@ def update_commits(autoland_head: str) -> None:
                 update_touched_together_gen.send(None)
 
         logger.info("Touched together DB updated.")
-    except Exception as e:
-        # It's not ideal, but better not to crash the service!
-        logger.error("Exception while updating commits DB: %s", e)
+    except Exception:
+        logger.exception("Exception while updating touched together DB")
+
+    return True
 
 
-def refresh_commits() -> None:
+@contextlib.contextmanager
+def commits_db_lock() -> Iterator[None]:
+    """Hold the lock of the commits DB, so that a single process adds commits to it at a time.
+
+    Both the refresh (see bugbug_http.refresh) and the jobs which need the latest commits add
+    commits to the DB. The lock is released when its process dies.
+    """
+    with open(f"{repository.COMMITS_DB}.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def refresh_commits() -> bool:
     """Pull the latest autoland commits, and add them to the commits DB (see update_commits).
+
+    Returns whether the commits DB has all the latest autoland commits.
 
     The latest commit on the default branch is pulled by node, rather than as "tip", to know which
     commits were pulled from autoland, as the clone can also contain commits from other repositories
-    (e.g. try).
+    (e.g. try). When the commits are being added by another process, this waits for it to finish,
+    and then adds the remaining ones.
     """
     autoland_head = get_autoland_head()
     repository.pull(REPO_DIR, "integration/autoland", autoland_head)
-    update_commits(autoland_head)
+    with commits_db_lock():
+        return update_commits(autoland_head)
 
 
 def refresh_data() -> None:

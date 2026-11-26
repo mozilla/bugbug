@@ -36,6 +36,9 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
+# The commits of a bug are looked up again more often than predictions expire,
+# as more commits can land for the bug.
+BUG_COMMITS_EXPIRATION_TTL = 15 * 60
 
 TREEHERDER_API_URL = "https://treeherder.mozilla.org/api"
 # "expected fail", "intermittent", "infra", "autoclassified intermittent" and
@@ -96,11 +99,16 @@ RISK_CALIBRATIONS = RiskCalibrations(timedelta(hours=6))
 cctx = zstandard.ZstdCompressor(level=10)
 
 
-def setkey(key: str, value: bytes, compress: bool = False) -> None:
+def setkey(
+    key: str,
+    value: bytes,
+    compress: bool = False,
+    expiration: int = DEFAULT_EXPIRATION_TTL,
+) -> None:
     LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
         value = cctx.compress(value)
-    redis.set(key, value, ex=DEFAULT_EXPIRATION_TTL)
+    redis.set(key, value, ex=expiration)
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
@@ -623,6 +631,59 @@ def classify_commits(model_name: str, branch: str, revs: Sequence[str]) -> str:
                 **data,
                 "extra_data": model_extra_data,
             },
+        )
+
+    return "OK"
+
+
+def get_bug_commits(bug_ids: Sequence[int]) -> str:
+    """Find the autoland commits of bugs, and store their full hashes in Redis.
+
+    The latest autoland commits are added to the commits DB first (see
+    bugbug_http.boot.refresh_commits), so that the commits of the bugs are all found through the
+    index of the DB. The result is {"commits": [<node>, ...], "backedout": [<node>, ...]} for each
+    bug, with its commits in the order of the DB, and the ones which are backed out. As commits can
+    be backed out after they are classified, whose results are cached for longer, their backouts
+    are looked up again each time. The result expires sooner than predictions, as more commits can
+    land. Nothing is stored when the latest commits can't be added to the DB.
+    """
+    from bugbug_http import REPO_DIR, boot
+    from bugbug_http.app import JobInfo
+
+    LOGGER.info("Finding the commits of bugs %s...", bug_ids)
+
+    if not boot.refresh_commits():
+        # The commits of the bugs which are not in the DB would be missing. Without results, the
+        # bugs are looked up again on the next request.
+        LOGGER.error("The commits of bugs %s can't be found", bug_ids)
+        return "NOK"
+
+    bug_nodes = repository.get_bug_nodes_in_db(dict.fromkeys(bug_ids))
+    nodes = list(dict.fromkeys(node for nodes in bug_nodes.values() for node in nodes))
+    # The backouts which landed after the commits were mined are only in the local repository, and
+    # the ones found when they were mined only in the DB, when they are too far from the commits
+    # for the repository to find them (see backoutsearchlimit in infra/hgrc).
+    db_commits = repository.get_commits_from_db(nodes)
+    with hglib.open(REPO_DIR) as hg:
+        backedoutby = repository.get_backedoutby(
+            hg, [node.encode("ascii") for node in nodes]
+        )
+    backedout = {
+        node
+        for node in nodes
+        if backedoutby.get(node) or db_commits[node]["backedoutby"]
+    }
+
+    for bug_id, nodes in bug_nodes.items():
+        setkey(
+            JobInfo(get_bug_commits, bug_id).result_key,
+            orjson.dumps(
+                {
+                    "commits": nodes,
+                    "backedout": [node for node in nodes if node in backedout],
+                }
+            ),
+            expiration=BUG_COMMITS_EXPIRATION_TTL,
         )
 
     return "OK"
