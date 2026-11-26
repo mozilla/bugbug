@@ -2074,7 +2074,7 @@ async def test_external_content_manifest_and_prompt_body():
     ]
 
     prompt_content = format_external_content(results)
-    assert "<external_content_manifest>" in prompt_content
+    assert "<external_content_manifest>" not in prompt_content
     assert "<external_context>" in prompt_content
     assert "Audio guidelines." in prompt_content
 

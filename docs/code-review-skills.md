@@ -54,10 +54,12 @@ The `{external_context}` slot in `first_message.md` is filled by
 `format_external_content()` from `review_context.py` when rules match. It is an
 empty string otherwise, so no blank section appears in the prompt.
 
-Loaded content is preceded by an `<external_content_manifest>` block. The
-manifest excludes the body text and records each item's name, source, source
-type, matched rules, trust reason, byte count, and SHA-256 digest. The same
-manifest is also returned in `CodeReviewToolResponse.details["external_content"]`.
+Each loaded item is wrapped in a `<context name="...">` element inside an
+`<external_context>` block. An audit manifest, which excludes the body text and
+records each item's name, source, source type, matched rules, trust reason, byte
+count, and SHA-256 digest, is returned in
+`CodeReviewToolResponse.details["external_content"]`. It is not shown to the
+model.
 
 All currently injected external content is trusted:
 

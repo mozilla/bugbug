@@ -11,7 +11,6 @@ against the rules, and pre-loads the referenced content.
 
 import fnmatch
 import hashlib
-import json
 import re
 import time
 from collections.abc import Mapping
@@ -600,19 +599,11 @@ def external_content_manifest(content_items: list[ExternalContentItem]) -> list[
 
 
 def format_external_content(content_items: list[ExternalContentItem]) -> str:
-    manifest = json.dumps(external_content_manifest(content_items), indent=2)
     content = "\n\n".join(
         f'<context name="{item.name}">\n{item.body.strip()}\n</context>'
         for item in content_items
     )
-    return (
-        "\n\n<external_content_manifest>\n"
-        f"{manifest}\n"
-        "</external_content_manifest>"
-        "\n\n<external_context>\n"
-        f"{content}\n"
-        "</external_context>"
-    )
+    return f"\n\n<external_context>\n{content}\n</external_context>"
 
 
 async def resolve_external_context_for_review(
