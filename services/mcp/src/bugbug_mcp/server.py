@@ -34,6 +34,16 @@ def get_code_review_tool():
     return CodeReviewTool.create()
 
 
+def _revision_id_from_url(patch_url: str) -> int:
+    parsed_url = urlparse(patch_url)
+    if (
+        parsed_url.netloc == "phabricator.services.mozilla.com"
+        and parsed_url.path.startswith("/D")
+    ):
+        return int(parsed_url.path[2:])
+    raise ValueError(f"Unsupported patch URL: {patch_url}")
+
+
 @mcp.prompt()
 async def patch_review(
     patch_url: str,
@@ -43,14 +53,7 @@ async def patch_review(
     content_overrides: str | None = None,
 ) -> str:
     """Review a code patch from Phabricator."""
-    parsed_url = urlparse(patch_url)
-    if (
-        parsed_url.netloc == "phabricator.services.mozilla.com"
-        and parsed_url.path.startswith("/D")
-    ):
-        revision_id = int(parsed_url.path[2:])
-    else:
-        raise ValueError(f"Unsupported patch URL: {patch_url}")
+    revision_id = _revision_id_from_url(patch_url)
 
     overrides = None
     if content_overrides is not None:
@@ -236,6 +239,42 @@ async def read_fx_doc_section(
         response.raise_for_status()
 
         return response.text
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+async def read_review_guideline(
+    patch_url: Annotated[
+        str, "The URL of the patch under review, as given to the patch_review prompt"
+    ],
+    file_path: Annotated[
+        str,
+        "Repository-relative path of a file the review guidelines point to, e.g. 'accessible/docs/HCMCSSChecklist.md'",
+    ],
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+) -> str:
+    """Read a file that the review guidelines of the patch_review prompt point to.
+
+    The file is read at the same version as the guidelines, which can be newer
+    than the code the patch is based on. Pass the same review_context_repo and
+    review_context_branch as to the patch_review prompt, if any.
+    """
+    from bugbug.tools.code_review.review_context import (
+        fetch_review_guideline,
+        resolve_review_context_source,
+    )
+
+    patch = PhabricatorPatch(revision_id=_revision_id_from_url(patch_url))
+    await patch.load()
+    source = await resolve_review_context_source(
+        patch, review_context_repo, review_context_branch
+    )
+    if source is None:
+        raise ToolError("No review guidelines are configured for this patch.")
+    try:
+        return await fetch_review_guideline(source, file_path)
+    except FileNotFoundError as e:
+        raise ToolError(str(e)) from e
 
 
 def main():

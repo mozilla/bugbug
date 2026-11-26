@@ -520,7 +520,7 @@ def _guideline_runtime(monkeypatch, source):
 def test_read_review_guideline_reads_from_review_context_source(monkeypatch):
     _guideline_runtime(monkeypatch, ("mozilla-firefox/firefox", "autoland"))
     fetch = AsyncMock(return_value=SimpleNamespace(text="Checklist\n"))
-    monkeypatch.setattr(langchain_tools, "_fetch_url", fetch)
+    monkeypatch.setattr(review_context, "_fetch_url", fetch)
 
     result = asyncio.run(
         langchain_tools.read_review_guideline.coroutine(
@@ -540,7 +540,7 @@ def test_read_review_guideline_reports_missing_file(monkeypatch):
     request = httpx.Request("GET", "https://example.com")
     response = httpx.Response(404, request=request)
     monkeypatch.setattr(
-        langchain_tools,
+        review_context,
         "_fetch_url",
         AsyncMock(
             side_effect=httpx.HTTPStatusError(

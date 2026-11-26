@@ -625,6 +625,23 @@ async def resolve_review_context_source(
     return review_context_repo, review_context_branch or "main"
 
 
+async def fetch_review_guideline(source: tuple[str, str], file_path: str) -> str:
+    """Return a file the review guidelines point to, from the guidelines' (repo, branch).
+
+    Raises FileNotFoundError if the file does not exist there.
+    """
+    repo, branch = source
+    try:
+        response = await _fetch_url(_github_raw_url(repo, branch, file_path))
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise FileNotFoundError(
+                f"{file_path} does not exist in {repo}@{branch}"
+            ) from e
+        raise
+    return response.text
+
+
 async def resolve_external_context_for_review(
     patch,
     review_context_repo: str | None = None,

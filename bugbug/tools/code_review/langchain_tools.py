@@ -15,8 +15,8 @@ from langchain.tools import tool
 from langgraph.runtime import get_runtime
 from searchfox import AsyncSearchfoxClient, SearchfoxNetworkError, SearchfoxRequestError
 
-from bugbug.tools.code_review.data_types import Skill, SkillLoadError, _fetch_url
-from bugbug.tools.code_review.review_context import _github_raw_url
+from bugbug.tools.code_review.data_types import Skill, SkillLoadError
+from bugbug.tools.code_review.review_context import fetch_review_guideline
 from bugbug.tools.core.connection import retry_transient_errors
 from bugbug.tools.core.platforms.base import Patch
 from bugbug.tools.core.platforms.patch_apply import get_file_after_stack
@@ -166,18 +166,13 @@ async def read_review_guideline(file_path: str) -> str:
     if source is None:
         return _tool_error("no review guidelines were loaded for this patch")
 
-    repo, branch = source
     try:
-        response = await _fetch_url(_github_raw_url(repo, branch, file_path))
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return f"Warning: {file_path} does not exist in {repo}@{branch}."
-        logger.exception("Could not read review guideline %s", file_path)
-        return _tool_error(f"could not read {file_path}: {e}")
+        return await fetch_review_guideline(source, file_path)
+    except FileNotFoundError as e:
+        return f"Warning: {e}."
     except httpx.HTTPError as e:
         logger.exception("Could not read review guideline %s", file_path)
         return _tool_error(f"could not read {file_path}: {e!r}")
-    return response.text
 
 
 def create_load_skill_tool(skills: list[Skill]):
