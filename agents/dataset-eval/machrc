@@ -2,3 +2,7 @@
 # someone to close the browser, which nobody here does.
 [alias]
 wpt = wpt --no-pause-after-test
+
+# Otherwise bootstrap writes it here, which the agent user can't.
+[mach_telemetry]
+is_employee = false
