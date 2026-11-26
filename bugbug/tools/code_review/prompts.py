@@ -132,6 +132,11 @@ Here is the patch you need to review:
 <patch>
 {patch}
 </patch>
+{external_context_instructions}"""
+
+
+EXTERNAL_CONTEXT_INSTRUCTIONS = """
+The owners of this code keep their detailed review checks in separate files, and the guidelines in `<external-resources>` point to them. Reading a file that a guideline points to is part of the review, not optional background: those files contain the checks that catch the issues the guidelines alone do not. Before you write any comment, read in full, with `expand_context`, every file a guideline directs you to read or apply for a patch like this one. Skip only the files that serve steps you cannot perform here, such as running a build or a browser. Resolve relative paths against the directory of the `<context>` that references them. Then review the patch against all of them.
 """
 
 

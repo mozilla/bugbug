@@ -36,6 +36,7 @@ from bugbug.tools.code_review.langchain_tools import (
 from bugbug.tools.code_review.prompts import (
     CODE_REVIEW_TODO_PROMPT,
     CODE_REVIEW_TODO_TOOL_DESCRIPTION,
+    EXTERNAL_CONTEXT_INSTRUCTIONS,
     FIRST_MESSAGE_TEMPLATE,
     PATCH_SCOPE_PROMPT,
     STATIC_COMMENT_EXAMPLES,
@@ -219,6 +220,9 @@ class CodeReviewTool(GenerativeModelTool):
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
             external_context=external_context,
+            external_context_instructions=(
+                EXTERNAL_CONTEXT_INSTRUCTIONS if external_context else ""
+            ),
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
