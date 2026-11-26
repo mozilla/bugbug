@@ -285,7 +285,9 @@ async def run_build_repair(
         target_software=TARGET_SOFTWARE,
         git_commit=failure_commit,
         source_repo=source_repo,
-        push_context=_push_context(git_commits),
+        push_context=_push_context(
+            git_commits, shallow=(source_repo / ".git" / "shallow").exists()
+        ),
         treeherder_step=treeherder_step,
         blame_step=_blame_step(git_commits, scratch_out),
         scratch_out=scratch_out,
@@ -525,13 +527,14 @@ def _read_doc(
     return path.read_text()
 
 
-def _push_context(git_commits: list[str]) -> str:
+def _push_context(git_commits: list[str], shallow: bool) -> str:
     """Tell the agent exactly which commits make up the push.
 
     Spelled out even for a single commit: without it the agent takes the parent
-    commit for a stacked one and blames it as part of the push.
+    commit for a stacked one and blames it as part of the push. The shallow
+    history warning is left out when the checkout came from the full snapshot.
     """
-    history = CHECKOUT_HISTORY.format(depth=CHECKOUT_DEPTH)
+    history = CHECKOUT_HISTORY.format(depth=CHECKOUT_DEPTH) if shallow else ""
     if len(git_commits) == 1:
         return SINGLE_COMMIT_CONTEXT.format(
             commit=git_commits[0], checkout_history=history
