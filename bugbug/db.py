@@ -9,12 +9,12 @@ import logging
 import mmap
 import os
 import pickle
+from compression import zstd
 from contextlib import contextmanager
 from urllib.parse import urljoin
 
 import orjson
 import requests
-import zstandard
 
 from bugbug import utils
 
@@ -154,10 +154,12 @@ class JSONStore(Store):
             self.fh.write(orjson.dumps(elem) + b"\n")
 
     def read(self):
-        if self.use_mmap:
-            if os.stat(self.fh.fileno()).st_size == 0:
-                return
+        # Covers DBs which are still being created, whose compressed data might
+        # not have been flushed yet.
+        if os.stat(self.fh.fileno()).st_size == 0:
+            return
 
+        if self.use_mmap:
             with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
                 while line := buf.readline():
                     yield orjson.loads(line)
@@ -166,10 +168,10 @@ class JSONStore(Store):
                 yield orjson.loads(line)
 
     def size(self):
-        if self.use_mmap:
-            if os.stat(self.fh.fileno()).st_size == 0:
-                return 0
+        if os.stat(self.fh.fileno()).st_size == 0:
+            return 0
 
+        if self.use_mmap:
             with mmap.mmap(self.fh.fileno(), 0, prot=mmap.PROT_READ) as buf:
                 count = 0
                 while buf.readline():
@@ -219,14 +221,12 @@ def _db_open(path, mode):
         with gzip.GzipFile(path, mode) as f:
             yield store_constructor(f, use_mmap=False)
     elif compression == "zstd":
-        if "w" in mode or "a" in mode:
-            cctx = zstandard.ZstdCompressor()
-            with open(path, mode) as f, cctx.stream_writer(f) as writer:
-                yield store_constructor(writer, use_mmap=False)
-        else:
-            dctx = zstandard.ZstdDecompressor()
-            with open(path, mode) as f, dctx.stream_reader(f) as reader:
-                yield store_constructor(reader, use_mmap=False)
+        with zstd.ZstdFile(path, mode) as f:
+            # ZstdFile writes nothing when no data is written, and an empty file
+            # is not valid zstd: writing an empty chunk forces a frame out.
+            if "w" in mode or "a" in mode:
+                f.write(b"")
+            yield store_constructor(f, use_mmap=False)
     else:
         with open(path, mode) as f:
             yield store_constructor(f, use_mmap=True)

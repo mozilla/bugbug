@@ -4,13 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import json
+from compression import zstd
 from typing import Callable
 
 import hglib
 import orjson
 import pytest
 import responses
-import zstandard
 from responses import matchers
 
 from bugbug import test_scheduling
@@ -159,7 +159,7 @@ def test_simple_schedule(
     # Assert the test selection result is stored in Redis.
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert len(result) == 7
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose
@@ -212,7 +212,7 @@ def test_schedule_with_confidence_thresholds(
 
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["confidence_thresholds"] == thresholds
     # Runnables are returned down to the lowest threshold, rather than 0.5.
     assert result["tasks"] == {
@@ -411,7 +411,7 @@ def test_schedule_backout(
         f"bugbug:job_result:schedule_tests:integration/autoland_{rev}"
     )
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["tasks"] == {
         "test-linux1804-64/opt": 1.0,
         "test-windows10/opt": 1.0,
@@ -453,7 +453,7 @@ def test_schedule_backout_try(
 
     value = models.redis.get(f"bugbug:job_result:schedule_tests:try_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["tasks"] == {}
     assert result["groups"] == {}
 
@@ -546,7 +546,7 @@ def test_schedule_backout_treeherder_failure(
         f"bugbug:job_result:schedule_tests:integration/autoland_{rev}"
     )
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["tasks"] == {}
     assert result["groups"] == {}
 
@@ -620,7 +620,7 @@ def test_schedule_config_selection_risk(
         assert sorted(very_likely) == ["test-group1", "test-group2", "test-group3"]
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["groups"] == {
         "test-group1": 0.99,
         "test-group2": 0.6,
@@ -676,7 +676,7 @@ def test_schedule_config_selection_by_level(
 
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     # The groups are returned down to the "very_low" threshold. The configs of a level ("high" for
     # test-group1, "very_low", "low" or "medium" for test-group2) are selected after the ones of
     # the levels above, reusing them.
@@ -733,7 +733,7 @@ def test_schedule_config_groups_with_new_tasks(
 
     value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     assert value is not None
-    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    result = orjson.loads(zstd.decompress(value))
     assert result["config_groups"] == {
         "test-group1": [
             "test-linux1804-64/opt-mochitest",

@@ -10,13 +10,13 @@ import logging
 import os
 import re
 import uuid
+from compression import zstd
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
 import orjson
-import zstandard
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
@@ -111,7 +111,6 @@ VALIDATOR = Validator()
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 GITHUB_TOKEN = os.environ.get("BUGBUG_GITHUB_TOKEN")
 
-dctx = zstandard.ZstdDecompressor()
 
 logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger()
@@ -507,8 +506,8 @@ def get_result(job: JobInfo) -> Any | None:
         # Some job results were stored before compression was enabled.
         # We can remove the exception handling after enough time has passed
         # since 47114f4f47db6b73214cf946377be8da945d34b5.
-        with contextlib.suppress(zstandard.ZstdError):
-            result = dctx.decompress(result)
+        with contextlib.suppress(zstd.ZstdError):
+            result = zstd.decompress(result)
 
         assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)

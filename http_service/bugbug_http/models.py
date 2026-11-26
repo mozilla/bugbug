@@ -7,6 +7,7 @@ import concurrent.futures
 import logging
 import os
 from collections import defaultdict
+from compression import zstd
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Collection, Sequence
@@ -15,7 +16,6 @@ from urllib.parse import urlparse
 import hglib
 import orjson
 import requests
-import zstandard
 from redis import Redis
 from urllib3.util.retry import Retry
 
@@ -93,13 +93,11 @@ class RiskCalibrations:
 
 RISK_CALIBRATIONS = RiskCalibrations(timedelta(hours=6))
 
-cctx = zstandard.ZstdCompressor(level=10)
-
 
 def setkey(key: str, value: bytes, compress: bool = False) -> None:
     LOGGER.debug("Storing data at %s: %r", key, value)
     if compress:
-        value = cctx.compress(value)
+        value = zstd.compress(value, level=10)
     redis.set(key, value, ex=DEFAULT_EXPIRATION_TTL)
 
 

@@ -5,11 +5,11 @@
 
 import contextlib
 import gzip
+from compression import zstd
 
 import hglib
 import numpy as np
 import orjson
-import zstandard
 
 from bugbug_http import models
 from bugbug_http.app import API_TOKEN, JobInfo
@@ -30,9 +30,9 @@ def _job_key(rev: str, branch: str = "integration/autoland") -> str:
 
 def _get_result(rev: str, branch: str = "integration/autoland"):
     job = JobInfo(models.classify_commits, "regressor", branch, rev)
-    return orjson.loads(
-        zstandard.ZstdDecompressor().decompress(models.redis.get(job.result_key))
-    )
+    stored = models.redis.get(job.result_key)
+    assert stored is not None
+    return orjson.loads(zstd.decompress(stored))
 
 
 PREDICTION = {
