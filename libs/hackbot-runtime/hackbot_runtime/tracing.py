@@ -13,6 +13,10 @@ The SDK integration otherwise labels every agent ``claude_agent_sdk``;
 dashboard can tell the agents apart. Subagents get the parent agent's name too,
 so they don't show up as separate agents, are tagged with their own name, and
 get their token usage recorded.
+
+Weave has no Codex integration, so for Codex agents the runtime records each
+turn itself (:mod:`hackbot_runtime.codex_tracing`), with the same agent name and
+run id.
 """
 
 import contextlib
@@ -207,6 +211,18 @@ def _trace_subagents_as(agent: str) -> Iterator[None]:
 
 
 @contextlib.contextmanager
+def _trace_codex() -> Iterator[None]:
+    """Trace Codex turns, when the agent has the Codex SDK installed."""
+    try:
+        from hackbot_runtime.codex_tracing import trace_codex_turns
+    except ImportError:
+        yield
+        return
+    with trace_codex_turns():
+        yield
+
+
+@contextlib.contextmanager
 def trace_agent(entrypoint: Callable, run_id: str) -> Iterator[None]:
     """Trace the agent run, labelled with the agent's name and tagged with the run id.
 
@@ -221,5 +237,5 @@ def trace_agent(entrypoint: Callable, run_id: str) -> Iterator[None]:
     _tag_spans(run_id)
     agent = resolve_agent_name(entrypoint)
     log.info("Enabled Weave tracing for agent %s", agent)
-    with agent_name_override(agent), _trace_subagents_as(agent):
+    with agent_name_override(agent), _trace_subagents_as(agent), _trace_codex():
         yield
