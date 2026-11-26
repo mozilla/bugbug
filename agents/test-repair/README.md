@@ -36,6 +36,12 @@ may start, which works out the fix from the root cause. hackbot-api starts that 
 once this one has succeeded, so the verdict reaches sheriffs without waiting for a
 patch. A hand-off without a resolved culprit is dropped.
 
+## Backing out the culprit
+
+A `backout` verdict on autoland records a `lando.backout` action for the culprit, which
+Lando reverts on `firefox-autoland`. It waits for a human to apply it from the Hackbot UI;
+see `_record_backout` in [`__main__.py`](hackbot_agents/test_repair/__main__.py).
+
 ## Input
 
 - `FAILURE_TASKS` - failed Taskcluster test tasks,
