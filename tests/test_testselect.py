@@ -1095,6 +1095,8 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
     )
 
     model = model_class()
+    # A gtest folder close to the modified file, so that the gtest task is always selected.
+    model.gtest_folders = ("dom/base/gtest",)
     # Keep more passing runnables than by default, so that the training and test sets aren't empty.
     model.negative_sample_rate = 0.5
 
@@ -1159,6 +1161,42 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
 
     monkeypatch.setattr(model_class, "get_sample_weights", get_sample_weights)
 
+    # The autoland pushes after the history, on which the trained model's thresholds are computed: a
+    # backout and a push whose commit isn't in the commits DB yet aren't scored.
+    recent_pushes = [[f"new{i}"] for i in range(8)] + [["backout"], ["missing"]]
+    monkeypatch.setattr(
+        testselect,
+        "get_recent_pushes",
+        lambda after_rev: recent_pushes if after_rev == "rev59" else [],
+    )
+    recent_commits = [
+        {
+            "node": node,
+            "ignored": False,
+            "backsout": ["new0"] if node == "backout" else [],
+            "files": ["dom/base/Document.cpp"],
+            "types": [".cpp"],
+            "directories": ["dom/base"],
+            "components": ["Core::DOM: Core & HTML"],
+        }
+        for node in [f"new{i}" for i in range(8)] + ["backout"]
+    ]
+    monkeypatch.setattr(
+        testselect.repository, "get_commits", lambda **kwargs: iter(recent_commits)
+    )
+    monkeypatch.setattr(testselect, "MIN_RECENT_PUSHES", 5)
+    recent_confidences = []
+    orig_get_confidences = model_class.get_confidences
+
+    def get_confidences(self, commits, push_num=None):
+        confidences = orig_get_confidences(self, commits, push_num)
+        # Scored as the HTTP service does (without a push number).
+        if push_num is None:
+            recent_confidences.append(confidences)
+        return confidences
+
+    monkeypatch.setattr(model_class, "get_confidences", get_confidences)
+
     model.train()
 
     X_train, X_test, y_train, y_test = splits[0]
@@ -1172,10 +1210,55 @@ def test_train_end_to_end(monkeypatch, tmp_path, model_class, runnables) -> None
     # then all the rows.
     assert [n for n, _ in weights] == [len(y_train), len(y_train) + len(y_test)]
     assert all(w is None or len(w) == n for n, w in weights)
-    # The evaluation ran on the test pushes and computed the confidence thresholds.
-    assert set(model.confidence_thresholds) == set(
-        testselect.CONFIDENCE_LEVEL_TARGETS[model.granularity]
+    # The confidence thresholds (and the calibration bands) were computed on the trained model's
+    # confidences on the recent pushes, except the groups which the HTTP service always selects.
+    assert len(recent_confidences) == 8
+    fit_confidences = [
+        testselect.top_fit_confidences(
+            confidences,
+            model.forced_runnables(recent_commits[:1], list(confidences)),
+        )
+        for confidences in recent_confidences
+    ]
+    targets = testselect.CONFIDENCE_LEVEL_TARGETS[model.granularity]
+    assert model.confidence_thresholds == testselect.compute_confidence_thresholds(
+        fit_confidences, targets
     )
+    assert model.calibration is not None
+    assert model.calibration[0] == list(
+        testselect.compute_confidence_thresholds(
+            fit_confidences, {str(c): c for c in testselect.CALIBRATION_COUNTS}
+        ).values()
+    )
+    assert len(model.calibration[1]) == len(testselect.CALIBRATION_COUNTS) + 1
+    # The manifest and the gtest task close to the modified file are always selected.
+    assert model.forced_runnables(recent_commits[:1], runnables) == (
+        {"dom/base/test/mochitest.toml"}
+        if model.granularity == "group"
+        else {"test-linux2404-64/opt-gtest-1proc"}
+    )
+
+
+def test_post_training_without_recent_pushes(monkeypatch) -> None:
+    model = testselect.TestGroupSelectModel()
+    thresholds = {"low": 0.5, "high": 0.8}
+    calibration = ([0.9, 0.5], [0.2, 0.02, 0.001])
+    model.confidence_thresholds = dict(thresholds)
+    model.calibration = calibration
+
+    monkeypatch.setattr(
+        testselect.test_scheduling,
+        "get_test_scheduling_history",
+        lambda granularity: iter([(["rev0"], [])]),
+    )
+    # The only recent push isn't in the commits DB yet.
+    monkeypatch.setattr(testselect, "get_recent_pushes", lambda after_rev: [["rev1"]])
+    monkeypatch.setattr(testselect.repository, "get_commits", lambda **kwargs: iter([]))
+
+    # The thresholds of the evaluation are kept.
+    model.post_training()
+    assert model.confidence_thresholds == thresholds
+    assert model.calibration == calibration
 
 
 def test_label_model_configuration() -> None:
@@ -1220,33 +1303,40 @@ def test_label_model_suite_test_dirs(tmp_path) -> None:
         "testing/gtest/",
         "xpcom/tests/gtest/",
     )
+    # The gtest folders, to find the tasks which the HTTP service always selects.
+    assert model.gtest_folders == ("xpcom/tests/gtest",)
 
 
-def test_fit_calibration() -> None:
+def test_fit_band_rates() -> None:
     totals = [0] * 101
     failures = [0] * 101
-    # 1% of the runnables with confidence 0.5 fail, 2% at 0.6 and 1.5% at 0.7 (pooled with 0.6), 30% at 0.95.
     for confidence, n, f in (
+        (30, 1000, 1),
         (50, 1000, 10),
         (60, 1000, 20),
-        (70, 1000, 15),
+        (70, 1000, 10),
         (95, 100, 30),
     ):
         totals[confidence], failures[confidence] = n, f
-    calibration = testselect.fit_calibration(totals, failures)
-    assert calibration is not None
+
+    # Bands: >= 0.9, [0.6, 0.9), [0.5, 0.6), [0.5, 0.5) (empty), < 0.5.
+    assert testselect.fit_band_rates([0.9, 0.6, 0.5, 0.5], totals, failures) == [
+        pytest.approx(0.3),
+        pytest.approx(0.015),
+        pytest.approx(0.01),
+        pytest.approx(0.01),
+        pytest.approx(0.001),
+    ]
+    # An empty first band.
+    assert testselect.fit_band_rates([0.99], totals, failures)[0] == 0.0
+
+
+def test_calibrated_probabilities() -> None:
     model = testselect.TestGroupSelectModel()
-    model.calibration = calibration
-    probabilities = model.calibrated_probabilities(
-        {"a": 0.5, "b": 0.6, "c": 0.7, "d": 0.95, "e": 0.3, "f": 1.0, "g": 0.825}
-    )
-    assert probabilities["a"] == pytest.approx(0.01)
-    assert probabilities["b"] == probabilities["c"] == pytest.approx(0.0175)
-    assert probabilities["d"] == probabilities["f"] == pytest.approx(0.3)
-    assert probabilities["e"] == pytest.approx(0.01)
-    assert probabilities["c"] < probabilities["g"] < probabilities["d"]
-    # Without failures, or without calibration, the confidences are unchanged.
-    assert testselect.fit_calibration([10] * 101, [0] * 101) is None
-    assert testselect.TestGroupSelectModel().calibrated_probabilities({"a": 0.5}) == {
-        "a": 0.5
-    }
+    # Without calibration, the confidences are unchanged.
+    assert model.calibrated_probabilities({"a": 0.5}) == {"a": 0.5}
+
+    model.calibration = ([0.9, 0.6], [0.3, 0.02, 0.001])
+    assert model.calibrated_probabilities(
+        {"a": 0.95, "b": 0.9, "c": 0.7, "d": 0.6, "e": 0.3}
+    ) == {"a": 0.3, "b": 0.3, "c": 0.02, "d": 0.02, "e": 0.001}

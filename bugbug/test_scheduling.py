@@ -1825,6 +1825,69 @@ def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[s
     return manifests
 
 
+def approximate_manifests_for_paths(
+    paths: Iterable[str], groups: Collection[str]
+) -> set[str]:
+    """The groups among `groups` that find_manifests_for_paths likely runs for modified paths.
+
+    Without the repository, the files included by each manifest aren't known: a manifest is assumed
+    to include the files in its directory, and a web-platform test directory to be the closest one
+    among `groups` that contains the modified file. On autoland pushes, ~85% of the groups returned
+    are also run by find_manifests_for_paths, and they include ~95% of its groups.
+    """
+    manifests = [
+        (group, os.path.dirname(group))
+        for group in groups
+        if not group.startswith(WPT_ROOTS)
+    ]
+    wpt_groups = {group for group in groups if group.startswith(WPT_ROOTS)}
+
+    result: set[str] = set()
+    for path in paths:
+        parent = os.path.dirname(path)
+
+        result.update(
+            group
+            for group, group_dir in manifests
+            if path == group or (group_dir and path.startswith(f"{group_dir}/"))
+        )
+
+        # The manifests in test subfolders close to a modified file, as find_manifests_for_paths.
+        if parent:
+            siblings = {
+                group
+                for group, group_dir in manifests
+                if group_dir.startswith(f"{parent}/")
+                and repository.is_test(f"/{group_dir}/")
+            }
+            if len(siblings) <= MAX_SIBLING_MANIFESTS:
+                result |= siblings
+
+        if path.endswith(("/META.yml", "/README.md")):
+            continue
+        for root in WPT_ROOTS:
+            prefix = next(
+                (
+                    f"{root}/{sub}/"
+                    for sub in ("tests", "meta")
+                    if path.startswith(f"{root}/{sub}/")
+                ),
+                None,
+            )
+            if prefix is None:
+                continue
+
+            # The closest directory containing the file.
+            cur_dir = os.path.dirname(path[len(prefix) :])
+            while cur_dir and f"{root}/tests/{cur_dir}" not in wpt_groups:
+                cur_dir = os.path.dirname(cur_dir)
+            if cur_dir:
+                result.add(f"{root}/tests/{cur_dir}")
+            break
+
+    return result
+
+
 _GTEST_RE = re.compile(rb"^[ \t]*(?:TEST|TEST_F)\(", re.MULTILINE)
 _GTEST_FOLDERS = ("gtest", "gtests", "googletest")
 _CPPUNIT_INFRA_FILES = {
@@ -1924,3 +1987,51 @@ def find_tasks_for_paths(
             selected_tasks.append(task)
 
     return selected_tasks
+
+
+def get_gtest_folders(repo_dir: str) -> tuple[str, ...]:
+    """The gtest folders of a Firefox tree (see find_tasks_for_paths), from its moz.build files.
+
+    Only the moz.build files are needed (e.g. a sparse checkout), as gtest folders contain one.
+    """
+    folders = set()
+    for root, subdirs, files in os.walk(repo_dir):
+        subdirs[:] = [d for d in subdirs if not d.startswith((".", "obj-"))]
+        rel_root = os.path.relpath(root, repo_dir).replace(os.sep, "/")
+        if "moz.build" in files and any(
+            part in _GTEST_FOLDERS for part in rel_root.split("/")
+        ):
+            folders.add(rel_root)
+    return tuple(sorted(folders))
+
+
+def approximate_tasks_for_paths(
+    paths: Iterable[str], tasks: Iterable[str], gtest_folders: Collection[str]
+) -> set[str]:
+    """The tasks among `tasks` that find_tasks_for_paths likely runs for modified paths.
+
+    Without the repository, the gtest folders close to the modified files are among `gtest_folders`
+    (see get_gtest_folders), and the C/C++ files containing gtests and the cppunit tests aren't known.
+    On autoland pushes, the tasks returned are run by find_tasks_for_paths, and include ~98% of its
+    tasks.
+    """
+    paths = list(paths)
+    select_rusttests = any(repository.get_type(path) == "Rust" for path in paths)
+    select_gtest = any(
+        f"/{folder}/" in path for path in paths for folder in _GTEST_FOLDERS
+    ) or any(
+        any(part in _GTEST_FOLDERS for part in folder[len(parent) + 1 :].split("/"))
+        for parent in {os.path.dirname(path) for path in paths}
+        if parent
+        for folder in gtest_folders
+        if folder.startswith(f"{parent}/")
+    )
+    select_cppunit = any(path in _CPPUNIT_INFRA_FILES for path in paths)
+
+    return {
+        task
+        for task in tasks
+        if (select_gtest and "gtest" in task)
+        or (select_cppunit and "cppunit" in task)
+        or (select_rusttests and "rusttests" in task)
+    }
