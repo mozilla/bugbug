@@ -92,6 +92,11 @@ def _has_uncommitted(repo: Path) -> bool:
     return bool(_git(repo, "status", "--porcelain").strip())
 
 
+def uncommit_head(repo: Path) -> None:
+    """Undo the HEAD commit, keeping its changes in the working tree."""
+    _git(repo, "reset", "-q", "HEAD~1")
+
+
 def commit_all(repo: Path, message: str, *, author: str | None = None) -> bool:
     """Stage everything in ``repo`` and commit it, if there is anything to commit.
 

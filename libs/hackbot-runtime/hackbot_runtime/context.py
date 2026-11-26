@@ -100,6 +100,9 @@ class HackbotContext(BaseSettings):
     # prepared. Stays None for agents that never touch source, which is how
     # publish_changes() knows there are no changes to collect.
     _source_base: str | None = PrivateAttr(default=None)
+    # The revision a checkout was rebuilt at and the commit holding its changes,
+    # so a new revision stacked on it leaves those changes out of its diff.
+    _target: tuple[int, str] | None = PrivateAttr(default=None)
     # The commit the checkout was *fetched* at, which unlike `_source_base` is
     # always a published commit the remote can resolve. The two differ once a
     # caller seeds the checkout with local commits (see `record_source_base`),
@@ -181,6 +184,22 @@ class HackbotContext(BaseSettings):
         :meth:`publish_changes` collects only what the agent itself did.
         """
         self._source_base = changes.base_commit(self.repo_path)
+
+    def record_target(self, revision_id: int) -> None:
+        """Record HEAD as the commit holding ``D<revision_id>``'s changes."""
+        self._target = (revision_id, changes.base_commit(self.repo_path))
+
+    def _phabricator_diff_base(self) -> str:
+        """The source base, or the target's commit when stacking on the target."""
+        if self._target is not None:
+            revision_id, commit = self._target
+            for action in self.actions.actions:
+                if (
+                    action["type"] == SUBMIT_PATCH_ACTION_TYPE
+                    and action["params"].get("parent_revision_id") == revision_id
+                ):
+                    return commit
+        return self._source_base
 
     def checkout(self, ref: str) -> str:
         """Move the prepared checkout to ``ref`` and start the agent's edits there.
@@ -335,7 +354,9 @@ class HackbotContext(BaseSettings):
 
         if recorded_types & PATCH_ACTION_TYPES:
             diff_payload = changes.build_phabricator_diff(
-                self.repo_path, self._source_base, self._config.source.repo_url
+                self.repo_path,
+                self._phabricator_diff_base(),
+                self._config.source.repo_url,
             )
             if diff_payload is not None:
                 self.publish_json(phabricator_diff_key, diff_payload)
