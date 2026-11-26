@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.15-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable --package reviewhelper-api
 
 # Runtime stage
-FROM python:3.15-slim AS base
+FROM python:3.14-slim AS base
 
 COPY --from=builder /opt/venv /opt/venv
 
