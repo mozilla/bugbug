@@ -103,19 +103,14 @@ class LandoClient:
                 "job id"
             ) from exc
 
-    async def push_commits(self, repo_name: str, patches: list[str]) -> int:
-        """Land base64-encoded ``git format-patch`` commits on a repo; return the job id.
+    async def revert_commit(self, repo_name: str, commit: str) -> int:
+        """Back out a recently landed ``commit`` from a repo; return the job id.
 
-        What ``lando push-commits`` does: Lando applies the commits, in order, on
-        top of the repo's current head. Needs the headless API token.
+        Lando runs ``git revert`` on the repo's head. Needs the headless API token.
         """
         if not self.settings.headless_api_token:
             raise LandoAPIError("LANDO_HEADLESS_API_TOKEN is not configured")
-        payload = {
-            "actions": [
-                {"action": "add-commit-base64", "content": patch} for patch in patches
-            ]
-        }
+        payload = {"actions": [{"action": "revert", "commit": commit}]}
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
             response = await client.post(
                 self.repo_url(repo_name),

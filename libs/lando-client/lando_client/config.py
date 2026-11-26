@@ -25,9 +25,9 @@ class LandoSettings(BaseModel):
     pushes: Lando's Try endpoint authenticates the *user* (it has no API-key
     mode), and the try repository's permissions are checked against that user.
 
-    ``headless_api_token`` authenticates pushes to landing repos (autoland) through
-    the headless API, as ``lando push-commits`` does; the account it belongs to
-    needs the repo's automation permission.
+    ``headless_api_token`` authenticates backouts on landing repos (autoland) through
+    the headless API; the account it belongs to needs ``main.can_revert_commits``,
+    and the repo has to be in Lando's ``REVERT_ALLOWED_REPOS``.
     """
 
     access_token: Annotated[str, Field(min_length=1)]
