@@ -55,6 +55,7 @@ or code.
 | `bug-fix`                 | Triage a Bugzilla bug and produce a candidate fix as a Phabricator revision. Also handles `@hackbot` follow-ups on an existing revision, and Bugzilla `needinfo?` requests.                                                                     |  yes   |      yes      |       **yes**        |
 | `test-repair`             | Classify a CI test failure as regression or intermittent, blame the culprit commit, hand it on to `test-repair-fix`.                                                                                                                            |  yes   |      no       |          no          |
 | `test-repair-fix`         | Propose a patch for the culprit a `test-repair` run blamed, for its author to squash in and reland.                                                                                                                                             |  yes   |      yes      |          no          |
+| `perftest-repair`         | Diagnose a perf test intermittent (mozperftest, raptor/browsertime, talos), push a suggested fix to try with retriggers, and report to Slack.                                                                                                   |  yes   |   optional    |     try + Slack      |
 | `build-repair`            | Analyze a Firefox build failure at a specific commit and produce a candidate fix.                                                                                                                                                               |  yes   |      yes      |          no          |
 | `frontend-triage`         | Read-only root-cause analysis and fix plan for a desktop frontend bug.                                                                                                                                                                          |  yes   |      no       |          no          |
 | `gecko-triage`            | Triage a Gecko bug. Each team can add its own rules. With no team, the run uses the shared rules for the bug's component. It asks for missing information, reads profiles and logs, sets severity and priority, and keeps its state on the bug. |  yes   |      no       |          no          |
@@ -65,7 +66,7 @@ or code.
 | `uplift-resolve`          | Resolve the merge conflicts from cherry-picking patches onto a stable uplift branch, and return the resolved patch with a confidence level.                                                                                                     |  yes   |      no       |          no          |
 | `dataset-eval`            | Run an agent over an eval dataset, grade every example, and log the evaluation to Weave.                                                                                                                                                        |  yes   |      yes      |          no          |
 
-Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `build-repair`) check out
+Two shapes recur. **Source agents** (`bug-fix`, `test-repair`, `perftest-repair`, `build-repair`) check out
 Firefox, often build it, edit the tree, and let the runtime capture the diff. **Browser
 agents** (`autowebcompat-repro`, `autowebcompat-diagnosis`, `test-plan-generator`) need
 no checkout; they drive a Firefox binary through the DevTools MCP server.
