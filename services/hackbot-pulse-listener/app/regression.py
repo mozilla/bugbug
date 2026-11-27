@@ -1,14 +1,15 @@
 """Whether a CI failure is new at a push or inherited from an ancestor.
 
 The ancestor chain comes from mozci, which resolves it from the hg pushlog --
-Treeherder itself uses mozci for exactly this. The per-push results come from
+Treeherder itself uses mozci for exactly this. The per-push job results come from
 Treeherder, which keeps them small: mozci would instead pull the push's whole task
-list from the Taskcluster queue, tens of megabytes per ancestor.
+list from the Taskcluster queue, tens of megabytes per ancestor. The per-manifest
+results come from the errorsummary logs of the tasks.
 
 A build, and a test task from a suite that reports no manifests, are looked up by
-task label. A test group is looked up by configuration (platform and build option)
-instead, because a chunked test label carries its chunk number and chunk assignments
-drift between pushes.
+task label. A test group is looked up by configuration (platform, build option and
+suite) instead, because a chunked test label carries its chunk number and chunk
+assignments drift between pushes.
 """
 
 import logging
@@ -19,7 +20,7 @@ from mozci import config as mozci_config
 from mozci.errors import ParentPushNotFound
 from mozci.push import MAX_DEPTH, Push
 
-from app import treeherder
+from app import taskcluster, treeherder
 
 logger = logging.getLogger(__name__)
 
@@ -74,30 +75,43 @@ def _label_status(project: str, rev: str, label: str):
     return None
 
 
-def _group_status(project: str, rev: str, config: tuple[str, str], group: str):
+def suite(label: str) -> str:
+    """The task label without its chunk number, which drifts between pushes."""
+    return re.sub(r"-\d+$", "", label)
+
+
+def _group_status(project: str, rev: str, config: tuple[str, str, str], group: str):
     """'passed'/'failed'/_PENDING/None for a test group on a push, in one config.
 
-    Only this configuration's runs are consulted, so a manifest already broken on
-    another platform cannot mask a genuine new failure on this one.
+    Only this configuration's runs of the same suite are consulted, so a manifest
+    already broken on another platform or in another variant cannot mask a genuine
+    new failure on this one. They also bound the errorsummary logs to read to one per
+    chunk of the suite.
 
     Precedence is pass, then fail, then pending -- unlike _label_status, which puts
     pending first. A recorded failure has to be decisive here because ``_unsettled``
-    covers every job of the configuration, not just the ones that could run this
-    manifest, and on a recent ancestor some unrelated job is nearly always still
-    going: deferring on that spent the whole MAX_WAIT_SECONDS and then failed open.
-    The cost is that an ancestor whose failure was itself intermittent now reads as
-    inherited, so such a failure is skipped rather than investigated.
+    covers every chunk of the suite, not just the one that runs this manifest, and on
+    a recent ancestor some chunk is often still going: deferring on that can spend
+    the whole MAX_WAIT_SECONDS and then fail open. The cost is that an ancestor whose
+    failure was itself intermittent now reads as inherited, so such a failure is
+    skipped rather than investigated.
     """
-    jobs = treeherder.config_jobs(project, rev, *config)
-    results = treeherder.group_results(project, rev)
-    recorded = [
-        results[job["task_id"]][group]
-        for job in jobs
-        if group in (results.get(job["task_id"]) or {})
+    platform, platform_option, task_suite = config
+    jobs = [
+        job
+        for job in treeherder.config_jobs(project, rev, platform, platform_option)
+        if suite(job["label"] or "") == task_suite
     ]
-    if any(recorded):
-        return "passed"
-    if recorded:
+    failed = False
+    for job in jobs:
+        # A task only has its results once it finished.
+        if job["state"] != "completed":
+            continue
+        passed = taskcluster.group_results(job["task_id"]).get(group)
+        if passed:
+            return "passed"
+        failed = failed or passed is False
+    if failed:
         return "failed"
     if _unsettled(jobs):
         return _PENDING
@@ -375,13 +389,13 @@ def is_new_task_failure(project: str, rev: str, label: str, should_abort=None) -
 def new_test_failures(
     project: str,
     rev: str,
-    config: tuple[str, str],
+    config: tuple[str, str, str],
     groups: list[str],
     should_abort=None,
 ) -> set[str]:
     """The failing groups this push introduced, for one configuration.
 
-    `config` is (platform, platform_option). With no configuration to compare
+    `config` is (platform, platform_option, suite). With no configuration to compare
     against, every group is reported as new rather than silently dropped.
     """
     if not all(config):

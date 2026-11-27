@@ -8,12 +8,36 @@ from mozci.errors import ParentPushNotFound
 
 GROUP = "dom/base/test/mochitest.ini"
 OTHER_GROUP = "layout/test/mochitest.ini"
-CONFIG = ("linux1804-64", "opt")
-OTHER_CONFIG = ("windows11-64", "debug")
+SUITE = "test-linux1804-64/opt-mochitest-plain"
+CONFIG = ("linux1804-64", "opt", SUITE)
+OTHER_CONFIG = ("windows11-64", "debug", SUITE)
 
 
-def _job(task_id="T1", result="testfailed", state="completed"):
-    return {"result": result, "state": state, "task_id": task_id}
+def _job(task_id="T1", result="testfailed", state="completed", label=f"{SUITE}-1"):
+    return {"result": result, "state": state, "task_id": task_id, "label": label}
+
+
+def _config_jobs(jobs):
+    """A config_jobs stand-in over {rev: {config: [job]}}."""
+
+    def config_jobs(project, rev, platform, platform_option):
+        return [
+            job
+            for config, config_jobs in jobs.get(rev, {}).items()
+            if config[:2] == (platform, platform_option)
+            for job in config_jobs
+        ]
+
+    return config_jobs
+
+
+def _group_results(results):
+    """A taskcluster.group_results stand-in over {rev: {task_id: {group: passed}}}."""
+    by_task = {}
+    for task_results in results.values():
+        for task_id, groups in task_results.items():
+            assert by_task.setdefault(task_id, groups) == groups, task_id
+    return lambda task_id: by_task.get(task_id, {})
 
 
 class FakePush:
@@ -55,12 +79,12 @@ def _run(groups, jobs, results, *, depth=1, poll=None, max_wait=None):
         patch.object(
             regression.treeherder,
             "config_jobs",
-            lambda p, rev, plat, opt: snapshot()[0].get(rev, {}).get((plat, opt), []),
+            lambda *args: _config_jobs(snapshot()[0])(*args),
         ),
         patch.object(
-            regression.treeherder,
+            regression.taskcluster,
             "group_results",
-            lambda p, rev: snapshot()[1].get(rev, {}),
+            lambda task_id: _group_results(snapshot()[1])(task_id),
         ),
         patch.object(
             regression.time,
@@ -89,6 +113,32 @@ def test_inherited_when_ancestor_failed():
         _run([GROUP], {"rev1": {CONFIG: [_job()]}}, {"rev1": {"T1": {GROUP: False}}})
         == set()
     )
+
+
+def test_other_suite_failure_does_not_mask_new_failure():
+    # The manifest also runs in another variant of the suite, already failing at the
+    # parent push; only this suite's chunks may decide.
+    variant = _job(task_id="VARIANT", label=f"{SUITE}-xorig-1")
+    jobs = {"rev1": {CONFIG: [variant, _job(task_id="T1", label=f"{SUITE}-2")]}}
+    results = {"rev1": {"VARIANT": {GROUP: False}, "T1": {GROUP: True}}}
+    assert _run([GROUP], jobs, results) == {GROUP}
+
+
+def test_unfinished_chunk_results_are_not_read():
+    # A chunk still running has no errorsummary log yet; it defers the decision
+    # rather than being read.
+    jobs = {"rev1": {CONFIG: [_job(task_id="RUNNING", result=None, state="running")]}}
+    with (
+        patch.object(regression.treeherder, "config_jobs", _config_jobs(jobs)),
+        patch.object(
+            regression.taskcluster,
+            "group_results",
+            lambda task_id: pytest.fail(f"read results of unfinished {task_id}"),
+        ),
+    ):
+        assert regression._group_status("autoland", "rev1", CONFIG, GROUP) is (
+            regression._PENDING
+        )
 
 
 def test_retriggered_green_ancestor_counts_as_passed():
@@ -222,12 +272,8 @@ def test_groups_of_one_task_share_one_wait_budget():
 
     with (
         patch.object(regression, "Push", return_value=_chain(1)),
-        patch.object(
-            regression.treeherder,
-            "config_jobs",
-            lambda p, rev, plat, opt: jobs.get(rev, {}).get((plat, opt), []),
-        ),
-        patch.object(regression.treeherder, "group_results", lambda p, rev: {}),
+        patch.object(regression.treeherder, "config_jobs", _config_jobs(jobs)),
+        patch.object(regression.taskcluster, "group_results", lambda task_id: {}),
         patch.object(regression.time, "sleep", no_sleep),
         patch.object(
             regression.time,
@@ -243,6 +289,6 @@ def test_groups_of_one_task_share_one_wait_budget():
 def test_missing_configuration_reports_every_group_as_new():
     # Without a configuration there is nothing to compare against, so nothing may
     # be silently dropped.
-    assert regression.new_test_failures("autoland", "head", (None, None), [GROUP]) == {
-        GROUP
-    }
+    assert regression.new_test_failures(
+        "autoland", "head", (None, None, SUITE), [GROUP]
+    ) == {GROUP}

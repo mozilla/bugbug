@@ -91,7 +91,7 @@ def test_sample_messages_route_to_test_repair_not_build():
     # them triggers the build-repair agent.
     with (
         patch.object(consumer.taskcluster, "get_task", return_value=_task_def()),
-        patch.object(consumer.treeherder, "failing_groups", return_value=[]) as groups,
+        patch.object(consumer.taskcluster, "failing_groups", return_value=[]) as groups,
         patch.object(consumer.treeherder, "job_for_task", return_value=None),
         patch.object(consumer.treeherder, "await_skip_reason", return_value=None),
         patch.object(consumer.client, "trigger_run") as trigger,
@@ -334,7 +334,7 @@ def env(monkeypatch):
         trigger_run=MagicMock(return_value="tr-1"),
     )
     monkeypatch.setattr(consumer.taskcluster, "get_task", mocks.get_task)
-    monkeypatch.setattr(consumer.treeherder, "failing_groups", mocks.failing_groups)
+    monkeypatch.setattr(consumer.taskcluster, "failing_groups", mocks.failing_groups)
     monkeypatch.setattr(consumer.treeherder, "job_for_task", mocks.job_for_task)
     monkeypatch.setattr(
         consumer.treeherder, "recheck_skip_reason", mocks.recheck_skip_reason
@@ -393,6 +393,12 @@ def test_unclassified_failure_is_investigated(env):
     env.await_skip_reason.return_value = None
     assert consumer.process(_test_msg()) == "tr-1"
     env.new_test_failures.assert_called_once()
+    # Compared against the other chunks of the same suite, in the same configuration.
+    assert env.new_test_failures.call_args.args[2] == (
+        "linux1804-64",
+        "opt",
+        "test-linux1804-64/opt-mochitest-browser-chrome",
+    )
 
 
 def test_inherited_test_group_skipped(env):
@@ -462,7 +468,7 @@ def test_the_log_is_awaited_before_its_failure_lines_are_read(env):
 def test_task_without_group_results_still_triggers_run(env):
     # A task-level failure (crash, timeout) records no per-manifest results; that
     # must not be mistaken for "nothing failed" and drop a real regression.
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable(
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
         "no group results for task ERR"
     )
     assert consumer.process(_test_msg(task_id="ERR")) == "tr-1"
@@ -605,7 +611,9 @@ def test_verdict_is_awaited_before_resolving_groups(env):
 def test_the_verdict_is_awaited_once_on_every_path(env):
     # A task with no group results used to run its own second wait; the up-front one
     # covers it, and waiting twice would double the delay before a real repair.
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     assert consumer.process(_test_msg()) == "tr-1"
     env.await_skip_reason.assert_called_once()
 
@@ -613,7 +621,9 @@ def test_the_verdict_is_awaited_once_on_every_path(env):
 def test_group_less_intermittent_is_dropped_by_the_up_front_gate(env):
     # The only filter such a failure gets, since it has no manifest to compare.
     env.await_skip_reason.return_value = "intermittent"
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
 
@@ -650,7 +660,7 @@ def test_group_less_task_claims_the_push_for_every_path(env):
     # One run per push whichever path triggered it: a task-level failure (no group
     # results) and a manifest failure on the same push must not both run.
     env.failing_groups.side_effect = [
-        consumer.treeherder.GroupResultsUnavailable("none"),
+        consumer.taskcluster.GroupResultsUnavailable("none"),
         [_GROUP],
     ]
     assert consumer.process(_test_msg(task_id="A")) == "tr-1"
@@ -662,7 +672,7 @@ def test_manifest_failure_claims_the_push_against_a_group_less_task(env):
     # The reverse order must dedupe too.
     env.failing_groups.side_effect = [
         [_GROUP],
-        consumer.treeherder.GroupResultsUnavailable("none"),
+        consumer.taskcluster.GroupResultsUnavailable("none"),
     ]
     assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     assert consumer.process(_test_msg(task_id="B")) is None
@@ -823,7 +833,9 @@ def test_source_test_tasks_are_not_routed_to_test_repair(env):
 
 
 def test_group_less_task_inherited_from_an_ancestor_is_skipped(env):
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     env.is_new_task_failure.return_value = False
 
     assert consumer.process(_test_msg()) is None
@@ -836,7 +848,9 @@ def test_group_less_task_inherited_from_an_ancestor_is_skipped(env):
 
 
 def test_group_less_task_new_at_this_push_still_triggers(env):
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     env.is_new_task_failure.return_value = True
 
     assert consumer.process(_test_msg()) == "tr-1"
@@ -856,7 +870,9 @@ def test_group_less_suites_are_investigated_as_a_whole_task(env):
     # gtest / junit / talos and the rest report no manifests, so there is no group to
     # compare -- but the agent can still find the culprit commit, so they go through the
     # whole-task comparison rather than being dropped.
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     env.is_new_task_failure.return_value = True
     body = _test_msg()
     body["task"]["tags"]["label"] = "test-macosx1500-aarch64/debug-gtest-1proc"
@@ -900,7 +916,9 @@ def test_an_abandoned_walk_does_not_look_inherited(env, caplog):
 
 
 def test_the_group_less_walk_is_also_abandoned(env):
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     env.is_new_task_failure.side_effect = consumer.regression.WalkAborted("task at rev")
     assert consumer.process(_test_msg()) is None
     env.trigger_run.assert_not_called()
@@ -1000,7 +1018,9 @@ def test_a_failed_trigger_releases_the_manifests(env):
 def test_a_group_less_task_is_not_suppressed_by_the_manifest_cache(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
     assert consumer.process(_test_msg(task_id="A")) == "tr-1"
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     assert consumer.process(_test_msg(task_id="B")) == "tr-1"
 
 
@@ -1008,7 +1028,9 @@ def test_the_same_whole_task_failure_on_later_pushes_is_deduped(env):
     # No manifest to dedupe on, so the label stands in for it: a debug assertion
     # count broken by one push fails the same task on every push after it.
     _consecutive_pushes(env, "rev-one", "rev-two", "rev-three")
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     assert consumer.process(_test_msg(task_id="B")) is None
     assert consumer.process(_test_msg(task_id="C")) is None
@@ -1017,7 +1039,9 @@ def test_the_same_whole_task_failure_on_later_pushes_is_deduped(env):
 
 def test_whole_task_dedupe_ignores_the_chunk_number(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     chunked = "test-linux1804-64/opt-mochitest-browser-chrome-{}"
     assert consumer.process(_test_msg(task_id="A", label=chunked.format(1))) == "tr-1"
     assert consumer.process(_test_msg(task_id="B", label=chunked.format(7))) is None
@@ -1025,7 +1049,9 @@ def test_whole_task_dedupe_ignores_the_chunk_number(env):
 
 def test_a_different_whole_task_failure_on_a_later_push_still_runs(env):
     _consecutive_pushes(env, "rev-one", "rev-two")
-    env.failing_groups.side_effect = consumer.treeherder.GroupResultsUnavailable("none")
+    env.failing_groups.side_effect = consumer.taskcluster.GroupResultsUnavailable(
+        "none"
+    )
     assert consumer.process(_test_msg(task_id="A")) == "tr-1"
     other = "test-windows11-64/debug-mochitest-plain-3"
     assert consumer.process(_test_msg(task_id="B", label=other)) == "tr-1"
@@ -1051,9 +1077,7 @@ def test_a_manifest_dedupe_costs_no_recheck(env):
 
 def _distinct_groups(env):
     """Give every task its own failing manifest, so only the gate under test applies."""
-    env.failing_groups.side_effect = lambda project, rev, task_id: [
-        f"{task_id}/mochitest.ini"
-    ]
+    env.failing_groups.side_effect = lambda task_id: [f"{task_id}/mochitest.ini"]
 
 
 def test_test_verify_tasks_are_skipped(env):

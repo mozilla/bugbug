@@ -897,6 +897,7 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
     """
     # mozci.data needs to be imported before mozci.task to avoid a circular import.
     import mozci.data  # noqa: F401
+    from mozci.data.base import DataHandler
     from mozci.task import Task, TestTask
 
     utils.setup_mozci()
@@ -954,41 +955,38 @@ def _get_recent_failures(project: str, rev: str) -> tuple[set[str], set[str]]:
         url = data["next"]
         params = None
 
-    def get_group_results(push_id: int) -> dict[str, dict[str, bool]]:
-        response = session.get(
-            f"{TREEHERDER_API_URL}/project/{project}/push/group_results/",
-            params={"revision": push_revs[push_id]},
-            headers=headers,
-            timeout=30,
-        )
-        response.raise_for_status()
-        return response.json()
+    # The failing groups are read from the errorsummary artifacts of the tasks, as
+    # Treeherder ingests them from there but its push/group_results endpoint can lag
+    # behind or return nothing at all.
+    errorsummary = DataHandler("errorsummary")
 
-    # The group results of each push are retrieved in parallel, as there can be one
-    # request for each of the recent pushes.
+    def get_failing_groups(push_id: int, task_id: str, label: str) -> set[str]:
+        task = Task.create(id=task_id, label=label)
+        if not isinstance(task, TestTask):
+            return set()
+
+        group_results = errorsummary.get(
+            "test_task_groups", branch=project, rev=push_revs[push_id], task=task
+        )
+        if group_results:
+            return {group for group, (ok, _) in group_results.items() if not ok}
+
+        # The group results are written when the suite ends, so they are missing
+        # when the task was aborted (e.g. it timed out). In this case, take the
+        # groups of the failing tests instead.
+        return set(errorsummary.get("test_task_failure_types", task_id=task_id))
+
+    failing_tasks = [
+        (push_id, task_id, label)
+        for push_id, labels in labels_by_push.items()
+        for task_id, label in labels.items()
+    ]
+    # There is one artifact to download for each failing task, so they are retrieved
+    # in parallel.
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        group_results_by_push = dict(
-            zip(labels_by_push, executor.map(get_group_results, labels_by_push))
+        groups: set[str] = set().union(
+            *executor.map(lambda args: get_failing_groups(*args), failing_tasks)
         )
-
-    groups: set[str] = set()
-    for push_id, labels in labels_by_push.items():
-        group_results = group_results_by_push[push_id]
-        for task_id, label in labels.items():
-            if task_id in group_results:
-                groups.update(
-                    group for group, ok in group_results[task_id].items() if not ok
-                )
-                continue
-
-            # The group results are missing when the task did not report them (e.g.
-            # when it was aborted), or when Treeherder did not ingest them yet. In
-            # this case, take the groups of the failing tests from the errorsummary
-            # artifacts of the task. They are not used in general, as they also
-            # contain failures which passed on retry.
-            task = Task.create(id=task_id, label=label)
-            if isinstance(task, TestTask):
-                groups.update(task.failure_types)
 
     known_tasks = set(test_scheduling.PastFailures("label", True).all_runnables)
     known_groups = set(test_scheduling.PastFailures("group", True).all_runnables)
