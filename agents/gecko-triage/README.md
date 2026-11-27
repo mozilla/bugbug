@@ -3,7 +3,8 @@
 Triages one Gecko bug per run and keeps no memory of its own. Each team can add
 its own rules. With no team, the run uses the shared rules for the bug's component. It inventories what the report contains. It reads the diagnostics reporters attach:
 Firefox Profiler captures, logs, crash reports and specs. It records one comment plus
-the field changes it is allowed. These are severity and priority when they are unset,
+the field changes it is allowed. These are severity and priority when they are unset
+(never in a component that `left_to_owner` in `shared/bugzilla.toml` lists for the field),
 needinfo flags, a meta bug in `blocks`, keywords, `regressed_by`, `see_also`, fix tags in
 the whiteboard, a component move, a resolution and the product's security group. On a duplicate, it also adds the team meta bug to the `dupe_of` bug. A bug
 runs again when someone changes it. Each run reads the whole bug, with all comments, and
@@ -82,11 +83,11 @@ flowchart TD
 The agent never holds a Bugzilla key and never writes. It records actions; hackbot-api
 applies them as `hackbot@mozilla.tld` and tags every comment `gecko-triage`.
 
-| Mode          | Model auth                                                                                                                                                                                                                      | Bugzilla key                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Cloud Run job | Workload Identity Federation, with no Anthropic API key. The deploy sets the `ANTHROPIC_FEDERATION_RULE_ID` and the other ids, and the runtime writes the token file (`libs/hackbot-runtime/hackbot_runtime/anthropic_wif.py`). | A shared broker secret from Secret Manager. The Hackbot deploy in mozilla/webservices-infra sets it. Only the broker holds it. |
-| Local, Docker | `ANTHROPIC_API_KEY` in the root `.env`                                                                                                                                                                                          | `BUGZILLA_API_KEY` in the root `.env`, given to the broker only                                                                |
-| Local, host   | `ANTHROPIC_API_KEY` when the shell sets it, else the Claude Code login                                                                                                                                                          | `BUGZILLA_API_KEY` in the broker's terminal                                                                                    |
+| Mode          | Model auth                                                                                                                                                                                                            | Bugzilla key                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Cloud Run job | Workload Identity Federation, with no Anthropic API key. The deploy sets the `ANTHROPIC_FEDERATION_RULE_ID` and the other ids, and the runtime writes the token file (`libs/hackbot-runtime/hackbot_runtime/wif.py`). | A shared broker secret from Secret Manager. The Hackbot deploy in mozilla/webservices-infra sets it. Only the broker holds it. |
+| Local, Docker | `ANTHROPIC_API_KEY` in the root `.env`                                                                                                                                                                                | `BUGZILLA_API_KEY` in the root `.env`, given to the broker only                                                                |
+| Local, host   | `ANTHROPIC_API_KEY` when the shell sets it, else the Claude Code login                                                                                                                                                | `BUGZILLA_API_KEY` in the broker's terminal                                                                                    |
 
 In every mode, the broker serves only read tools. The bot account reads only public bugs,
 and later the Hackbot Bugzilla proxy controls which bugs a key can read. For a local run,
@@ -408,7 +409,7 @@ a change on a `dupe_of` bug that is closed, a meta bug or out of scope. Then `re
 When an expert leads the analysis, the run posts only confirmed facts or a field change, as
 `rules/workflow.md` says under "An expert leads the analysis".
 `needs_info` means the bug still waits for data. The run sets severity and priority in
-both cases. `asked` lists the data the run asked for, never a developer hand-off. A run
+both cases, except where `left_to_owner` in `shared/bugzilla.toml` leaves them to the owners. `asked` lists the data the run asked for, never a developer hand-off. A run
 that ends with `analyzed` and an item in the plan's `asked` fails, and BugBot runs it
 again. A run that ends with `analyzed` and a needinfo on a reporter who is not a
 developer also fails, because that needinfo asks for data. The capture check does not

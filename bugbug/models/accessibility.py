@@ -49,7 +49,6 @@ class AccessibilityModel(BugModel):
                     bug_features.BugExtractor(
                         feature_extractors,
                         cleanup_functions,
-                        rollback=True,
                     ),
                 ),
             ]
@@ -78,6 +77,9 @@ class AccessibilityModel(BugModel):
                 ),
             ]
         )
+
+    def get_rollback_point(self, item, label):
+        return "creation"
 
     @staticmethod
     def __is_accessibility_bug(bug):

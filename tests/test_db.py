@@ -480,3 +480,21 @@ def test_is_different_schema(tmp_path):
 
     # When the remote version file exists and returns an older version than the current db, we consider that the current db version is different from remote db version.
     assert db.is_different_schema(db_path)
+
+
+@pytest.mark.parametrize("num_elems", [0, 1, 5, 2000])
+@pytest.mark.parametrize("count", [0, 1, 3, 5, 10, 1999, 3000])
+def test_read_last(mock_db, monkeypatch, num_elems, count):
+    db_path = mock_db("json", None)
+    # Small blocks, to read the file in several of them, with lines spanning two blocks.
+    monkeypatch.setattr(db, "READ_LAST_BLOCK_SIZE", 7)
+
+    elems = [{"a": i, "b": "x" * (i % 13)} for i in range(num_elems)]
+    db.write(db_path, elems)
+
+    assert db.read_last(db_path, count) == (elems[-count:] if count > 0 else [])
+
+
+def test_read_last_not_existent(mock_db):
+    db_path = mock_db("json", None)
+    assert db.read_last(db_path, 3) == []

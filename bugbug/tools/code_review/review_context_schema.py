@@ -10,11 +10,12 @@ also be copied into target repositories and used from local tests.
 """
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, cast
 
 try:
     import tomllib
@@ -36,11 +37,19 @@ class Policy:
     github: GithubPolicy = field(default_factory=GithubPolicy)
 
 
+DiffSide: TypeAlias = Literal["old", "new", "any"]
+
+
 @dataclass(frozen=True)
 class FilePredicate:
     include: list[str] = field(default_factory=list)
     exclude: list[str] = field(default_factory=list)
     ext: list[str] = field(default_factory=list)
+    # Matches lines of the file's diff on the given side: "old" is before the
+    # patch (context and removed lines), "new" after it (context and added
+    # lines), "any" either. Set together with diff_regex, never alone.
+    diff_regex: re.Pattern[str] | None = None
+    side: DiffSide | None = None
 
 
 @dataclass(frozen=True)
@@ -230,22 +239,63 @@ def _parse_policy(value: object | None) -> Policy:
     return Policy(github=_parse_github_policy(table.get("github", {}), "policy.github"))
 
 
+_DIFF_SIDES: tuple[str, ...] = ("old", "new", "any")
+
+
+def _parse_diff_regex(
+    table: dict, path: str
+) -> tuple[re.Pattern[str] | None, DiffSide | None]:
+    pattern_text = _optional_string(table.get("diff_regex"), f"{path}.diff_regex")
+    side = _optional_string(table.get("side"), f"{path}.side")
+    if pattern_text is None:
+        if side is not None:
+            raise ReviewContextValidationError(f"{path}.side: requires diff_regex")
+        return None, None
+    if side is None:
+        side = "any"
+    elif side not in _DIFF_SIDES:
+        raise ReviewContextValidationError(
+            f"{path}.side: expected one of {', '.join(_DIFF_SIDES)}, got {side!r}"
+        )
+    try:
+        pattern = re.compile(pattern_text)
+    except (re.error, OverflowError, RecursionError) as exc:
+        # re.compile raises OverflowError for huge repeat counts and
+        # RecursionError for deep nesting, not only re.error.
+        raise ReviewContextValidationError(
+            f"{path}.diff_regex: invalid regex {pattern_text!r}: {exc}"
+        ) from None
+    return pattern, cast(DiffSide, side)
+
+
 def _parse_file_predicate(value: object, path: str) -> FilePredicate:
     table = _require_table(value, path)
-    _reject_unknown_keys(path, table, {"include", "exclude", "ext", "ref"})
+    _reject_unknown_keys(
+        path, table, {"include", "exclude", "ext", "diff_regex", "side", "ref"}
+    )
     if "ref" in table:
         if len(table) != 1:
             raise ReviewContextValidationError(
                 f"{path}.ref: cannot combine with fields"
             )
         raise ReviewContextValidationError(f"{path}.ref: unresolved ref")
+    diff_regex, side = _parse_diff_regex(table, path)
     predicate = FilePredicate(
         include=_string_list(table.get("include"), f"{path}.include"),
         exclude=_string_list(table.get("exclude"), f"{path}.exclude"),
         ext=_string_list(table.get("ext"), f"{path}.ext"),
+        diff_regex=diff_regex,
+        side=side,
     )
-    if not predicate.include and not predicate.exclude and not predicate.ext:
-        raise ReviewContextValidationError(f"{path}: expected include, exclude, or ext")
+    if (
+        not predicate.include
+        and not predicate.exclude
+        and not predicate.ext
+        and diff_regex is None
+    ):
+        raise ReviewContextValidationError(
+            f"{path}: expected include, exclude, ext, or diff_regex"
+        )
     return predicate
 
 

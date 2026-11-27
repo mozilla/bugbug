@@ -17,6 +17,7 @@ import os
 import pickle
 import re
 import shelve
+import shutil
 import subprocess
 import sys
 import threading
@@ -26,6 +27,7 @@ from typing import Collection, Iterable, Iterator, NamedTuple, NewType, Set, Uni
 
 import hglib
 import lmdb
+import orjson
 import requests
 import rs_parsepatch
 import tenacity
@@ -50,7 +52,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    24,
+    25,
     [COMMIT_EXPERIENCES_DB],
 )
 
@@ -319,6 +321,183 @@ def get_commits(
         include_backouts=include_backouts,
         include_ignored=include_ignored,
     )
+
+
+# How many commits get_last_commit reads from the end of the commits DB before falling back to
+# reading all of them.
+LAST_COMMIT_RECENT_COMMITS = 256
+
+
+def get_last_commit(
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> CommitDict | None:
+    """Return the last commit that get_commits would return, or None if it would return none.
+
+    Only the end of the commits DB is read, unless none of the last commits passes the filters.
+    """
+    filters = {
+        "include_no_bug": include_no_bug,
+        "include_backouts": include_backouts,
+        "include_ignored": include_ignored,
+    }
+
+    recent_commits = db.read_last(COMMITS_DB, LAST_COMMIT_RECENT_COMMITS)
+    last_commit = collections.deque(filter_commits(recent_commits, **filters), maxlen=1)
+    # If fewer commits than requested were read, the whole DB was read.
+    if not last_commit and len(recent_commits) == LAST_COMMIT_RECENT_COMMITS:
+        logger.info("None of the last commits passes the filters, reading all commits")
+        last_commit = collections.deque(get_commits(**filters), maxlen=1)
+
+    return last_commit[0] if last_commit else None
+
+
+# The offset of each commit in the commits DB, by node, and the nodes of the commits of each bug (by
+# "bug:<id>" keys, see _get_bug_key), to find them without reading the whole DB.
+COMMITS_INDEX_DB = "data/commits_index.lmdb"
+# The size of the part of the commits DB which is indexed.
+COMMITS_INDEX_SIZE_KEY = b"$indexed_size$"
+# The serialized commits start with their node, followed by their author and bug ID (see
+# Commit.to_dict). The key can't be found inside the author, as its quotes are escaped.
+COMMIT_LINE_PREFIX = b'{"node":"'
+COMMIT_BUG_ID_KEY = b',"bug_id":'
+COMMITS_INDEX_BLOCK_SIZE = 16 * 1024 * 1024
+
+
+def _get_bug_key(bug_id: int) -> bytes:
+    return b"bug:%d" % bug_id
+
+
+def _split_nodes(nodes: bytes) -> list[bytes]:
+    return [nodes[i : i + 40] for i in range(0, len(nodes), 40)]
+
+
+def _parse_commit_line(line: bytes) -> tuple[bytes, int | None]:
+    """Get the node and the bug ID of a serialized commit, without parsing it whole if possible."""
+    if line.startswith(COMMIT_LINE_PREFIX):
+        bug_id_start = line.find(COMMIT_BUG_ID_KEY)
+        if bug_id_start != -1:
+            value_start = bug_id_start + len(COMMIT_BUG_ID_KEY)
+            value_end = line.find(b",", value_start)
+            value = line[value_start : value_end if value_end != -1 else -1]
+            node_start = len(COMMIT_LINE_PREFIX)
+            return (
+                line[node_start : node_start + 40],
+                None if value == b"null" else int(value),
+            )
+
+    commit = orjson.loads(line)
+    return commit["node"].encode("ascii"), commit.get("bug_id")
+
+
+def _update_commits_index(index: LMDBDict) -> None:
+    # The offset in the DB of the start of `pending`, the part of the DB read but not indexed yet.
+    pos = int(bytes(index.get(COMMITS_INDEX_SIZE_KEY, b"0")))
+    pending = b""
+
+    with open(COMMITS_DB, "rb") as f:
+        f.seek(pos)
+        # The DB is read in blocks, as mapping it in memory would make it count as used memory.
+        while block := f.read(COMMITS_INDEX_BLOCK_SIZE):
+            pending += block
+            start = 0
+            # Only the complete lines are indexed, in case the DB is being written to.
+            while (end := pending.find(b"\n", start)) != -1:
+                node, bug_id = _parse_commit_line(pending[start:end])
+                index[node] = str(pos + start).encode("ascii")
+                if bug_id is not None:
+                    bug_key = _get_bug_key(bug_id)
+                    index[bug_key] = bytes(index.get(bug_key, b"")) + node
+                start = end + 1
+            pending = pending[start:]
+            pos += start
+
+    index[COMMITS_INDEX_SIZE_KEY] = str(pos).encode("ascii")
+
+
+def delete_commits_index() -> None:
+    """Delete the index of the commits DB, which is wrong once the DB is rewritten."""
+    shutil.rmtree(COMMITS_INDEX_DB, ignore_errors=True)
+
+
+def update_commits_index() -> None:
+    """Index the commits added to the commits DB since the last update."""
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+    finally:
+        index.close()
+
+
+def _get_commits_offsets(nodes: Iterable[str]) -> dict[str, int]:
+    """Return the offsets in the commits DB of the commits among `nodes` which are in it.
+
+    The index of the DB is updated first with the commits added to the DB since the last update.
+    """
+    if not os.path.exists(COMMITS_DB):
+        return {}
+
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+        return {
+            node: int(bytes(offset))
+            for node in nodes
+            if (offset := index.get(node.encode("ascii"))) is not None
+        }
+    finally:
+        index.close()
+
+
+def get_bug_nodes_in_db(bug_ids: Iterable[int]) -> dict[int, list[str]]:
+    """Return the nodes of the commits of each of `bug_ids` which are in the commits DB.
+
+    The nodes are in the order of the DB. The index of the DB is updated first with the commits
+    added to the DB since the last update.
+    """
+    if not os.path.exists(COMMITS_DB):
+        return {bug_id: [] for bug_id in bug_ids}
+
+    index = LMDBDict(COMMITS_INDEX_DB)
+    try:
+        _update_commits_index(index)
+        return {
+            bug_id: [
+                node.decode("ascii")
+                for node in _split_nodes(bytes(index.get(_get_bug_key(bug_id), b"")))
+            ]
+            for bug_id in bug_ids
+        }
+    finally:
+        index.close()
+
+
+def get_nodes_in_db(nodes: Iterable[str]) -> set[str]:
+    """Return the commits among `nodes` which are in the commits DB."""
+    return set(_get_commits_offsets(nodes))
+
+
+def get_commits_from_db(nodes: Iterable[str]) -> dict[str, CommitDict]:
+    """Return the commits among `nodes` which are already in the commits DB, by node.
+
+    These commits can't be mined again (with save=False), as their experience features would be
+    calculated after the ones of the commits pushed after them, which are in the experiences DB.
+    The commits are found through an index of the DB.
+    """
+    offsets = _get_commits_offsets(nodes)
+    if not offsets:
+        return {}
+
+    commits: dict[str, CommitDict] = {}
+    with open(COMMITS_DB, "rb") as f:
+        for node, offset in offsets.items():
+            f.seek(offset)
+            commit = orjson.loads(f.readline())
+            assert commit["node"] == node, f"The commits index is wrong for {node}"
+            commits[node] = commit
+
+    return commits
 
 
 def get_revision_id(commit: CommitDict) -> int | None:
@@ -674,6 +853,9 @@ def set_commit_metrics(
     before_metrics: dict,
     after_metrics: dict,
 ) -> None:
+    previous_totals = {
+        metric: commit.metrics[f"{metric}_total"] for metric in METRIC_NAMES
+    }
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
@@ -692,11 +874,12 @@ def set_commit_metrics(
             "rust-code-analysis error on commit %s, path %s", commit.node, path
         )
 
-    commit.metrics_diff = {
-        f"{metric}_total": commit.metrics[f"{metric}_total"]
-        - before_metrics_dict[f"{metric}_total"]
-        for metric in METRIC_NAMES
-    }
+    # The metrics of the commit are the sum of the metrics of its files, so the
+    # difference is accumulated over the files too.
+    for metric in METRIC_NAMES:
+        commit.metrics_diff[f"{metric}_total"] += (
+            commit.metrics[f"{metric}_total"] - previous_totals[metric]
+        ) - before_metrics_dict[f"{metric}_total"]
 
     touched_functions = get_touched_functions(
         after_metrics["spaces"],
@@ -855,7 +1038,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
                             try:
                                 before = hg.cat(
                                     [os.path.join(repo_dir, path).encode("utf-8")],
-                                    rev=commit.node.encode("ascii"),
+                                    rev=f"{commit.node}^".encode("ascii"),
                                 )
 
                                 before_metrics = code_analysis_server.metrics(
@@ -941,7 +1124,7 @@ def hg_log(
     if len(revs) == 0:
         return tuple()
 
-    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{firstpushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -1039,6 +1222,22 @@ def get_revs(hg, rev_start=0, rev_end="default"):
     )
     x = hg.rawcommand(args)
     return x.splitlines()
+
+
+def get_new_revs(hg: hglib.client, base: str, head: str) -> list[bytes]:
+    """Get the non-merge commits on the default branch which are ancestors of `head`, but not of `base`.
+
+    Unlike the commits after `base` by revision number, these don't include the commits from other
+    repositories pulled in the same clone (e.g. try).
+    """
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="default",
+        rev=f"::{head} - ::{base}",
+    )
+    return hg.rawcommand(args).splitlines()
 
 
 class Experiences:
@@ -1292,22 +1491,30 @@ def set_commits_to_ignore(
 
 
 def download_coverage_mapping() -> None:
+    # The DB is built from the whole file, which is large, so only when it changes.
+    is_built = os.path.exists("data/coverage_mapping.lmdb")
     commit_to_coverage = get_coverage_mapping(False)
 
     try:
-        utils.download_check_etag(
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
-            "data/coverage_mapping.json.zst",
-        )
+        if (
+            utils.download_check_etag(
+                "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+                "data/coverage_mapping.json.zst",
+            )
+            or not is_built
+        ):
+            zstd_decompress("data/coverage_mapping.json")
+            assert os.path.exists("data/coverage_mapping.json")
 
-        zstd_decompress("data/coverage_mapping.json")
-        assert os.path.exists("data/coverage_mapping.json")
+            with open("data/coverage_mapping.json", "r") as f:
+                data = json.load(f)
 
-        with open("data/coverage_mapping.json", "r") as f:
-            data = json.load(f)
-
-        for commit_hash, commit_stats in data.items():
-            commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+            for commit_hash, commit_stats in data.items():
+                commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(
+                    commit_stats
+                )
+        else:
+            logger.info("The commit->coverage mapping didn't change")
     except requests.exceptions.HTTPError as e:
         logger.error("Failure downloading commit->coverage mapping %s", e)
 
@@ -1354,18 +1561,26 @@ def set_commit_coverage(commits: Iterable[CommitDict]) -> None:
 
 
 def download_component_mapping():
+    # The DB is built from the whole file, which is large, so only when it changes.
+    is_built = os.path.exists("data/component_mapping.lmdb")
     path_to_component = get_component_mapping(False)
 
-    utils.download_check_etag(
-        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-        "data/component_mapping.json",
-    )
+    if (
+        utils.download_check_etag(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+            "data/component_mapping.json",
+        )
+        or not is_built
+    ):
+        with open("data/component_mapping.json", "r") as f:
+            data = json.load(f)
 
-    with open("data/component_mapping.json", "r") as f:
-        data = json.load(f)
-
-    for path, component in data.items():
-        path_to_component[path.encode("utf-8")] = "::".join(component).encode("utf-8")
+        for path, component in data.items():
+            path_to_component[path.encode("utf-8")] = "::".join(component).encode(
+                "utf-8"
+            )
+    else:
+        logger.info("The file->component mapping didn't change")
 
     close_component_mapping()
 
@@ -1497,7 +1712,11 @@ def download_commits(
                 # Fixing https://github.com/mozilla/bugbug/issues/3131
                 mp_context=mp.get_context("fork"),
             ) as executor:
-                commits_iter = executor.map(_transform, commits, chunksize=64)
+                # Large chunks reduce the overhead when mining many commits, but with few of them
+                # (e.g. when updating the DB) they would leave most processes idle: give several
+                # chunks to each process.
+                chunksize = max(1, min(64, commits_num // ((cpu_count or 1) * 4)))
+                commits_iter = executor.map(_transform, commits, chunksize=chunksize)
                 commits_iter = tqdm(commits_iter, total=commits_num)
                 commits = tuple(commits_iter)
         else:
@@ -1551,6 +1770,27 @@ def get_backsout(hg: hglib.client, revs: list[bytes]) -> dict[str, list[str]]:
         if backsout != b""
         else []
         for node, backsout in hglib.util.grouper(2, out)
+    }
+
+
+def get_backedoutby(hg: hglib.client, revs: list[bytes]) -> dict[str, str]:
+    """Get the node of the commit backing out each of the given commits ("" if none).
+
+    Only the backouts which are in the local repository are known.
+    """
+    if len(revs) == 0:
+        return {}
+
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template="{node}\\0{backedoutby}\\0",
+        rev=revs,
+    )
+    out = hg.rawcommand(args).split(b"\x00")[:-1]
+
+    return {
+        node.decode("ascii"): backedoutby.decode("ascii")
+        for node, backedoutby in hglib.util.grouper(2, out)
     }
 
 
@@ -1649,6 +1889,7 @@ def update_commits(repo_dir: str | None = None) -> None:
         refresh_backouts_and_ignored(repo_dir, commits)
 
     db.write(COMMITS_DB, commits)
+    delete_commits_index()
 
 
 def clean(hg, repo_dir):
@@ -1687,13 +1928,7 @@ def clone(
         with hglib.open(repo_dir) as hg:
             clean(hg, repo_dir)
 
-        # Remove pushlog DB to make sure it's regenerated.
-        try:
-            os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
-        except FileNotFoundError:
-            logger.info("pushlog database doesn't exist")
-
-        # Pull, to make sure the pushlog is generated.
+        # Pull, to retrieve the new changesets and their pushes.
         with hglib.open(repo_dir) as hg:
             logger.info("Pulling %s", repo_dir)
             hg.pull(update=update)
@@ -1704,6 +1939,10 @@ def clone(
         if "abort: repository" not in str(e) and "not found" not in str(e):
             raise
 
+    # robustcheckout pulls twice: into the pooled store, and then into the share. mozext records
+    # the pushes in the `changetracker.db` of each repository (not in the shared store), so it would
+    # download the whole pushlog for both pulls, and the copy of the pooled store is never used. Its
+    # database is disabled for the clone, and the pushes are retrieved once by pulling in the share.
     cmd = _build_hg_cmd(
         "robustcheckout",
         url,
@@ -1713,8 +1952,12 @@ def clone(
         networkattempts=7,
         branch=b"default",
         noupdate=not update,
+        config=b"mozext.disable_local_database=true",
     )
     subprocess.run(cmd, check=True)
+
+    with hglib.open(repo_dir) as hg:
+        hg.pull(update=update)
 
     logger.info("%s cloned", repo_dir)
 
@@ -1758,6 +2001,39 @@ def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> Non
                 hg.update(revision.encode("utf-8"), clean=True)
 
     trigger_pull()
+
+
+def get_stack(repo_dir: str, branch: str, rev: str) -> list[bytes]:
+    """The nodes of the patches in the stack of a revision, like utils.get_hgmo_stack.
+
+    On try, they are computed from the local repository with the automationrelevant
+    revset of the hgmo extension, which hg.mozilla.org uses for automationrelevance:
+    the draft ancestors of the revision (from the phases pulled from try). On other
+    repositories, the stack is made of the changesets of the push of the revision,
+    which are only known by hg.mozilla.org, so it is retrieved from there.
+    """
+    if branch != "try" or not re.fullmatch(r"[0-9a-f]{40}", rev):
+        return utils.get_hgmo_stack(branch, rev)
+
+    with hglib.open(repo_dir) as hg:
+        changesets = json.loads(
+            hg.rawcommand(
+                hglib.util.cmdbuilder(
+                    b"log",
+                    rev=f"sort(automationrelevant({rev}))".encode("ascii"),
+                    template=b"json(node, files)",
+                    config=["hgmo.automationrelevantdraftancestors=true"],
+                )
+            )
+        )
+
+    return [
+        changeset["node"].encode("ascii")
+        for changeset in changesets
+        # Like get_hgmo_stack, don't analyze empty changesets or changesets which
+        # simply specify try parameters.
+        if changeset["files"] not in ([], ["try_task_config.json"])
+    ]
 
 
 def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:

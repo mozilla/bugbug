@@ -44,6 +44,8 @@ RUN apt-get update \
         # Debugging and inspecting: crashes, syscalls, JSON from mach and CI,
         # profile databases.
         gdb strace ripgrep jq sqlite3 \
+        # For `./mach try fuzzy`, which otherwise prompts to download it.
+        fzf \
         # Firefox runtime deps.
         libgtk-3-0t64 libdbus-glib-1-2 libx11-xcb1 libxcb1 libxcb-shm0 \
         libxcb-render0 libxcb-glx0 libxcb-shape0 libxtst6 libxt6 libpci3 \

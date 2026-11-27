@@ -17,7 +17,62 @@ from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
 
-from .conftest import MOCK_KNOWN_TASKS, MockModelCache
+from .conftest import MOCK_CONFIG_SELECTION_TASKS, MOCK_KNOWN_TASKS, MockModelCache
+
+
+def task_labels(group: str, configs: list[str]) -> list[str]:
+    """The labels of the mock tasks running the group on the configs."""
+    return sorted(
+        label
+        for label, task in MOCK_CONFIG_SELECTION_TASKS.items()
+        if task["config"] in configs and group in task["manifests"]
+    )
+
+
+def test_schedule_commits_from_db(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+    result_key = f"bugbug:job_result:schedule_tests:mozilla-central_{rev}"
+
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label1": 0.9}, {"test-group2": 0.9}
+    )
+
+    mined = []
+    orig_download_commits = models.repository.download_commits
+
+    def download_commits(*args, **kwargs):
+        commits = orig_download_commits(*args, **kwargs)
+        mined.extend(commits)
+        return commits
+
+    monkeypatch.setattr(models.repository, "download_commits", download_commits)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    result = models.redis.get(result_key)
+    assert len(mined) == 1
+
+    # The commits already in the commits DB are not mined again.
+    def get_commits_from_db(db_nodes):
+        return {commit["node"]: commit for commit in mined}
+
+    def no_download_commits(*args, **kwargs):
+        raise AssertionError("The commits were mined")
+
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
+    monkeypatch.setattr(models.repository, "download_commits", no_download_commits)
+    models.redis.delete(result_key)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    assert models.redis.get(result_key) == result
 
 
 @pytest.mark.parametrize(
@@ -113,8 +168,9 @@ def test_simple_schedule(
     assert result["known_tasks"] == MOCK_KNOWN_TASKS
     # The mock models don't have confidence thresholds.
     assert result["confidence_thresholds"] == {}
-    assert {k: set(v) for k, v in result["config_groups"].items()} == {
-        k: set(v) for k, v in config_groups.items()
+    # The taskgraph is given the labels of the tasks of the selected configs.
+    assert result["config_groups"] == {
+        group: task_labels(group, configs) for group, configs in config_groups.items()
     }
 
 
@@ -334,7 +390,9 @@ def test_schedule_backout(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -377,7 +435,9 @@ def test_schedule_backout_try(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -398,6 +458,63 @@ def test_schedule_backout_try(
     assert result["groups"] == {}
 
 
+def test_schedule_try(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    repo_dir, remote_repo_dir = mock_repo
+
+    # Like try, the remote repository doesn't publish the changesets pushed to it, so
+    # they stay draft when pulled. The base history is public, as on try.
+    with open(f"{remote_repo_dir}/.hg/hgrc", "a") as f:
+        f.write("\n[phases]\npublish = False\n")
+    for d in (repo_dir, remote_repo_dir):
+        with hglib.open(str(d)) as hg:
+            hg.phase(revs=[b"desc('Base history 3')"], public=True)
+
+    with hglib.open(str(remote_repo_dir)) as hg:
+        stack_node = hg.log(limit=1)[0].node
+        try_task_config = f"{remote_repo_dir}/try_task_config.json"
+        with open(try_task_config, "w") as f:
+            f.write("{}\n")
+        hg.add([try_task_config.encode("utf-8")])
+        hg.commit("Try parameters", user="bugbug")
+        rev = hg.log(limit=1)[0].node.decode("ascii")
+
+    stacks = []
+    orig_get_stack = models.repository.get_stack
+
+    def get_stack(repo_dir, branch, r):
+        stack = orig_get_stack(repo_dir, branch, r)
+        stacks.append(stack)
+        return stack
+
+    monkeypatch.setattr(models.repository, "get_stack", get_stack)
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests("try", rev) == "OK"
+
+    # The stack is computed from the local repository: the draft changesets pulled from
+    # the remote one, except the one which only specifies try parameters.
+    assert stacks == [[stack_node]]
+    assert not any(
+        "json-automationrelevance" in call.request.url for call in responses.calls
+    )
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:try_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
+
+
 def test_schedule_backout_treeherder_failure(
     monkeypatch: pytest.MonkeyPatch,
     mock_hgmo: None,
@@ -409,7 +526,9 @@ def test_schedule_backout_treeherder_failure(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     mock_schedule_tests_classify(
         {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}
@@ -455,8 +574,8 @@ def test_schedule_config_selection_risk(
         def get(self, model_name):
             model = super().get(model_name)
             if model_name == "testgroupselect" and calibrated:
-                # Confidences 0.5 -> 0.01, 1 -> 0.21.
-                model.calibration = ([0.5, 1.0], [0.01, 0.21])
+                # Confidences >= 0.9 -> 0.2, >= 0.5 -> 0.05, below -> 0.01.
+                model.calibration = ([0.9, 0.5], [0.2, 0.05, 0.01])
             if model_name == "testgroupselect" and very_high is not None:
                 model.confidence_thresholds = {
                     "low": 0.5,
@@ -488,9 +607,7 @@ def test_schedule_config_selection_risk(
     # Groups are selected by confidence, configs weighted by the calibrated probabilities (the
     # confidences, if the group model isn't calibrated).
     if calibrated:
-        assert risks == pytest.approx(
-            {"test-group1": 0.206, "test-group2": 0.05, "test-group3": 1.0}
-        )
+        assert risks == {"test-group1": 0.2, "test-group2": 0.05, "test-group3": 1.0}
     else:
         assert risks == {"test-group1": 0.99, "test-group2": 0.6, "test-group3": 1.0}
     # The manifests including the modified tests, and the groups selected with at least the model's
@@ -567,8 +684,59 @@ def test_schedule_config_selection_by_level(
         ({"test-group2": group2_confidence}, ["test-linux1804-64/opt-*"]),
     ]
     assert result["config_groups"] == {
-        "test-group1": ["test-linux1804-64/opt-*"],
-        "test-group2": ["test-windows10/opt-*"],
+        "test-group1": ["test-linux1804-64/opt-mochitest"],
+        "test-group2": ["test-windows10/opt-mochitest"],
+    }
+
+
+def test_schedule_config_groups_with_new_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+
+    mock_schedule_tests_classify({}, {"test-group1": 0.99})
+
+    # A task renamed since the backstop push the other tasks come from.
+    with open("config_selection_tasks.json", "w") as f:
+        json.dump(
+            {
+                "backstop": "backstop-rev",
+                "tasks": MOCK_CONFIG_SELECTION_TASKS,
+                "new_tasks": {
+                    "test-linux1804-64/opt-mochitest-renamed": "test-linux1804-64/opt-*"
+                },
+                "ignored": [],
+                "unresolved": {},
+                "processed": [],
+                "not_backstops": [],
+            },
+            f,
+        )
+    monkeypatch.setattr(
+        models,
+        "select_configs",
+        lambda groups, modified_paths, very_likely_groups, used_configs=(): {
+            group: ["test-linux1804-64/opt-*"] for group in groups
+        },
+    )
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["config_groups"] == {
+        "test-group1": [
+            "test-linux1804-64/opt-mochitest",
+            "test-linux1804-64/opt-mochitest-renamed",
+        ]
     }
 
 

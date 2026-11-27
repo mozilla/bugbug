@@ -1,0 +1,19 @@
+# perf-triage needs no platform prep: no [source] checkout, no [firefox] build.
+# The bug comes from the request (bug_id) and triage reads it through the broker;
+# a linked profile is fetched by profiler-cli at run time.
+
+# Infrastructure this agent runs on, applied by Terraform. Changing anything here
+# changes the agent's shape and goes through an infra PR; the image ships on
+# its own.
+#
+# Local runs took 2-3 minutes. The memory is for profiler-cli, which loads a
+# linked profile whole.
+[deploy]
+runtime = "cloud_run_job"
+cpu = "2"
+memory = "8Gi"
+timeout_seconds = 1800
+
+[deploy.broker]
+cpu = "1"
+memory = "512Mi"

@@ -53,8 +53,6 @@ class DevDocNeededModel(BugModel):
                     bug_features.BugExtractor(
                         feature_extractors,
                         cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
                         commit_data=True,
                     ),
                 ),
@@ -81,7 +79,11 @@ class DevDocNeededModel(BugModel):
             ]
         )
 
-    def rollback(self, change):
+    def get_rollback_point(self, item, label):
+        return self.rollback
+
+    @staticmethod
+    def rollback(change):
         return change["field_name"] == "keywords" and any(
             keyword in change["added"]
             for keyword in ["dev-doc-needed", "dev-doc-complete"]

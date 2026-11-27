@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class DefectEnhancementTaskModel(DefectModel):
+    # About a fifth of the fixed defects are actually tasks or enhancements filed with
+    # the default type, which are the bugs the model is used to find, so these labels
+    # are weighted less than the labels from explicitly set types.
+    fixed_defects_weight = 0.1
+
     def __init__(self, lemmatization=False, historical=False):
         DefectModel.__init__(self, lemmatization, historical)
 

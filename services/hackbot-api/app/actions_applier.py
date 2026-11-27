@@ -392,7 +392,8 @@ async def on_run_completed(
         if _should_auto_apply(
             spec,
             action.type,
-            require_review=run.inputs["require_review"],
+            # Runs created before `require_review` existed don't carry it.
+            require_review=run.inputs.get("require_review", False),
             run_level_auto_apply=run_level_auto_apply,
         ):
             to_apply.append((action, attachments))

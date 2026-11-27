@@ -953,6 +953,17 @@ def test_dev_releases_the_branch_always(cloud: FakeCloud, repo) -> None:
     assert [p.name for p in planned] == ["agents/bug-fix"]
 
 
+@pytest.mark.parametrize("branch", ["dev/agents/all", "dev/agents/all/try"])
+def test_dev_agents_all_releases_every_agent(cloud: FakeCloud, repo, branch) -> None:
+    planned = release.plan(cloud, DEV, repo, branch=branch, pusher="x")
+    assert [p.name for p in planned] == ["agents/bug-fix", "agents/test-repair"]
+
+
+def test_dev_services_all_is_refused(cloud: FakeCloud, repo) -> None:
+    with pytest.raises(DeployError, match="dev/services/all"):
+        release.plan(cloud, DEV, repo, branch="dev/services/all", pusher="x")
+
+
 def test_plan_lines_round_trip() -> None:
     item = release.Planned("agents/bug-fix", "1.0.0", None, "h2", True)
     assert item.line() == "agents/bug-fix 1.0.0 - h2 broker"
@@ -1076,3 +1087,82 @@ def test_services_without_migrations_just_deploy(services: FakeCloud) -> None:
     services.build(ref, "-")
     deploy_service(services, "hackbot-ui", DEV, ref)
     assert services.calls == []
+
+
+def test_promotions_lists_what_differs_for_all(
+    cloud: FakeCloud, tmp_path, monkeypatch
+) -> None:
+    write_agent(tmp_path, "bug-fix", "1.0.0", broker=True)
+    write_agent(tmp_path, "test-repair", "2.0.0")
+    (tmp_path / "services" / "hackbot-api").mkdir(parents=True)
+    (tmp_path / "services" / "hackbot-api" / "cloudbuild.yaml").write_text(
+        "steps: []\n"
+    )
+    cloud.apply(STAGE, "bug-fix", "h2")
+    cloud.job(STAGE, "bug-fix", ["agent", "broker"], label="h2")
+    ship(cloud, 1)  # bug-fix in dev, not stage; nothing else deployed anywhere
+    monkeypatch.setattr(cli, "GoogleCloud", lambda: cloud)
+    output = tmp_path / "promotions.json"
+    dirs = [
+        "--agents-dir",
+        str(tmp_path / "agents"),
+        "--services-dir",
+        str(tmp_path / "services"),
+    ]
+
+    with pytest.raises(SystemExit):
+        cli.app(
+            [
+                "promotions",
+                "all",
+                "--from",
+                "dev",
+                "--to",
+                "stage",
+                "--output",
+                str(output),
+                *dirs,
+            ]
+        )
+    planned = json.loads(output.read_text())
+    assert [p["name"] for p in planned] == ["agents/bug-fix"]
+    assert planned[0]["environment"] == "hackbot-prod-agents"
+
+    promote(cloud, "agents/bug-fix", DEV, STAGE, actor="test")
+    with pytest.raises(SystemExit):
+        cli.app(
+            [
+                "promotions",
+                "agents/bug-fix",
+                "--from",
+                "dev",
+                "--to",
+                "stage",
+                "--output",
+                str(output),
+            ]
+        )
+    assert json.loads(output.read_text()) == []
+
+
+def test_the_workflow_list_starts_with_all(tmp_path) -> None:
+    write_agent(tmp_path, "bug-fix", "1.0.0")
+    (tmp_path / "services" / "hackbot-ui").mkdir(parents=True)
+    (tmp_path / "services" / "hackbot-ui" / "cloudbuild.yaml").write_text("steps: []\n")
+    workflow = tmp_path / "workflow.yml"
+    workflow.write_text(WORKFLOW)
+    with pytest.raises(SystemExit):
+        cli.app(
+            [
+                "workflow-names",
+                str(workflow),
+                "--agents-dir",
+                str(tmp_path / "agents"),
+                "--services-dir",
+                str(tmp_path / "services"),
+            ]
+        )
+    assert (
+        "- all\n          - agents/bug-fix\n          - services/hackbot-ui\n"
+        in workflow.read_text()
+    )

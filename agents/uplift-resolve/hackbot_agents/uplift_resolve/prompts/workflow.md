@@ -8,30 +8,37 @@ the final patch as an artifact.
 
 ## How to apply each patch
 
-Apply the sources one at a time, in the order given. The checkout is shallow, so
-commits you need are not present locally until you fetch them.
+Run every command in the foreground and wait for it to finish. Never end your
+turn while a command you started is still running: nobody will resume you, so
+the run ends there with nothing resolved.
+
+Apply the sources one at a time, in the order given. The checkout is shallow, but
+every commit the sources need has already been fetched for you, so do not fetch
+them again.
 
 For a **Git** source (a commit SHA):
 
-1. Fetch the commit and its parent so cherry-pick can three-way merge:
-   `git fetch --depth=2 origin <commit>`
-2. `git cherry-pick -x <commit>`
+1. The commit and its parent are already local, so cherry-pick can three-way
+   merge.
+2. `git cherry-pick <commit>`. Leave out `-x`: its "(cherry picked from commit ...)"
+   line would end up in the uplift's commit message.
 3. If it conflicts, resolve the conflicts and commit the fixed patch.
 
 For a **Phabricator** source (a revision id):
 
 1. Its diff has already been fetched for you, at the path your task lists for
    it. Do not try to download it yourself.
-2. Fetch the base commit listed for it: `git fetch --depth=1 origin <base>`.
-   Do not skip this. The diff names the blobs it was built from, and until that
-   commit is local they are missing, so `git apply --3way` reports "repository
+2. The base commit listed for it has already been fetched. Check with
+   `git cat-file -e <base>`, and only if that fails, fetch it:
+   `git fetch --depth=1 origin <base>`. Do not skip this check. The diff names
+   the blobs it was built from, and until that commit is local they are missing, so `git apply --3way` reports "repository
    lacks the necessary blob", silently falls back to a direct apply, and fails
    leaving you no conflict markers at all.
 3. Apply it with a three-way merge so conflicts surface as markers:
    `git apply --3way <diff-file>`
 4. Resolve any conflicts and commit the fixed patch. A raw diff carries no
    commit message, so do not write one yourself: read the revision's title and
-   summary with `get_phabricator_revision` and commit under those, ending the
+   summary with `get_revision` and commit under those, ending the
    message with a `Differential Revision: <the revision's URI>` line.
 
 If no base commit is listed, Phabricator never recorded one. Try the apply
@@ -45,10 +52,9 @@ Resolve conflicts while preserving the _intent_ of the original patch while
 fitting the code as it exists on the target branch:
 
 - When the intent is not obvious from the diff alone, consult the originating
-  bug (`get_bugzilla_bug`) and the Phabricator revision (`get_phabricator_revision`)
-  through the bugbug MCP. Read both before resolving a non-trivial conflict.
-- Use `read_fx_doc_section` when you need Firefox architecture or workflow
-  context.
+  bug (`get_bugs`, `get_bug_comments`) and the Phabricator revision
+  (`get_revision`, `get_revision_comments`). Read both before resolving a
+  non-trivial conflict.
 - Never drop the patch's functional change to make a conflict "go away", and
   never invent behavior the patch did not have. If a hunk simply does not apply
   because the surrounding feature is absent on the branch, that is a real signal
@@ -59,6 +65,10 @@ fitting the code as it exists on the target branch:
 You work like a local Claude Code session: `Read`/`Grep`/`Glob`/`Edit`/`Write`,
 `Bash` for git, and `Task` sub-agents for parallel investigation. On top of the
 built-ins, the following Mozilla MCP servers are wired in:
+
+- **bugzilla** — read bugs, their comments, history and attachments. Use it to
+  understand what the originating bug was fixing.
+- **phabricator** — read a revision's title, summary, reviewers and comments.
 
 - **searchfox** — search mozilla-central by identifier, text, or definition, and
   read blame. Use it to understand how the code the patch touches evolved on the
@@ -103,6 +113,12 @@ this shape:
   "unresolved": ["path/to/file: why it could not be resolved"]
 }
 ```
+
+In `summary`, `conflicts`, `unresolved` and `summary.md`, refer to each source by
+the name its work item leads with: its revision's D-number (e.g. "D4342"), or
+its short commit hash when it has no revision. Never call sources "patch 1",
+"patch 2" and so on: reviewers read the report on the revisions themselves, where
+those numbers mean nothing.
 
 Set `resolved` to `false` if any source could not be applied or any conflict was
 left unresolved, and list those in `unresolved`. Before you finish, check that
