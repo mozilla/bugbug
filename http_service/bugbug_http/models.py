@@ -871,7 +871,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
 
     # Pull the base revision to the local repository
     LOGGER.info("Pulling base revision from the remote repository...")
-    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
+    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=False)
 
     LOGGER.info("Generating commit(s) from patch...")
     revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)

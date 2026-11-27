@@ -783,3 +783,66 @@ def test_select_configs_very_likely_and_build_platforms(
     assert models.select_configs(
         {"test-group1": 1.0}, ["dom/foo.cpp"], ["test-group1"]
     ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}
+
+
+def test_schedule_tests_from_patch(
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    repo_dir, remote_repo_dir = mock_repo
+
+    with hglib.open(str(remote_repo_dir)) as hg:
+        hg_base_rev = hg.log(revrange=b"desc('Base history 3')")[0].node
+    with hglib.open(str(repo_dir)) as hg:
+        working_dir_parent = hg.log(revrange=b".")[0].node
+
+    git_base_rev = "b" * 40
+    responses.add(
+        responses.GET,
+        f"https://lando.moz.tools/api/git2hg/firefox/{git_base_rev}",
+        json={"git_hash": git_base_rev, "hg_hash": hg_base_rev.decode("ascii")},
+    )
+
+    patch_hash = "abc"
+    models.redis.set(
+        f"bugbug:patch:{patch_hash}",
+        b"""From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Test User <test@example.com>
+Date: Mon, 17 Nov 2025 14:58:22 +0000
+Subject: [PATCH] Bug 123 - Change the test file
+
+---
+diff --git a/test.txt b/test.txt
+--- a/test.txt
++++ b/test.txt
+@@ -1 +1 @@
+-Version 3
+\\ No newline at end of file
++Version 4
+\\ No newline at end of file
+""",
+    )
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests_from_patch(git_base_rev, patch_hash) == "OK"
+
+    # The patch is imported on top of the base, without updating the working directory.
+    with hglib.open(str(repo_dir)) as hg:
+        imported = hg.log(revrange=b"children(%s)" % hg_base_rev)
+        assert [c.desc for c in imported] == [b"Bug 123 - Change the test file"]
+        assert hg.log(revrange=b".")[0].node == working_dir_parent
+        assert hg.status() == []
+
+    value = models.redis.get(
+        f"bugbug:job_result:schedule_tests_from_patch:{git_base_rev}_{patch_hash}"
+    )
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
