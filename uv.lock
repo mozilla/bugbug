@@ -17,6 +17,7 @@ members = [
     "bugbug-http-service",
     "bugbug-mcp",
     "bugzilla-client",
+    "bugzilla-proxy",
     "hackbot-agent-autowebcompat-diagnosis",
     "hackbot-agent-autowebcompat-intervention",
     "hackbot-agent-autowebcompat-repro",
@@ -912,6 +913,42 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "tenacity", specifier = ">=9.1.0" },
 ]
+
+[[package]]
+name = "bugzilla-proxy"
+version = "0.1.0"
+source = { editable = "services/bugzilla-proxy" }
+dependencies = [
+    { name = "cachetools" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "cryptography" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cachetools", specifier = ">=5.3.0" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42.0.0" },
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic", specifier = ">=2.6.0" },
+    { name = "pydantic-settings", specifier = ">=2.1.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "cachetools"
@@ -2045,6 +2082,23 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-iam"
+version = "2.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6c/b0/5be37571789b0c2924ea1b226ebbf06ca5071fcceb54fd4d60b81bb055bc/google_cloud_iam-2.27.0.tar.gz", hash = "sha256:8d2c88901bcbf66e2e52fbc9a0136a5ff2018a8ea02b0085930b0c4bf8921ecd", size = 614108, upload-time = "2026-11-05T18:40:13.116Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/8d/d4935375d5d31be9d35f25711f4edd0578698e930258efadb75d7a6441e1/google_cloud_iam-2.27.0-py3-none-any.whl", hash = "sha256:e6b4d4f798347f9cecf6c0aa370f32e874d071c54ecda2d708af2b1c36947e13", size = 566424, upload-time = "2026-11-05T18:39:24.955Z" },
+]
+
+[[package]]
 name = "google-cloud-pubsub"
 version = "2.43.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2794,6 +2848,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "githubkit", extra = ["auth-app"] },
     { name = "google-auth" },
+    { name = "google-cloud-iam" },
     { name = "google-cloud-pubsub" },
     { name = "google-cloud-run" },
     { name = "google-cloud-storage" },
@@ -2834,6 +2889,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "githubkit", extras = ["auth-app"], specifier = ">=0.16.0" },
     { name = "google-auth", specifier = ">=2.29.0" },
+    { name = "google-cloud-iam", specifier = ">=2.15.0" },
     { name = "google-cloud-pubsub", specifier = ">=2.21.0" },
     { name = "google-cloud-run", specifier = ">=0.10.0" },
     { name = "google-cloud-storage", specifier = ">=2.16.0" },
