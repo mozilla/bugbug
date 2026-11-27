@@ -13,6 +13,7 @@ from pydantic import BaseModel, RootModel
 class RunStatus(str, Enum):
     pending = "pending"
     running = "running"
+    awaiting_ci = "awaiting_ci"
     succeeded = "succeeded"
     failed = "failed"
     timed_out = "timed_out"

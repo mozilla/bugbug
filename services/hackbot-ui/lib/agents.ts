@@ -2,6 +2,7 @@
 // (components/TriggerForm.tsx) and the recent-runs filter (components/RecentRuns.tsx)
 // so the two dropdowns can never drift apart.
 export const AGENTS = [
+  { value: "perf-regression", label: "perf-regression" },
   { value: "bug-fix", label: "bug-fix" },
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "autowebcompat-diagnosis", label: "autowebcompat-diagnosis" },

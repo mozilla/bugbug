@@ -1,9 +1,10 @@
 """Build Firefox with a given mozconfig."""
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Any
+
+from agent_tools.firefox_env import toolchain_environment
 
 
 async def build_firefox(
@@ -41,19 +42,9 @@ async def build_firefox(
                 "message": f"MOZCONFIG file not found at {mozconfig_path}",
             }
 
-        env = os.environ.copy()
+        env = toolchain_environment()
         env["MOZCONFIG"] = str(mozconfig_path.resolve())
         env["CLAUDECODE"] = "1"
-
-        # `mach bootstrap` installs rust under ~/.cargo/bin and clang under
-        # ~/.mozbuild/clang/bin, neither of which is on the default PATH. Without
-        # this the build fails with "Rust compiler not found" even right after a
-        # successful bootstrap.
-        home = Path.home()
-        toolchain_bins = [home / ".cargo" / "bin", home / ".mozbuild" / "clang" / "bin"]
-        env["PATH"] = os.pathsep.join(
-            [*(str(p) for p in toolchain_bins), env.get("PATH", "")]
-        )
 
         async def mach_build(*args: str) -> tuple[int | None, str, str]:
             process = await asyncio.create_subprocess_exec(

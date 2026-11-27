@@ -13,7 +13,7 @@ from fastapi import (
     Response,
     status,
 )
-from hackbot_client import HackbotClient
+from hackbot_client import HackbotClient, RunStatus
 from phabricator_client import PhabricatorClient
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,10 @@ from app.auth import (
     require_phabricator_signature,
 )
 from app.bugzilla_authorization import BugzillaAuthorizer
-from app.bugzilla_webhook import detect_needinfo_request
+from app.bugzilla_webhook import (
+    detect_needinfo_request,
+    detect_perf_regression_creation,
+)
 from app.config import settings
 from app.database.connection import get_db
 from app.github import GitHubApp
@@ -216,10 +219,48 @@ async def bugzilla_webhook(
     api_client: Annotated[HackbotClient, Depends(get_hackbot_client)],
     authorizer: Annotated[BugzillaAuthorizer, Depends(get_bugzilla_authorizer)],
 ) -> dict:
-    """Trigger a bug-fix follow-up for a bot-directed ``needinfo?`` change."""
+    """Route performance-regression creations and bot-directed ``needinfo?`` changes."""
     payload = await request.json()
     if not isinstance(payload, dict):
         return {"status": "ignored", "reason": "payload is not a JSON object"}
+
+    if settings.bugzilla_webhook.perf_regression_enabled:
+        bug_id = detect_perf_regression_creation(
+            payload, settings.bugzilla_webhook.perf_regression_reporters
+        )
+        if bug_id is not None:
+            # A key belongs to one run for good, so a run that failed (for
+            # example because its job never started, which made Bugzilla
+            # redeliver) is retried under a key derived from that failed run.
+            # Redeliveries of the same event still resolve to one run.
+            suites = settings.bugzilla_webhook.perf_regression_suites
+            inputs = {"bug_id": bug_id, **({"suites": suites} if suites else {})}
+            key = f"perf-regression-created:{bug_id}"
+            for _ in range(3):
+                run = await api_client.trigger_run(
+                    "perf-regression", inputs, dedupe_key=key
+                )
+                if run.is_new or run.status != RunStatus.failed:
+                    break
+                key = f"perf-regression-created:{bug_id}:after:{run.run_id}"
+            if not run.is_new:
+                log.info(
+                    "Duplicate perf-regression creation delivery for bug %s "
+                    "resolved to run %s",
+                    bug_id,
+                    run.run_id,
+                )
+                return {
+                    "status": "ignored",
+                    "reason": "duplicate delivery",
+                    "run_id": run.run_id,
+                }
+            log.info(
+                "Triggered perf-regression run %s for new Bugzilla bug %s",
+                run.run_id,
+                bug_id,
+            )
+            return {"status": "triggered", "run_id": run.run_id}
 
     detected = detect_needinfo_request(
         payload,

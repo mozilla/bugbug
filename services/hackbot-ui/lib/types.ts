@@ -3,6 +3,7 @@
 export type RunStatus =
   | "pending"
   | "running"
+  | "awaiting_ci"
   | "succeeded"
   | "failed"
   | "timed_out";

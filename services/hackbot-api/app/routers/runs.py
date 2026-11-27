@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -12,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import gcs, jobs, pubsub
+from app import gcs, jobs, perf_regression, pubsub
 from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
@@ -360,6 +361,35 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
     if run.finalized_at is not None:
         return
 
+    if run.agent == "perf-regression":
+        if run.status == RunStatus.awaiting_ci.value:
+            await perf_regression.resume(db, run)
+            return
+        # Serialize phase changes with Pulse and the maintenance sweep. Refresh
+        # after taking the lock: another event may already have advanced it.
+        locked = await db.execute(
+            select(Run)
+            .where(Run.run_id == run.run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        run = locked.scalar_one()
+        if run.finalized_at is not None or run.status == RunStatus.awaiting_ci.value:
+            await db.commit()
+            return
+
+    if run.agent == "perf-regression" and not run.execution_name:
+        watch = run.ci_wait or {}
+        if time.time() < watch.get("launching_until", 0):
+            await db.commit()
+            return
+        if watch.get("validation_id"):
+            # The launch claim expired without registering an execution.
+            await perf_regression.validation_ended(
+                db, run, "Validation launch was not registered", launched=False
+            )
+            return
+
     try:
         exec_status = await jobs.get_execution_status(run.execution_name)
     except Exception:
@@ -367,17 +397,85 @@ async def finalize_run(db: AsyncSession, run: Run) -> None:
         raise
 
     if exec_status == ExecutionStatus.pending:
+        if run.agent == "perf-regression":
+            await db.commit()  # Release the row lock taken above.
         return
     if exec_status == ExecutionStatus.running:
         if run.status == RunStatus.pending.value:
             run.status = RunStatus.running.value
             await db.commit()
+        elif run.agent == "perf-regression":
+            await db.commit()
         return
 
-    summary = await gcs.read_summary(str(run.run_id))
-    artifacts = await gcs.list_artifacts(str(run.run_id))
-
+    expected = (
+        (run.ci_wait or {}).get("validation_id")
+        if run.agent == "perf-regression"
+        else None
+    )
+    artifact_prefix = (run.ci_wait or {}).get("artifact_prefix", "") if expected else ""
+    summary = (
+        await gcs.read_summary(str(run.run_id), artifact_prefix=artifact_prefix)
+        if artifact_prefix
+        else await gcs.read_summary(str(run.run_id))
+    )
     new_status, error = _terminal_status(exec_status, summary)
+
+    if expected:
+        if new_status == RunStatus.succeeded and (
+            summary.findings.get("validation_id") != expected
+        ):
+            new_status, error = (
+                RunStatus.failed,
+                "Validation execution did not publish its own summary",
+            )
+        if new_status != RunStatus.succeeded:
+            # The investigation's saved state survives a failed validator.
+            await perf_regression.validation_ended(db, run, error or new_status.value)
+            return
+        if artifact_prefix:
+            # The row lock fences publication: a late/untracked execution has
+            # only a private upload grant and cannot replace these artifacts.
+            summary = await gcs.promote_artifacts(
+                str(run.run_id), artifact_prefix, summary
+            )
+    artifacts = await gcs.list_artifacts(str(run.run_id))
+    if run.agent == "perf-regression":
+        artifacts = [a for a in artifacts if not a.name.startswith("_validation/")]
+    if run.agent == "perf-regression" and new_status == RunStatus.succeeded:
+        try:
+            watch = perf_regression.pending_watch(summary)
+            required = {
+                "investigation/continuation.json",
+                "attempts/1/candidate.patch",
+            }
+            if watch and not required.issubset(a.name for a in artifacts):
+                raise ValueError("Missing saved CI continuation artifacts")
+        except ValueError as exc:
+            watch = None
+            new_status, error = RunStatus.failed, str(exc)
+        if watch:
+            previous = run.ci_wait or {}
+            # A validation that hands back (CI still running per Treeherder)
+            # is relaunched with backoff, not every sweep.
+            relaunches = previous.get("relaunches", 0) + bool(expected)
+            run.ci_wait = {
+                **previous,
+                **watch,
+                "validation_id": None,
+                "launching_until": 0,
+                "relaunches": relaunches,
+                "not_before": time.time() + perf_regression.backoff(relaunches)
+                if relaunches
+                else 0,
+            }
+            run.status = RunStatus.awaiting_ci.value
+            run.execution_name = None
+            run.summary = summary.model_dump(mode="json")
+            run.artifacts = [a.model_dump(mode="json") for a in artifacts]
+            await db.commit()
+            await perf_regression.resume(db, run)
+            return
 
     run.status = new_status.value
     run.artifacts = [a.model_dump(mode="json") for a in artifacts]

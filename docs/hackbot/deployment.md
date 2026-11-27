@@ -33,7 +33,17 @@ of the same Dockerfile:
   time, and is never touched by per-execution overrides.
 
 The container name `agent` is what per-execution overrides target, so it must match.
-`task_count=1`, timeout from `JOB_EXECUTION_TIMEOUT_SECONDS` (default 8h). `hackbot.toml` is
+`task_count=1`, timeout from `JOB_EXECUTION_TIMEOUT_SECONDS` (default 8h), unless the
+agent registry specifies an execution timeout. Performance investigations use 8h
+and exit after submitting to Try. CI waits live in the API database; Pulse and
+the maintenance sweep launch separate one-hour validation executions on the same
+run, with no model calls or additional Try pushes. See the
+[CI continuation setup](../../agents/perf-regression/README.md#ci-completion-events).
+The API reads the `runs.ci_wait` column added for this, so **apply the API's
+Alembic migrations before deploying a new API revision**; nothing runs them
+automatically, and an API deployed first fails every runs query.
+Upload policies use the execution timeout plus the configured grace.
+`hackbot.toml` is
 copied into the image's working directory, where the runtime discovers it.
 
 Registering the agent in `AGENT_REGISTRY` requires the Job to exist under the `job_name`

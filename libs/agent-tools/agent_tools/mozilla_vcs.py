@@ -25,18 +25,25 @@ class MozillaVcsContext:
     default_repo: str = "mozilla-central"
     user_agent: str = "bugbug-frontend-triage"
     timeout: float = 30.0
-    # Cap diff size so a huge changeset can't blow up the agent's context.
-    max_diff_bytes: int = 60_000
+    # Cap tool responses; None retains full patches for evidence artifacts.
+    max_diff_bytes: int | None = 60_000
+    # Evidence collectors can reuse their HTTP pool and retain the full patch.
+    client: httpx.AsyncClient | None = None
 
 
 async def _get(ctx: MozillaVcsContext, path: str, *, as_json: bool):
     url = f"{ctx.base_url}/{path}"
     headers = {"User-Agent": ctx.user_agent}
     try:
-        async with httpx.AsyncClient(
-            timeout=ctx.timeout, follow_redirects=True
-        ) as client:
-            resp = await client.get(url, headers=headers)
+        if ctx.client is not None:
+            resp = await ctx.client.get(
+                url, headers=headers, timeout=ctx.timeout, follow_redirects=True
+            )
+        else:
+            async with httpx.AsyncClient(
+                timeout=ctx.timeout, follow_redirects=True
+            ) as client:
+                resp = await client.get(url, headers=headers)
     except httpx.HTTPError as e:
         raise ToolError(
             f"request failed: {e}",
@@ -102,13 +109,13 @@ async def get_commit_diff(
     """Return the unified diff (hg export) of a changeset.
 
     The key tool for regression triage: read exactly what a regressor changeset
-    changed so you can localize the fix precisely. Large diffs are truncated (see
-    the 'truncated' flag); narrow with a follow-up if needed.
+    changed so you can localize the fix precisely. Large diffs are truncated by
+    default (see the 'truncated' flag); narrow with a follow-up if needed.
     """
     repo = repo or ctx.default_repo
     text = await _get(ctx, f"{repo}/raw-rev/{node}", as_json=False)
     raw = text.encode("utf-8")
-    truncated = len(raw) > ctx.max_diff_bytes
+    truncated = ctx.max_diff_bytes is not None and len(raw) > ctx.max_diff_bytes
     if truncated:
         text = raw[: ctx.max_diff_bytes].decode("utf-8", "ignore")
     return {"node": node, "repo": repo, "truncated": truncated, "diff": text}

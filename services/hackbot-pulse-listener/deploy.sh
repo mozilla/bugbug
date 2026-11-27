@@ -93,6 +93,13 @@ gcloud builds submit "${ROOT_DIR}" \
 
 echo "==> Deploying worker pool"
 ENV_VARS="HACKBOT_API_URL=${HACKBOT_API_URL},ENVIRONMENT=production"
+if [[ -n "${CI_EVENTS_TOPIC:-}" ]]; then
+  gcloud pubsub topics describe "${CI_EVENTS_TOPIC}" >/dev/null 2>&1 || \
+    gcloud pubsub topics create "${CI_EVENTS_TOPIC}"
+  gcloud pubsub topics add-iam-policy-binding "${CI_EVENTS_TOPIC}" \
+    --member="serviceAccount:${SA_EMAIL}" --role=roles/pubsub.publisher >/dev/null
+  ENV_VARS="${ENV_VARS},CI_EVENTS_TOPIC=${CI_EVENTS_TOPIC}"
+fi
 ENV_VARS="${ENV_VARS},PULSE_USER=${PULSE_USER},WATCHED_REPOS=${WATCHED_REPOS}"
 ENV_VARS="${ENV_VARS},SENTRY_DSN=${SENTRY_DSN}"
 

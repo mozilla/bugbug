@@ -3,6 +3,7 @@ import type { RunStatus } from "@/lib/types";
 const LABEL: Record<RunStatus, string> = {
   pending: "pending",
   running: "running",
+  awaiting_ci: "waiting for Try",
   succeeded: "succeeded",
   failed: "failed",
   timed_out: "timed out",

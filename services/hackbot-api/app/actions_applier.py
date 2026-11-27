@@ -363,6 +363,31 @@ async def _apply_pending_rows(
                     results_by_ref[member.ref] = member.result
 
 
+def should_auto_apply(run: Run, action_type: str) -> bool:
+    """Whether one of ``run``'s actions may be applied without a manual apply."""
+    spec = AGENT_REGISTRY.get(run.agent)
+    return _should_auto_apply(
+        spec,
+        action_type,
+        require_review=run.inputs.get("require_review", False),
+        run_level_auto_apply=_auto_apply_blocker(spec, run) is None,
+    )
+
+
+async def apply_rows(
+    db: AsyncSession,
+    run: Run,
+    rows: list[tuple[RunAction, list[dict]]],
+    hackbot_client: HackbotClient | None,
+) -> None:
+    """Apply these of ``run``'s action rows now, before the run completes.
+
+    For an agent whose run continues after an action: perf-regression's try
+    push has to land before the API can wait for its CI.
+    """
+    await _apply_pending_rows(db, run, rows, hackbot_client)
+
+
 async def on_run_completed(
     db: AsyncSession, run: Run, hackbot_client: HackbotClient
 ) -> None:

@@ -88,15 +88,32 @@ Recurrence lives in the key, since only the caller knows whether the work may ha
 
 A run keeps its key whatever becomes of it, a failed dispatch included, so a repeated
 trigger gets the failure rather than a silent retry. A transient error therefore spends that
-key: key the work differently, or run unkeyed.
+key: key the work differently, or run unkeyed. The `perf-regression` creation webhook does
+the former: when a redelivery resolves to a failed run, it triggers again under a key
+derived from that run (`perf-regression-created:<bug>:after:<run-id>`).
 
 ## Run states
 
 ```
 pending ──> running ──> succeeded
-                   └──> failed
-                   └──> timed_out
+               ▲   └──> failed
+               │   └──> timed_out
+               │   └──> awaiting_ci   (perf-regression only)
+               └────────────┘
 ```
+
+`awaiting_ci` is used by `perf-regression`: the investigation execution exits after
+recording a `try_server.push` action, and the run waits in the database
+(`runs.ci_wait`) without an execution. The API applies that push through the ordinary
+action path first (held for a manual apply when the run requires review), then waits
+for its CI.
+Pulse wake-ups (`/internal/events/try-task-finished`) and the maintenance sweep (through
+`finalize_run`) call `perf_regression.resume`, which checks CI and claims the launch of a
+short validation execution under a row lock, moving the run back to `running`. When that
+execution finishes, `finalize_run` decides the terminal status as below, or returns the run
+to `awaiting_ci` with a backoff if CI was still running. Launch failures are retried with
+backoff and fail the run after five attempts or six hours past its CI deadline; a validation
+execution that fails or times out is relaunched up to three times before the run fails.
 
 Terminal status is decided in `finalize_run` from the **execution status** and the
 **`summary.json`** together:

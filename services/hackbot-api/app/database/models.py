@@ -44,6 +44,7 @@ class Run(Base):
     )
     execution_name: Mapped[str | None] = mapped_column(String, nullable=True)
     results_prefix: Mapped[str] = mapped_column(String, nullable=False)
+    ci_wait: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     artifacts: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

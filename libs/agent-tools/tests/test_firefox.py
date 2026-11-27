@@ -2,6 +2,7 @@
 
 import os
 
+import pytest
 from agent_tools import firefox
 from agent_tools.claude_sdk import build_sdk_server
 from agent_tools.firefox.tools import bootstrap_firefox
@@ -251,3 +252,43 @@ async def test_build_target_compiles_the_directory_after_its_prerequisites(tmp_p
         "build --quiet pre-export export",
         "build --quiet --allow-subdirectory-build build/clang-plugin image",
     ]
+
+
+@pytest.mark.parametrize("custom_cargo", [False, True])
+async def test_build_and_bootstrap_find_shared_toolchain(
+    tmp_path, monkeypatch, custom_cargo
+):
+    from agent_tools.firefox.tools.bootstrap_firefox import bootstrap_firefox
+    from agent_tools.firefox.tools.build_firefox import build_firefox
+    from agent_tools.firefox_env import toolchain_environment
+
+    original_path = os.environ["PATH"]
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cargo = tmp_path / ("cargo" if custom_cargo else ".cargo")
+    if custom_cargo:
+        monkeypatch.setenv("CARGO_HOME", str(cargo))
+    else:
+        monkeypatch.delenv("CARGO_HOME", raising=False)
+    clang = tmp_path / "state" / "clang"
+    for directory, name in [(cargo, "cargo-audit"), (clang, "clang")]:
+        binary = directory / "bin" / name
+        binary.parent.mkdir(parents=True)
+        binary.write_text("#!/bin/sh\nexit 0\n")
+        binary.chmod(0o755)
+    monkeypatch.setenv("MOZBUILD_STATE_PATH", str(tmp_path / "state"))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    mach = repo / "mach"
+    mach.write_text("#!/bin/sh\ncommand -v cargo-audit && command -v clang\n")
+    mach.chmod(0o755)
+    config = repo / "mozconfig"
+    config.write_text("# test\n")
+    for result in [
+        await bootstrap_firefox(repo),
+        await build_firefox(repo, config, repo / "obj"),
+    ]:
+        assert result["success"]
+        assert str(cargo / "bin/cargo-audit") in result["stdout"]
+        assert str(clang / "bin/clang") in result["stdout"]
+    assert str(cargo / "bin") in toolchain_environment()["PATH"]
+    assert os.environ["PATH"] == original_path

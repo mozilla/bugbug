@@ -66,6 +66,29 @@ def test_create_run_leaves_run_unattributed_without_header(client, db, headers):
     assert db.added.requested_by is None
 
 
+def test_speedometer_run_extends_both_job_and_upload_policy(client, monkeypatch):
+    calls = []
+
+    async def policy(run_id, timeout_seconds):
+        calls.append(("policy", timeout_seconds))
+        return {"url": "https://upload.example/", "fields": {}}
+
+    async def trigger(job_name, env, timeout_seconds):
+        calls.append(("job", timeout_seconds))
+        assert job_name == "hackbot-agent-perf-regression"
+        assert env["MAX_ATTEMPTS"] == "1"
+        return "execution"
+
+    monkeypatch.setattr(gcs, "generate_results_policy", policy)
+    monkeypatch.setattr(jobs, "trigger_execution", trigger)
+    response = client.post("/agents/perf-regression/runs", json={"bug_id": 2075214})
+    assert response.status_code == 201, response.text
+    assert calls == [
+        ("policy", 28800),
+        ("job", 28800),
+    ]
+
+
 # --- deduplication ---
 
 

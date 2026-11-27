@@ -1,0 +1,8 @@
+{
+  "name": "hackbot-agent-perf-regression-tools",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@firefox-devtools/profiler-cli": "0.10.0"
+  }
+}

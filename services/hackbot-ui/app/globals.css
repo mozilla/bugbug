@@ -201,6 +201,7 @@ button.secondary {
   font-weight: 600;
   text-transform: capitalize;
 }
+.badge.awaiting_ci,
 .badge.pending {
   background: rgba(210, 153, 42, 0.16);
   color: var(--amber);

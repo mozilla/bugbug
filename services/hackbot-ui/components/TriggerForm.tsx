@@ -26,6 +26,7 @@ export function TriggerForm() {
   const [requireReview, setRequireReview] = useState(
     () => params.get("require_review") === "true"
   );
+  const [alertId, setAlertId] = useState(() => params.get("alert_id") ?? "");
   const [gitCommit, setGitCommit] = useState(
     () => params.get("git_commit") ?? ""
   );
@@ -82,6 +83,7 @@ export function TriggerForm() {
   const isTestPlanAgent = agent === "test-plan-generator";
   const isUpliftAgent = agent === "uplift-resolve";
   const isDatasetEvalAgent = agent === "dataset-eval";
+  const isPerfRegressionAgent = agent === "perf-regression";
   const needsFailureTasks = isBuildRepairAgent || isTestRepairAgent;
 
   async function onSubmit(e: React.FormEvent) {
@@ -191,6 +193,14 @@ export function TriggerForm() {
         return;
       }
       inputs.bug_id = parsedBugId;
+      if (isPerfRegressionAgent && alertId.trim()) {
+        const parsedAlertId = Number(alertId.trim());
+        if (!Number.isInteger(parsedAlertId) || parsedAlertId <= 0) {
+          setError("Enter a valid Perfherder alert summary ID.");
+          return;
+        }
+        inputs.alert_id = parsedAlertId;
+      }
     } else {
       if (!hasBugId && !hasBugData) {
         setError(
@@ -307,6 +317,21 @@ export function TriggerForm() {
             />
           </div>
         )}
+
+      {isPerfRegressionAgent && (
+        <div className="field">
+          <label htmlFor="alertId">
+            Perfherder alert summary ID (optional if the bug links one alert)
+          </label>
+          <input
+            id="alertId"
+            inputMode="numeric"
+            placeholder="e.g. 53155"
+            value={alertId}
+            onChange={(e) => setAlertId(e.target.value)}
+          />
+        </div>
+      )}
 
       {isWebcompatAgent && (
         <div className="field">
