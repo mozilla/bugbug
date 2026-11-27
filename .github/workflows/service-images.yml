@@ -1,0 +1,61 @@
+name: Service images
+
+# Builds a service's Docker image when a PR changes its Dockerfile, so a broken
+# base-image bump fails the PR instead of a later deploy. Dependency changes
+# don't trigger it: the Taskcluster tests already install them on the Python
+# version the images use, so only a Dockerfile change can move the images
+# onto an untested one.
+# Builds only; nothing is pushed. The build context is the repo root, as in
+# services/cloudbuild.yaml.
+on:
+  pull_request:
+    paths:
+      - "services/*/Dockerfile"
+      - ".github/workflows/service-images.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - reviewhelper-api
+          - mcp
+          - hackbot-pulse-listener
+          - hackbot-api
+          - hackbot-ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The PR base has to be in history for the diff below.
+          fetch-depth: 0
+
+      - name: Check whether the Dockerfile changed
+        id: changes
+        env:
+          SERVICE: ${{ matrix.service }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          inputs=$(printf '%s\n' \
+            "services/$SERVICE/Dockerfile" \
+            ".github/workflows/service-images.yml")
+          if grep -qxFf <(printf '%s\n' "$inputs") <<< "$changed"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping $SERVICE: Dockerfile unchanged."
+          fi
+
+      - name: Build image
+        if: steps.changes.outputs.build == 'true'
+        env:
+          SERVICE: ${{ matrix.service }}
+        # No secrets: hackbot-ui's sentry_auth_token mount is optional, so
+        # BuildKit skips it when it isn't passed.
+        run: docker build -f "services/$SERVICE/Dockerfile" -t "bugbug-$SERVICE:ci" .
