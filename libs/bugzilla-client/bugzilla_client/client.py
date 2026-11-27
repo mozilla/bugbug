@@ -16,7 +16,6 @@ either with ``async with`` or by calling :meth:`BugzillaClient.close`.
 
 import base64
 import logging
-from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
@@ -32,6 +31,10 @@ from tenacity import (
 )
 
 from bugzilla_client.config import BugzillaSettings
+
+# A str is iterable too, so ``Collection[str]`` would let ``"id"`` through and
+# it would be sent as ``"i,d"``. Listing the accepted containers rules it out.
+type Items[T] = list[T] | tuple[T, ...] | set[T]
 
 log = logging.getLogger(__name__)
 
@@ -162,17 +165,6 @@ class BugzillaClient:
         return _parse(response)
 
 
-def _join_fields(fields: Collection[str]) -> str:
-    """Join field names for Bugzilla's comma-separated ``include_fields``.
-
-    A plain string is sent as is: joining it would split it into characters
-    (``"id"`` would become ``"i,d"``).
-    """
-    if isinstance(fields, str):
-        return fields
-    return ",".join(fields)
-
-
 class _Resource:
     def __init__(self, client: BugzillaClient) -> None:
         self._client = client
@@ -182,7 +174,7 @@ class _Bugs(_Resource):
     """Bugzilla REST API: https://bmo.readthedocs.io/en/latest/api/core/v1/bug.html."""
 
     async def get(
-        self, ids: Collection[int], *, include_fields: Collection[str] | None = None
+        self, ids: Items[int], *, include_fields: Items[str] | None = None
     ) -> BugzillaResponse:
         """Fetch bugs by id in one request.
 
@@ -193,7 +185,7 @@ class _Bugs(_Resource):
             raise ValueError("ids must not be empty")
         params: dict[str, Any] = {"id": ",".join(str(i) for i in ids)}
         if include_fields:
-            params["include_fields"] = _join_fields(include_fields)
+            params["include_fields"] = ",".join(include_fields)
         result = await self._client.request("GET", "bug", params=params)
         return BugzillaResponse(result)
 
@@ -201,7 +193,7 @@ class _Bugs(_Resource):
         self,
         params: dict[str, Any],
         *,
-        include_fields: Collection[str] | None = None,
+        include_fields: Items[str] | None = None,
     ) -> BugzillaResponse:
         """Find bugs matching search criteria (``GET /bug``).
 
@@ -212,7 +204,7 @@ class _Bugs(_Resource):
         ``include_fields`` overrides the same key in ``params``.
         """
         if include_fields:
-            params = {**params, "include_fields": _join_fields(include_fields)}
+            params = {**params, "include_fields": ",".join(include_fields)}
         result = await self._client.request("GET", "bug", params=params)
         return BugzillaResponse(result)
 
@@ -241,10 +233,10 @@ class _Comments(_Resource):
     async def get(
         self,
         *,
-        bug_ids: Collection[int] = (),
-        comment_ids: Collection[int] = (),
+        bug_ids: Items[int] = (),
+        comment_ids: Items[int] = (),
         new_since: datetime | None = None,
-        include_fields: Collection[str] | None = None,
+        include_fields: Items[str] | None = None,
         skip_private: bool = False,
     ) -> BugzillaResponse:
         """Comments by bug and/or by comment id, fetched in one request.
@@ -270,7 +262,7 @@ class _Comments(_Resource):
         if new_since:
             params["new_since"] = new_since.isoformat()
         if include_fields:
-            params["include_fields"] = _join_fields(include_fields)
+            params["include_fields"] = ",".join(include_fields)
         if skip_private:
             params["skip_private"] = 1
         result = await self._client.request("GET", path, params=params)
@@ -283,8 +275,8 @@ class _Attachments(_Resource):
     async def get(
         self,
         *,
-        bug_ids: Collection[int] = (),
-        attachment_ids: Collection[int] = (),
+        bug_ids: Items[int] = (),
+        attachment_ids: Items[int] = (),
         include_data: bool = False,
     ) -> BugzillaResponse:
         """Attachments by bug and/or by attachment id, fetched in one request.
@@ -342,12 +334,12 @@ class _Users(_Resource):
     async def get(
         self,
         *,
-        ids: Collection[int] = (),
-        names: Collection[str] = (),
-        match: Collection[str] = (),
+        ids: Items[int] = (),
+        names: Items[str] = (),
+        match: Items[str] = (),
         limit: int | None = None,
-        group_ids: Collection[int] = (),
-        groups: Collection[str] = (),
+        group_ids: Items[int] = (),
+        groups: Items[str] = (),
         include_disabled: bool = False,
         permissive: bool = False,
     ) -> BugzillaResponse:

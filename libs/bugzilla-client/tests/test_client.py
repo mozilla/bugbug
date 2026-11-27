@@ -197,7 +197,7 @@ async def test_bugs_get_sends_ids(bugzilla):
 
 
 @pytest.mark.parametrize(
-    "include_fields", ["id", ["id"], "id,summary", ["id", "summary"]]
+    "include_fields", [["id", "summary"], ("id", "summary"), {"id"}]
 )
 @pytest.mark.parametrize(
     "call",
@@ -210,15 +210,14 @@ async def test_bugs_get_sends_ids(bugzilla):
     ],
     ids=["bugs.get", "bugs.search", "comments.get"],
 )
-async def test_include_fields_accepts_a_plain_string(bugzilla, call, include_fields):
+async def test_include_fields_accepts_list_tuple_and_set(
+    bugzilla, call, include_fields
+):
     handler, requests = _recorder(httpx.Response(200, json={}))
 
     await call(bugzilla(handler), include_fields)
 
-    expected = (
-        include_fields if isinstance(include_fields, str) else ",".join(include_fields)
-    )
-    assert requests[0].url.params["include_fields"] == expected
+    assert requests[0].url.params["include_fields"] == ",".join(include_fields)
 
 
 async def test_comments_get_by_bugs_and_comment_ids_in_one_request(bugzilla):
