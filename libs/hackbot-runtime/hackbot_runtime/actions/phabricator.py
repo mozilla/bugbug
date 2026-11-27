@@ -21,6 +21,7 @@ from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
 SUBMIT_PATCH_ACTION_TYPE = "phabricator.submit_patch"
 UPDATE_PATCH_ACTION_TYPE = "phabricator.update_patch"
+ADD_COMMENT_ACTION_TYPE = "phabricator.add_comment"
 
 # Both patch actions submit the working directory's changes as a diff, so
 # anything gated on "this run submits a patch" — today the diff artifact built
@@ -223,7 +224,7 @@ async def add_comment(
     human review; nothing is posted to Phabricator during the run.
     """
     action = recorder.record(
-        "phabricator.add_comment",
+        ADD_COMMENT_ACTION_TYPE,
         {"revision_id": revision_id, "text": text},
         reasoning=reasoning,
     )

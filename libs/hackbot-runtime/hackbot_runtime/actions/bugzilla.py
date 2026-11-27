@@ -18,6 +18,11 @@ from pydantic import Field
 
 from hackbot_runtime.actions.recorder import ActionsRecorder, confirmation
 
+UPDATE_BUG_ACTION_TYPE = "bugzilla.update_bug"
+ADD_COMMENT_ACTION_TYPE = "bugzilla.add_comment"
+ADD_ATTACHMENT_ACTION_TYPE = "bugzilla.add_attachment"
+CREATE_BUG_ACTION_TYPE = "bugzilla.create_bug"
+
 _COMMENT_FOOTER = (
     "If you'd like to provide feedback on this comment, please use the 👍 or 👎 "
     "reaction."
@@ -56,7 +61,7 @@ async def update_bug(
     Recorded into the run summary for human review — does not modify Bugzilla.
     """
     action = recorder.record(
-        "bugzilla.update_bug",
+        UPDATE_BUG_ACTION_TYPE,
         {"bug_id": bug_id, "changes": changes},
         reasoning=reasoning,
     )
@@ -85,7 +90,7 @@ async def add_comment(
     """
     text_with_footer = text.rstrip() + "\n\n---\n\n" + _COMMENT_FOOTER
     action = recorder.record(
-        "bugzilla.add_comment",
+        ADD_COMMENT_ACTION_TYPE,
         {"bug_id": bug_id, "text": text_with_footer, "is_private": is_private},
         reasoning=reasoning,
     )
@@ -171,7 +176,7 @@ async def add_attachment(
         params["comment"] = comment
 
     action = recorder.record(
-        "bugzilla.add_attachment",
+        ADD_ATTACHMENT_ACTION_TYPE,
         params,
         reasoning=reasoning,
         attachments={"file": Path(file_path)},
@@ -220,7 +225,7 @@ async def create_bug(
     for k, v in (extra or {}).items():
         body.setdefault(k, v)
 
-    action = recorder.record("bugzilla.create_bug", body, reasoning=reasoning)
+    action = recorder.record(CREATE_BUG_ACTION_TYPE, body, reasoning=reasoning)
     return confirmation(action)
 
 

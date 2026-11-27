@@ -196,7 +196,7 @@ tasks:
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd services/hackbot-api &&
-                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra dev pytest --cov=app --cov-append tests/ &&
                     cd ../hackbot-pulse-listener &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=app --cov-append tests/ &&
                     cd ../mcp &&
