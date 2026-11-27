@@ -2048,16 +2048,38 @@ def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
 
 
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
-    """Import commits from a git format-patch style patches into a Mercurial repository."""
-    with hglib.open(repo_dir) as hg:
-        logger.info("Applying the patch ...")
-        hg.import_(patches=io.BytesIO(patch))
+    """Import commits from git format-patch style patches on top of `base_rev`.
 
-        revs = get_revs(hg, rev_start=f"children({base_rev})::.")
-        if not revs:
+    The working directory is not updated to `base_rev`, as it is slow: the patches are
+    applied and committed directly in the repository. Returns the nodes of the imported
+    commits, from the oldest to the newest.
+    """
+    with hglib.open(repo_dir) as hg:
+        # Import applies the patches on top of the parent of the working directory, so it is
+        # set to the base, without updating the files, and set back afterwards.
+        working_dir_parent = hg.log(revrange=b".")[0].node
+        hg.rawcommand(
+            hglib.util.cmdbuilder(b"debugsetparents", base_rev.encode("ascii"))
+        )
+        patch_io = io.BytesIO(patch)
+        try:
+            logger.info("Applying the patch ...")
+            # Like hg.import_, with the debug output to get the created commits.
+            out = hg.rawcommand(
+                hglib.util.cmdbuilder(b"import", bypass=True, debug=True, _=True),
+                prompt=lambda size, output: patch_io.readline(size),
+                input=patch_io.read,
+            )
+        finally:
+            hg.rawcommand(hglib.util.cmdbuilder(b"debugsetparents", working_dir_parent))
+
+        # The commits are not found from the tip, as other commits can be pulled at the
+        # same time.
+        created = re.findall(rb"^created ([0-9a-f]+)$", out, re.MULTILINE)
+        if not created:
             raise Exception("Failed to retrieve commits after applying patch")
 
-        return revs
+        return [commit.node for commit in hg.log(revrange=b"+".join(created))]
 
 
 if __name__ == "__main__":

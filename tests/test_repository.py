@@ -3421,11 +3421,22 @@ new file mode 100644
 +line3
 """
 
+    # Move the working directory away from the base, as it is not updated to it.
+    add_file(hg, local, "other.txt", "other content\n")
+    other_rev = commit(hg, "Other commit")
+
     # Apply the patch
     revs = repository.import_commits(local, base_rev, patch)
 
     # Verify we got all three commits
     assert len(revs) == 3
+
+    # The commits are on top of the base, and the working directory is unchanged.
+    parent = hg.log(revrange=b"parents(min(%s))" % b"+".join(revs))[0]
+    assert parent.node.decode("ascii") == base_rev
+    assert hg.log(revrange=b".")[0].node.decode("ascii") == other_rev
+    assert not os.path.exists(os.path.join(local, "file1.txt"))
+    assert hg.status() == []
 
     # Verify the commits are in order (oldest to newest)
     commits = repository.hg_log(hg, revs)
