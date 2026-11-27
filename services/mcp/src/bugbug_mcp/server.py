@@ -1,6 +1,7 @@
 """MCP server for Firefox Development."""
 
 import functools
+import json
 import os
 from pathlib import Path
 from typing import Annotated
@@ -34,7 +35,13 @@ def get_code_review_tool():
 
 
 @mcp.prompt()
-async def patch_review(patch_url: str) -> str:
+async def patch_review(
+    patch_url: str,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+    extra_context_toml: str | None = None,
+    content_overrides: str | None = None,
+) -> str:
     """Review a code patch from Phabricator."""
     parsed_url = urlparse(patch_url)
     if (
@@ -45,14 +52,42 @@ async def patch_review(patch_url: str) -> str:
     else:
         raise ValueError(f"Unsupported patch URL: {patch_url}")
 
+    overrides = None
+    if content_overrides is not None:
+        try:
+            overrides = json.loads(content_overrides)
+            if not isinstance(overrides, dict) or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in overrides.items()
+            ):
+                raise ValueError("expected an object of strings")
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "content_overrides must be a JSON object of strings"
+            ) from exc
+
     patch = PhabricatorPatch(revision_id=revision_id)
+    await patch.load()
 
     tool = get_code_review_tool()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         target_software=tool.target_software,
     )
     patch_summary = tool.patch_summarizer.run(patch)
-    initial_prompt = tool.generate_initial_prompt(patch, patch_summary)
+    from bugbug.tools.code_review.review_context import (
+        resolve_external_context_for_review,
+    )
+
+    external_context, _ = await resolve_external_context_for_review(
+        patch,
+        review_context_repo,
+        review_context_branch=review_context_branch,
+        extra_context_toml=extra_context_toml,
+        content_overrides=overrides,
+    )
+    initial_prompt = tool.generate_initial_prompt(
+        patch, patch_summary, external_context
+    )
 
     return system_prompt + "\n\n" + initial_prompt
 
@@ -141,13 +176,13 @@ def bugzilla_quick_search(
     return result
 
 
-def _get_revision_md(revision_id: int) -> str:
+async def _get_revision_md(revision_id: int) -> str:
     patch = SanitizedPhabricatorPatch(revision_id=revision_id)
-    if not patch.is_accessible() or not patch.is_public():
+    if not await patch.is_accessible() or not patch.is_public():
         raise ToolError(
             f"Revision D{revision_id} was not found. It may not exist or may be private."
         )
-    return patch.to_md()
+    return await patch.to_md()
 
 
 @mcp.resource(
@@ -155,15 +190,15 @@ def _get_revision_md(revision_id: int) -> str:
     name="Phabricator Revision Content",
     mime_type="text/markdown",
 )
-def handle_revision_view_resource(revision_id: int) -> str:
+async def handle_revision_view_resource(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
-def get_phabricator_revision(revision_id: int) -> str:
+async def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 llms_txt = FileResource(

@@ -13,6 +13,7 @@ and creating that commit is safe.
 
 import base64
 import contextlib
+import itertools
 import logging
 import os
 import re
@@ -333,6 +334,73 @@ def build_try_push(repo: Path, base: str) -> dict | None:
             for revision in revisions
         ],
     }
+
+
+# A submodule entry: its tree entry points at a commit, not a blob.
+_GITLINK_MODE = "160000"
+
+
+def _github_file_changes(repo: Path, parent: str, commit: str) -> list[dict]:
+    """The tree entries ``commit`` changes relative to ``parent``.
+
+    Each entry is ``{"path", "mode"}`` plus one of ``"content"`` (the new blob,
+    base64-encoded so binary files survive JSON), ``"sha"`` (a submodule's new
+    commit) or ``"deleted": True``. Renames are reported as a deletion plus an
+    addition, which is how a git tree records them anyway.
+    """
+    out = _git_bytes(
+        repo, "diff-tree", "-r", "-z", "--no-renames", "--no-commit-id", parent, commit
+    )
+    # -z output is ":<srcmode> <dstmode> <srcsha> <dstsha> <status>\0<path>\0" per
+    # entry, with paths unquoted. --no-renames keeps it to one path per entry (a
+    # rename or copy would carry two), and strict pairing raises if that ever
+    # stops holding. A commit that changes no files prints nothing at all. GitHub
+    # only takes UTF-8 paths, so any other path raises here rather than being
+    # pushed mangled.
+    fields = out.removesuffix(b"\0").split(b"\0") if out else []
+    entries = []
+    for header, raw_path in itertools.batched(fields, 2, strict=True):
+        src_mode, dst_mode, _src_sha, dst_sha, status = header.lstrip(b":").split()
+        path = raw_path.decode("utf-8")
+        if status == b"D":
+            entries.append({"path": path, "mode": src_mode.decode(), "deleted": True})
+        elif dst_mode.decode() == _GITLINK_MODE:
+            entries.append(
+                {"path": path, "mode": _GITLINK_MODE, "sha": dst_sha.decode()}
+            )
+        else:
+            blob = _git_bytes(repo, "cat-file", "blob", dst_sha.decode())
+            entries.append(
+                {
+                    "path": path,
+                    "mode": dst_mode.decode(),
+                    "content": base64.b64encode(blob).decode("ascii"),
+                }
+            )
+    return entries
+
+
+def build_github_commit(repo: Path, base: str, repo_url: str) -> dict | None:
+    """Build the artifact for pushing the agent's changes to GitHub.
+
+    hackbot-api has no git checkout (or git binary) to ``git am`` the run's
+    patch into, so this captures ``base..HEAD`` squashed into one commit, as
+    for Phabricator, in the shape GitHub's Git Data API takes: the files it
+    changes, with their new contents. The apply-side handler creates that
+    commit on top of ``base`` from this alone.
+
+    ``base`` must be a commit the GitHub repository already has (the published
+    base, as for a try push), since the new commit is parented on it. Returns
+    ``None`` when the tree is unchanged from ``base``.
+    """
+    # Normally already done by `collect`; repeated here (a no-op on a clean
+    # tree) so this does not drop uncommitted work if called on its own.
+    commit_all(repo, WIP_MESSAGE)
+
+    file_changes = _github_file_changes(repo, base, "HEAD")
+    if not file_changes:
+        return None
+    return {"repo_url": repo_url, "base_commit": base, "changes": file_changes}
 
 
 def collect(

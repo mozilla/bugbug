@@ -29,6 +29,52 @@ def task_labels(group: str, configs: list[str]) -> list[str]:
     )
 
 
+def test_schedule_commits_from_db(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    _, remote_repo_dir = mock_repo
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[0].node.decode("ascii")[:12]
+    result_key = f"bugbug:job_result:schedule_tests:mozilla-central_{rev}"
+
+    mock_schedule_tests_classify(
+        {"test-linux1804-64-opt-label1": 0.9}, {"test-group2": 0.9}
+    )
+
+    mined = []
+    orig_download_commits = models.repository.download_commits
+
+    def download_commits(*args, **kwargs):
+        commits = orig_download_commits(*args, **kwargs)
+        mined.extend(commits)
+        return commits
+
+    monkeypatch.setattr(models.repository, "download_commits", download_commits)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    result = models.redis.get(result_key)
+    assert len(mined) == 1
+
+    # The commits already in the commits DB are not mined again.
+    def get_commits_from_db(db_nodes):
+        return {commit["node"]: commit for commit in mined}
+
+    def no_download_commits(*args, **kwargs):
+        raise AssertionError("The commits were mined")
+
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
+    monkeypatch.setattr(models.repository, "download_commits", no_download_commits)
+    models.redis.delete(result_key)
+
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
+    assert models.redis.get(result_key) == result
+
+
 @pytest.mark.parametrize(
     "labels_to_choose, groups_to_choose, reduced_labels, config_groups",
     [
@@ -344,7 +390,9 @@ def test_schedule_backout(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -387,7 +435,9 @@ def test_schedule_backout_try(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     # The mock models would select these, but they are ignored for backouts.
     mock_schedule_tests_classify(
@@ -408,6 +458,63 @@ def test_schedule_backout_try(
     assert result["groups"] == {}
 
 
+def test_schedule_try(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+) -> None:
+    repo_dir, remote_repo_dir = mock_repo
+
+    # Like try, the remote repository doesn't publish the changesets pushed to it, so
+    # they stay draft when pulled. The base history is public, as on try.
+    with open(f"{remote_repo_dir}/.hg/hgrc", "a") as f:
+        f.write("\n[phases]\npublish = False\n")
+    for d in (repo_dir, remote_repo_dir):
+        with hglib.open(str(d)) as hg:
+            hg.phase(revs=[b"desc('Base history 3')"], public=True)
+
+    with hglib.open(str(remote_repo_dir)) as hg:
+        stack_node = hg.log(limit=1)[0].node
+        try_task_config = f"{remote_repo_dir}/try_task_config.json"
+        with open(try_task_config, "w") as f:
+            f.write("{}\n")
+        hg.add([try_task_config.encode("utf-8")])
+        hg.commit("Try parameters", user="bugbug")
+        rev = hg.log(limit=1)[0].node.decode("ascii")
+
+    stacks = []
+    orig_get_stack = models.repository.get_stack
+
+    def get_stack(repo_dir, branch, r):
+        stack = orig_get_stack(repo_dir, branch, r)
+        stacks.append(stack)
+        return stack
+
+    monkeypatch.setattr(models.repository, "get_stack", get_stack)
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests("try", rev) == "OK"
+
+    # The stack is computed from the local repository: the draft changesets pulled from
+    # the remote one, except the one which only specifies try parameters.
+    assert stacks == [[stack_node]]
+    assert not any(
+        "json-automationrelevance" in call.request.url for call in responses.calls
+    )
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:try_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
+
+
 def test_schedule_backout_treeherder_failure(
     monkeypatch: pytest.MonkeyPatch,
     mock_hgmo: None,
@@ -419,7 +526,9 @@ def test_schedule_backout_treeherder_failure(
     _, remote_repo_dir = mock_repo
     node = add_backout(remote_repo_dir)
     rev = node.decode("ascii")[:12]
-    monkeypatch.setattr(models, "get_hgmo_stack", lambda branch, r: [node])
+    monkeypatch.setattr(
+        models.repository, "get_stack", lambda repo_dir, branch, r: [node]
+    )
 
     mock_schedule_tests_classify(
         {"test-linux1804-64-opt-label2": 0.9}, {"test-group2": 0.9}
@@ -465,8 +574,8 @@ def test_schedule_config_selection_risk(
         def get(self, model_name):
             model = super().get(model_name)
             if model_name == "testgroupselect" and calibrated:
-                # Confidences 0.5 -> 0.01, 1 -> 0.21.
-                model.calibration = ([0.5, 1.0], [0.01, 0.21])
+                # Confidences >= 0.9 -> 0.2, >= 0.5 -> 0.05, below -> 0.01.
+                model.calibration = ([0.9, 0.5], [0.2, 0.05, 0.01])
             if model_name == "testgroupselect" and very_high is not None:
                 model.confidence_thresholds = {
                     "low": 0.5,
@@ -498,9 +607,7 @@ def test_schedule_config_selection_risk(
     # Groups are selected by confidence, configs weighted by the calibrated probabilities (the
     # confidences, if the group model isn't calibrated).
     if calibrated:
-        assert risks == pytest.approx(
-            {"test-group1": 0.206, "test-group2": 0.05, "test-group3": 1.0}
-        )
+        assert risks == {"test-group1": 0.2, "test-group2": 0.05, "test-group3": 1.0}
     else:
         assert risks == {"test-group1": 0.99, "test-group2": 0.6, "test-group3": 1.0}
     # The manifests including the modified tests, and the groups selected with at least the model's
@@ -676,3 +783,75 @@ def test_select_configs_very_likely_and_build_platforms(
     assert models.select_configs(
         {"test-group1": 1.0}, ["dom/foo.cpp"], ["test-group1"]
     ) == {"test-group1": ["test-linux1804-64/opt-*", "test-windows10/opt-*"]}
+
+
+@pytest.mark.parametrize(
+    "base_desc, pulled", [("Base history 3", False), ("Pulled from remote", True)]
+)
+def test_schedule_tests_from_patch(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+    base_desc: str,
+    pulled: bool,
+) -> None:
+    _, remote_repo_dir = mock_repo
+
+    with hglib.open(str(remote_repo_dir)) as hg:
+        hg_base_rev = hg.log(revrange=f"desc('{base_desc}')".encode())[0].node
+
+    git_base_rev = "b" * 40
+    responses.add(
+        responses.GET,
+        f"https://lando.moz.tools/api/git2hg/firefox/{git_base_rev}",
+        json={"git_hash": git_base_rev, "hg_hash": hg_base_rev.decode("ascii")},
+    )
+
+    pulls = []
+    orig_pull = models.repository.pull
+
+    def pull(*args, **kwargs):
+        pulls.append(args)
+        return orig_pull(*args, **kwargs)
+
+    monkeypatch.setattr(models.repository, "pull", pull)
+
+    patch_hash = "abc"
+    models.redis.set(
+        f"bugbug:patch:{patch_hash}",
+        b"""From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Test User <test@example.com>
+Date: Mon, 17 Nov 2025 14:58:22 +0000
+Subject: [PATCH] Bug 123 - Change the test file
+
+---
+diff --git a/test.txt b/test.txt
+--- a/test.txt
++++ b/test.txt
+@@ -1 +1 @@
+-Version 3
+\\ No newline at end of file
++Version 4
+\\ No newline at end of file
+""",
+    )
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests_from_patch(git_base_rev, patch_hash) == "OK"
+
+    # The base revision is only pulled when it isn't in the local repository.
+    assert len(pulls) == pulled
+
+    value = models.redis.get(
+        f"bugbug:job_result:schedule_tests_from_patch:{git_base_rev}_{patch_hash}"
+    )
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose

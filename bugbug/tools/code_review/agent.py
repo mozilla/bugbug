@@ -244,26 +244,19 @@ class CodeReviewTool(GenerativeModelTool):
     async def generate_review_comments(
         self, patch: Patch, patch_summary: str, stack: Optional[PatchStack] = None
     ) -> tuple[AgentResponse, list[dict]]:
-        external_context = ""
-        manifest: list[dict] = []
-        review_context_repo = self._review_context_repo
-        review_context_branch = self._review_context_branch
-        if review_context_repo is None:
-            repo_ref = await patch.github_repo_ref()
-            if repo_ref:
-                review_context_repo, review_context_branch = repo_ref
-        if review_context_repo:
-            from bugbug.tools.code_review.review_context import (
-                load_external_context_for_review,
-            )
+        from bugbug.tools.code_review.review_context import (
+            resolve_external_context_for_review,
+        )
 
-            external_context, manifest = await load_external_context_for_review(
-                patch,
-                review_context_repo,
-                review_context_branch=review_context_branch,
-                extra_context_toml=self._extra_context_toml,
-                content_overrides=self._content_overrides,
-            )
+        external_context, manifest = await resolve_external_context_for_review(
+            patch,
+            self._review_context_repo,
+            review_context_branch=(
+                self._review_context_branch if self._review_context_repo else None
+            ),
+            extra_context_toml=self._extra_context_toml,
+            content_overrides=self._content_overrides,
+        )
 
         messages = [
             HumanMessage(
@@ -323,6 +316,7 @@ class CodeReviewTool(GenerativeModelTool):
         return result["structured_response"].comments[:1]
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
+        await patch.load()
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 

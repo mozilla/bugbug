@@ -1,5 +1,10 @@
+from unittest.mock import AsyncMock
+
+import pytest
+from app import review_processor
 from app.config import Settings, settings
 from app.database.models import ReviewRequest
+from app.enums import Platform
 from app.review_processor import (
     build_generated_comment,
     create_main_review_comment,
@@ -134,3 +139,36 @@ def test_main_review_comment_includes_findings_summary():
     assert "Looks sound.\n**Findings:** 1 major · 1 minor\n" in main_comment, (
         "The findings summary should follow the general comment."
     )
+
+
+@pytest.mark.asyncio
+async def test_submit_review_to_phabricator_posts_through_async_helpers(monkeypatch):
+    create_inline = AsyncMock(side_effect=[101, 102])
+    create_comment = AsyncMock()
+    monkeypatch.setattr(review_processor, "create_inline_comment", create_inline)
+    monkeypatch.setattr(review_processor, "create_revision_comment", create_comment)
+
+    review_request = ReviewRequest(
+        platform=Platform.PHABRICATOR,
+        revision_id=284711,
+        diff_id=1234567,
+        general_comment="ok",
+    )
+    review_request.is_first_published_review = AsyncMock(return_value=True)
+    comments = make_generated_comments(CommentSeverity.MAJOR, CommentSeverity.MINOR)
+    comments[0].platform_comment_id = 55  # already submitted, must be skipped
+
+    submitted = [
+        (comment, comment_id)
+        async for comment, comment_id in review_processor.submit_review_to_platform(
+            review_request, comments
+        )
+    ]
+
+    assert submitted == [(comments[1], 101)]
+    create_inline.assert_awaited_once()
+    assert create_inline.await_args.kwargs["revision_id"] == 284711
+    assert create_inline.await_args.kwargs["diff_id"] == 1234567
+    create_comment.assert_awaited_once()
+    assert create_comment.await_args.args == (284711,)
+    assert "(Reviewing [Diff 1234567]" in create_comment.await_args.kwargs["message"]

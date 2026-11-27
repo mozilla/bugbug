@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import contextlib
+import fcntl
 import json
 import os
 import re
@@ -59,19 +60,95 @@ def test_refresh_data_keeps_going_after_a_failure(
     assert calls == ["tasks", "build platforms", "commits"]
 
 
+@responses.activate
 def test_refresh_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    tip = "a" * 40
+    responses.add(
+        responses.GET,
+        "https://hg.mozilla.org/integration/autoland/json-rev/default",
+        json={"node": tip},
+    )
     calls: list[object] = []
     monkeypatch.setattr(
         boot.repository,
         "pull",
         lambda repo_dir, branch, revision: calls.append(("pull", branch, revision)),
     )
-    monkeypatch.setattr(boot, "update_commits", lambda: calls.append("update"))
 
-    boot.refresh_commits()
+    def update_commits(autoland_head):
+        # Other processes can't add commits to the DB at the same time.
+        with (
+            open(f"{boot.repository.COMMITS_DB}.lock", "w") as f,
+            pytest.raises(BlockingIOError),
+        ):
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        calls.append(("update", autoland_head))
+        return True
+
+    monkeypatch.setattr(boot, "update_commits", update_commits)
+
+    assert boot.refresh_commits()
 
     # The latest autoland commits are pulled before being mined.
-    assert calls == [("pull", "integration/autoland", "tip"), "update"]
+    assert calls == [("pull", "integration/autoland", tip), ("update", tip)]
+
+    # The lock is released.
+    with open(f"{boot.repository.COMMITS_DB}.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_update_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    unknown, known, merge_parent, new = "1" * 40, "2" * 40, "4" * 40, "3" * 40
+    with open(boot.repository.COMMITS_DB, "w") as f:
+        for node in (merge_parent, known, unknown):
+            f.write(json.dumps({"node": node}) + "\n")
+
+    monkeypatch.setattr(boot.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+
+    # The last commits of the DB which are not in the clone are skipped.
+    def get_new_revs(hg, base, head):
+        assert head == "a" * 40
+        if base == unknown:
+            raise boot.hglib.error.CommandError(
+                [], 255, b"", b"abort: unknown revision"
+            )
+        if base == new:
+            return [merge_parent.encode()]
+        assert base == known
+        # The other parent of a merge is not an ancestor of the last commit, but it is in the DB.
+        return [merge_parent.encode(), new.encode()]
+
+    mined: list[bytes] = []
+
+    def download_commits(repo_dir, revs):
+        mined.extend(revs)
+        if new.encode() not in revs:
+            raise Exception("Failed to download the coverage mapping")
+        return ()
+
+    monkeypatch.setattr(boot.repository, "get_new_revs", get_new_revs)
+    monkeypatch.setattr(boot.repository, "download_commits", download_commits)
+
+    assert boot.update_commits("a" * 40)
+    assert mined == [new.encode()]
+
+    # Nothing is mined (and the data needed to mine is not retrieved) when all the commits are in
+    # the DB.
+    mined.clear()
+    with open(boot.repository.COMMITS_DB, "a") as f:
+        f.write(json.dumps({"node": new}) + "\n")
+    assert boot.update_commits("a" * 40)
+    assert mined == []
+
+    # A failure to mine the commits is reported.
+    newer = "5" * 40
+    monkeypatch.setattr(
+        boot.repository,
+        "get_new_revs",
+        lambda hg, base, head: [new.encode(), newer.encode()],
+    )
+    assert not boot.update_commits("a" * 40)
+    assert mined == [newer.encode()]
 
 
 def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,7 +160,7 @@ def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def sleep(seconds: float) -> None:
         assert seconds == boot.CONFIG_SELECTION_TASKS_REFRESH_INTERVAL
-        if len(calls) == 7:
+        if len(calls) == 11:
             raise Stop()
         now[0] += seconds
 
@@ -92,21 +169,40 @@ def test_refresh_main(monkeypatch: pytest.MonkeyPatch) -> None:
         if len(calls) == 1:
             raise Exception("pushlog unavailable")
 
-    monkeypatch.setattr(boot, "REFRESH_INTERVAL", 30)
+    def refresh_commits() -> None:
+        calls.append("commits")
+        if len(calls) == 2:
+            raise Exception("hg.mozilla.org unavailable")
+
+    monkeypatch.setattr(boot, "REFRESH_INTERVAL", 60)
+    monkeypatch.setattr(boot, "COMMITS_REFRESH_INTERVAL", 20)
     monkeypatch.setattr(boot, "CONFIG_SELECTION_TASKS_REFRESH_INTERVAL", 10)
     monkeypatch.setattr(refresh.os, "nice", lambda increment: None)
     monkeypatch.setattr(refresh.time, "sleep", sleep)
     monkeypatch.setattr(refresh.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(boot, "refresh_data", lambda: calls.append("refresh"))
+    monkeypatch.setattr(boot, "refresh_commits", refresh_commits)
     monkeypatch.setattr(
         boot, "refresh_config_selection_tasks", refresh_config_selection_tasks
     )
 
-    # The config selection tasks are refreshed often (also after a failure), the rest of the data
-    # (including them) once per REFRESH_INTERVAL.
+    # The config selection tasks are refreshed often and the commits less often (also after a
+    # failure), the rest of the data (including them) once per REFRESH_INTERVAL.
     with pytest.raises(Stop):
         refresh.main()
-    assert calls == ["tasks", "tasks", "refresh", "tasks", "tasks", "refresh", "tasks"]
+    assert calls == [
+        "tasks",
+        "commits",
+        "tasks",
+        "tasks",
+        "commits",
+        "tasks",
+        "tasks",
+        "refresh",
+        "tasks",
+        "commits",
+        "tasks",
+    ]
 
 
 def _task(

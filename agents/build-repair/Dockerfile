@@ -48,6 +48,9 @@ FROM base AS agent
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
+        # For `./mach try fuzzy` (the try_push tool), which otherwise prompts
+        # to download it and fails without a terminal to answer.
+        fzf \
     && rm -rf /var/lib/apt/lists/*
 
 # hackbot.toml lives at the agent root (not inside the package), so copy it into

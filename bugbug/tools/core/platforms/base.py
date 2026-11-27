@@ -149,8 +149,17 @@ class Patch(ABC):
         ...
 
     @abstractmethod
-    def is_accessible(self) -> bool:
-        """Return whether this patch is accessible."""
+    async def load(self) -> None:
+        """Fetch the data read by the synchronous properties of the patch.
+
+        Must be awaited before using them. It is cached, so awaiting it again
+        is cheap.
+        """
+        ...
+
+    @abstractmethod
+    async def is_accessible(self) -> bool:
+        """Load the patch and return whether it is accessible."""
         ...
 
     @abstractmethod
@@ -165,7 +174,7 @@ class ReviewData(ABC):
     NIT_PATTERN = re.compile(r"[^a-zA-Z0-9]nit[\s:,]", re.IGNORECASE)
 
     @abstractmethod
-    def get_patch_by_id(self, patch_id: str | int) -> Patch:
+    def get_raw_diff(self, diff_id: int) -> str:
         raise NotImplementedError
 
     @abstractmethod
@@ -191,8 +200,7 @@ class ReviewData(ABC):
                 raw_diff = f.read()
         except FileNotFoundError:
             with open(f"patches/{diff_id}.patch", "w") as f:
-                patch = self.get_patch_by_id(diff_id)
-                raw_diff = patch.raw_diff
+                raw_diff = self.get_raw_diff(diff_id)
                 f.write(raw_diff)
 
         return raw_diff
