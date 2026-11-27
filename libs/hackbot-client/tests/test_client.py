@@ -129,7 +129,7 @@ async def test_trigger_run_sends_who_triggered_the_run_and_from_where(monkeypatc
         identity=Identity(
             identity_provider=IdentityProvider.bugzilla,
             user_id="560562",
-            username="alice@example.com",
+            username="josé",
         ),
     )
 
@@ -138,7 +138,7 @@ async def test_trigger_run_sends_who_triggered_the_run_and_from_where(monkeypatc
         "Hackbot-Source": "bugzilla",
         "Hackbot-Requester-Identity-Provider": "bugzilla",
         "Hackbot-Requester-Id": "560562",
-        "Hackbot-Requester-Username": "alice@example.com",
+        "Hackbot-Requester-Username": "jos%C3%A9",
     }
 
 

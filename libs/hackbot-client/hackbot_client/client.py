@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -119,7 +120,8 @@ class HackbotClient:
             )
             headers["Hackbot-Requester-Id"] = identity.user_id
             if identity.username is not None:
-                headers["Hackbot-Requester-Username"] = identity.username
+                # Headers are ASCII-only, so the name is percent-encoded.
+                headers["Hackbot-Requester-Username"] = quote(identity.username)
 
         params = {} if dedupe_key is None else {"dedupe_key": dedupe_key}
 

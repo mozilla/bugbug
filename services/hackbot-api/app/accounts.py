@@ -1,8 +1,10 @@
 """Accounts: the people who trigger runs, one row per person per identity provider."""
 
 from typing import Annotated
+from urllib.parse import unquote
 
 from fastapi import Depends, Header, HTTPException
+from pydantic import BeforeValidator
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,9 +73,14 @@ async def get_account_id(
     ] = None,
     username: Annotated[
         str | None,
+        # Sent percent-encoded, as headers are ASCII-only.
+        BeforeValidator(lambda value: unquote(value) or None),
         Header(
             alias="Hackbot-Requester-Username",
-            description="That person's readable name on the identity provider.",
+            description=(
+                "That person's readable name on the identity provider, as "
+                "percent-encoded UTF-8."
+            ),
         ),
     ] = None,
 ) -> int | None:

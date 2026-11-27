@@ -66,14 +66,14 @@ def test_create_run_records_the_account_and_source(client, db):
             "Hackbot-Source": "bugzilla",
             "Hackbot-Requester-Identity-Provider": "bugzilla",
             "Hackbot-Requester-Id": "560562",
-            "Hackbot-Requester-Username": "alice@example.com",
+            "Hackbot-Requester-Username": "jos%C3%A9",
         },
     )
 
     assert db.account == {
         "identity_provider": "bugzilla",
         "external_id": "560562",
-        "username": "alice@example.com",
+        "username": "josé",
     }
     assert db.added.account_id == db.account_id
     assert db.added.source == "bugzilla"
