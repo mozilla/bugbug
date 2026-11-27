@@ -1,0 +1,9 @@
+{
+  "name": "hackbot-agent-autowebcompat-etp-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP server the autowebcompat-etp agent drives.",
+  "dependencies": {
+    "@mozilla/firefox-devtools-mcp-moz": "0.9.12"
+  }
+}

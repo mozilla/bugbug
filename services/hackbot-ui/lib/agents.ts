@@ -5,6 +5,7 @@ export const AGENTS = [
   { value: "bug-fix", label: "bug-fix" },
   { value: "autowebcompat-repro", label: "autowebcompat-repro" },
   { value: "autowebcompat-diagnosis", label: "autowebcompat-diagnosis" },
+  { value: "autowebcompat-etp", label: "autowebcompat-etp" },
   {
     value: "autowebcompat-intervention",
     label: "autowebcompat-intervention",

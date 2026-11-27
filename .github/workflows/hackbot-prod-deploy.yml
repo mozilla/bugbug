@@ -46,6 +46,7 @@ on:
         options:
           - all
           - agents/autowebcompat-diagnosis
+          - agents/autowebcompat-etp
           - agents/autowebcompat-intervention
           - agents/autowebcompat-repro
           - agents/bug-fix

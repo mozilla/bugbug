@@ -172,8 +172,12 @@ class Task(ABC, Generic[ResultT]):
 
     def handle_result(self, msg: ResultMessage) -> ResultT:
         if self.result_collector.result is None:
-            raise AgentError(
-                f"{self.subject()}: agent finished without submitting a result via submit_result"
+            # Agents sometimes write their summary as prose and claim they
+            # submitted it; give them one turn to actually call the tool.
+            raise RetryResultError(
+                "you finished without calling "
+                f"{submit_result_tool_name(self.result_server_name)}, so nothing "
+                "was recorded; a prose response is not captured"
             )
         return self.result_collector.result
 

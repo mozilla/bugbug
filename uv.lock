@@ -18,6 +18,7 @@ members = [
     "bugbug-mcp",
     "bugzilla-client",
     "hackbot-agent-autowebcompat-diagnosis",
+    "hackbot-agent-autowebcompat-etp",
     "hackbot-agent-autowebcompat-intervention",
     "hackbot-agent-autowebcompat-repro",
     "hackbot-agent-bug-fix",
@@ -2405,6 +2406,41 @@ requires-dist = [
 ]
 
 [[package]]
+name = "hackbot-agent-autowebcompat-etp"
+version = "0.1.0"
+source = { editable = "agents/autowebcompat-etp" }
+dependencies = [
+    { name = "agent-tools", extra = ["bugzilla"] },
+    { name = "autowebcompat-tools" },
+    { name = "bugsy" },
+    { name = "claude-agent-sdk" },
+    { name = "hackbot-runtime", extra = ["claude-sdk"] },
+    { name = "json5" },
+    { name = "mcp" },
+    { name = "pillow" },
+    { name = "requests" },
+    { name = "six" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-tools", extras = ["bugzilla"], editable = "libs/agent-tools" },
+    { name = "autowebcompat-tools", editable = "libs/autowebcompat-tools" },
+    { name = "bugsy" },
+    { name = "claude-agent-sdk", specifier = ">=0.1.30" },
+    { name = "hackbot-runtime", extras = ["claude-sdk"], editable = "libs/hackbot-runtime" },
+    { name = "json5" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "pillow" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "six" },
+    { name = "starlette", specifier = ">=0.36.0" },
+    { name = "uvicorn", specifier = ">=0.27.0" },
+]
+
+[[package]]
 name = "hackbot-agent-autowebcompat-intervention"
 source = { editable = "agents/autowebcompat-intervention" }
 dependencies = [
@@ -3503,6 +3539,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/19/a0245243d9fd1eb747abcec0955a806e9072cf7c50fdd4e113eceec0f11a/json_e-4.8.4.tar.gz", hash = "sha256:d6cb9340008e09d454eda8ac0e4bf71d94c6b26f1a1d5ac3f5a3153600180f3d", size = 12105, upload-time = "2026-08-20T12:45:57.953Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/2b/9a44893af03061fc8c1253aed5cfa85c62f4cf68a90e597f243410c4700d/json_e-4.8.4-py3-none-any.whl", hash = "sha256:698f6f3e56f04642176c4574bb0050e84fb5a8a9871da4034aa201f07001a7e2", size = 14056, upload-time = "2026-08-20T12:45:56.836Z" },
+]
+
+[[package]]
+name = "json5"
+version = "0.17.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/1f/58a4d7ee466f81bc3c7337036380fc6d49de3afb7855d74f8121b1e89b32/json5-0.17.3.tar.gz", hash = "sha256:8d0278ad34ebaa9c3af76d9519274811830224a2d1cd5af156dbd067f461b8a4", size = 54234, upload-time = "2026-10-09T21:19:28.335Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/39/e689b616c4279a821d5842a8a85c1874540f8d58e35028df93f2182120c2/json5-0.17.3-py3-none-any.whl", hash = "sha256:2c8b22a893c35cd6a3c5ccbf1dd1c7d02c25dc1b5897fea658f9bf08c2e05f9a", size = 34809, upload-time = "2026-10-09T21:19:27.357Z" },
 ]
 
 [[package]]
