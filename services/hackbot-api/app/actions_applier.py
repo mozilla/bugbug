@@ -151,6 +151,17 @@ def _should_auto_apply(
     return run_level_auto_apply
 
 
+# Actions with `wait_for_try` start `waiting` until their try push passes (see
+# `try_results`), or end `skipped` if it didn't; auto-apply and apply-all skip both.
+WAITING = "waiting"
+SKIPPED = "skipped"
+_NOT_APPLICABLE = {"applied", WAITING, SKIPPED}
+
+
+def initial_status(params: dict) -> str:
+    return WAITING if params.get("wait_for_try") else "pending"
+
+
 async def ensure_action_rows(
     db: AsyncSession, run: Run
 ) -> list[tuple[RunAction, list[dict]]]:
@@ -176,7 +187,7 @@ async def ensure_action_rows(
                 params=action.get("params", {}),
                 # TODO: Drop the `ref` fallback once older summaries are gone.
                 ref=action.get("action_id", action.get("ref")),
-                status="pending",
+                status=initial_status(action.get("params", {})),
             )
             db.add(row)
         rows.append((row, action.get("attachments", [])))
@@ -231,7 +242,9 @@ async def _claim_for_apply(db: AsyncSession, rows: list[RunAction]) -> bool:
     an earlier one's result, and half a chain cannot resolve those
     placeholders. A row stuck in `applying` past `_CLAIM_LEASE` is taken over.
     """
-    wanted = [row.id for row in rows if row.status != "applied"]
+    # `waiting` and `skipped` rows are for `try_results` to apply or have been
+    # ruled out: claiming them would block the rest of the run's actions.
+    wanted = [row.id for row in rows if row.status not in _NOT_APPLICABLE]
     if not wanted:
         return False
 
@@ -299,7 +312,7 @@ async def _apply_pending_rows(
         if row.ref and row.status == "applied" and row.result is not None
     }
 
-    pending = [(row, att) for row, att in rows if row.status != "applied"]
+    pending = [(row, att) for row, att in rows if row.status not in _NOT_APPLICABLE]
 
     # Plan which pending rows share one API request (indices into `pending`).
     # Drop any group with a member another pending action references: a group
