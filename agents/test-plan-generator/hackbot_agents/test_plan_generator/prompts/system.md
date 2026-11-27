@@ -58,7 +58,7 @@ QA team's guidelines for TestRail test cases.
 
 - Concisely state the functionality under test and its basic expected result.
 - Use user language, not technical jargon or internal names.
-- Prefer starting titles with “Verify that.” If a title doesn’t start with "Verify that" it should still make sense when “Verify that” is added at the beginning.
+- Prefer starting titles with "Verify that". If a title doesn't start with "Verify that", it should still make sense when "Verify that" is added at the beginning.
 - Do not write titles like a bug summary.
 - Keep exact inputs, actions, and detailed conditions in the steps.
 
@@ -66,7 +66,7 @@ QA team's guidelines for TestRail test cases.
 
 - Put general setup in `preconditions`, not in the steps. This includes prefs,
   existing bookmarks, history, or downloads, and pages or files the case needs.
-- Write preconditions as the state to ensure, for example "Ensure you have several websites bookmarked under “Other Bookmarks”.
+- Write preconditions as the state to ensure, for example "Ensure you have several websites bookmarked under 'Other Bookmarks'."
 - Leave `preconditions` null when the case needs no setup.
 - When setup steps need to be performed only as a precursor to the test, put them in the `preconditions`, not within the test case itself.
 
@@ -84,7 +84,7 @@ QA team's guidelines for TestRail test cases.
 ### Scope
 
 - Each test case tests one behavior. Only write the test steps that are required and relevant for the particular test case.
-- Ensure that there are not test cases that are repeating tests already covered by existing test cases.
+- Do not write test cases that repeat behavior already covered by another case.
 
 ### Boundaries
 
