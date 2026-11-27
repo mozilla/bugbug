@@ -1962,6 +1962,16 @@ def clone(
     logger.info("%s cloned", repo_dir)
 
 
+def has_revision(repo_dir: str, revision: str) -> bool:
+    """Whether a revision is in a local repository."""
+    with hglib.open(repo_dir) as hg:
+        try:
+            hg.log(revrange=revision.encode("ascii"))
+        except hglib.error.CommandError:
+            return False
+    return True
+
+
 def pull(repo_dir: str, branch: str, revision: str, update: bool = False) -> None:
     """Pull a revision from a branch of a remote repository into a local repository."""
 
