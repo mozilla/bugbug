@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 import subprocess
 import time
 from collections.abc import Iterator
@@ -12,6 +14,14 @@ EMULATOR_LOG = Path("/tmp/android-emulator.log")
 DEVICE_SERIAL = "emulator-5554"
 BOOT_TIMEOUT = 300
 ADB_TIMEOUT = 120
+
+
+def available() -> bool:
+    return (
+        shutil.which("emulator") is not None
+        and shutil.which("adb") is not None
+        and os.access("/dev/kvm", os.R_OK | os.W_OK)
+    )
 
 
 class AndroidError(Exception):
