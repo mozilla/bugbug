@@ -135,10 +135,10 @@ async def test_trigger_run_sends_who_triggered_the_run_and_from_where(monkeypatc
 
     assert captured["headers"] == {
         "X-API-Key": "secret",
-        "X-Source": "bugzilla",
-        "X-Identity-Provider": "bugzilla",
-        "X-User-Id": "560562",
-        "X-Username": "alice@example.com",
+        "Hackbot-Source": "bugzilla",
+        "Hackbot-Requester-Identity-Provider": "bugzilla",
+        "Hackbot-Requester-Id": "560562",
+        "Hackbot-Requester-Username": "alice@example.com",
     }
 
 

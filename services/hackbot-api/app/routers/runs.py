@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
-from app.accounts import find_or_create_account
+from app.accounts import get_account_id
 from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
@@ -26,7 +26,6 @@ from app.jobs import ExecutionStatus
 from app.schemas import (
     AgentDescriptor,
     ArtifactRef,
-    IdentityProvider,
     RunActionDoc,
     RunDoc,
     RunRef,
@@ -109,6 +108,7 @@ async def create_run(
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
     requested_via: Annotated[str | None, Depends(require_api_key)],
+    account_id: Annotated[int | None, Depends(get_account_id)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
@@ -119,30 +119,8 @@ async def create_run(
     source: Annotated[
         Source | None,
         Header(
-            alias="X-Source",
+            alias="Hackbot-Source",
             description="Where the run was triggered from, e.g. `bugzilla`.",
-        ),
-    ] = None,
-    identity_provider: Annotated[
-        IdentityProvider | None,
-        Header(
-            alias="X-Identity-Provider",
-            description="The service `X-User-Id` belongs to, e.g. `bugzilla`.",
-        ),
-    ] = None,
-    user_id: Annotated[
-        str | None,
-        Header(
-            alias="X-User-Id",
-            description="The stable ID, on the identity provider, of the person "
-            "who triggered the run.",
-        ),
-    ] = None,
-    username: Annotated[
-        str | None,
-        Header(
-            alias="X-Username",
-            description="That person's readable name on the identity provider.",
         ),
     ] = None,
     dedupe_key: Annotated[
@@ -175,12 +153,6 @@ async def create_run(
                 status_code=422,
                 detail=f"Parent run {parent.run_id} has not succeeded",
             )
-
-    account_id = None
-    if identity_provider and user_id:
-        account_id = await find_or_create_account(
-            db, identity_provider, user_id, username
-        )
 
     run_id = uuid.uuid7()
     results_prefix = gcs.run_prefix(str(run_id))

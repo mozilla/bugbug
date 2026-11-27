@@ -112,12 +112,14 @@ class HackbotClient:
             headers["X-On-Behalf-Of"] = on_behalf_of
 
         if source is not None:
-            headers["X-Source"] = source.value
+            headers["Hackbot-Source"] = source.value
         if identity is not None:
-            headers["X-Identity-Provider"] = identity.identity_provider.value
-            headers["X-User-Id"] = identity.user_id
+            headers["Hackbot-Requester-Identity-Provider"] = (
+                identity.identity_provider.value
+            )
+            headers["Hackbot-Requester-Id"] = identity.user_id
             if identity.username is not None:
-                headers["X-Username"] = identity.username
+                headers["Hackbot-Requester-Username"] = identity.username
 
         params = {} if dedupe_key is None else {"dedupe_key": dedupe_key}
 

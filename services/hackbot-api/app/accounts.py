@@ -1,9 +1,13 @@
 """Accounts: the people who trigger runs, one row per person per identity provider."""
 
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.connection import get_db
 from app.database.models import Account
 from app.schemas import IdentityProvider
 
@@ -44,3 +48,48 @@ async def find_or_create_account(
     if account_id is None:
         account_id = (await db.scalar(same_person)).id
     return account_id
+
+
+async def get_account_id(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    identity_provider: Annotated[
+        IdentityProvider | None,
+        Header(
+            alias="Hackbot-Requester-Identity-Provider",
+            description=(
+                "The service `Hackbot-Requester-Id` belongs to, e.g. `bugzilla`."
+            ),
+        ),
+    ] = None,
+    user_id: Annotated[
+        str | None,
+        Header(
+            alias="Hackbot-Requester-Id",
+            description="The stable ID, on the identity provider, of the person "
+            "who triggered the request.",
+        ),
+    ] = None,
+    username: Annotated[
+        str | None,
+        Header(
+            alias="Hackbot-Requester-Username",
+            description="That person's readable name on the identity provider.",
+        ),
+    ] = None,
+) -> int | None:
+    """Dependency: the account of the person a request names, if it names one.
+
+    It shares the request's session, so the account is saved with whatever the
+    endpoint commits.
+    """
+    if not identity_provider and not user_id:
+        return None
+    if not (identity_provider and user_id):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Hackbot-Requester-Identity-Provider and Hackbot-Requester-Id "
+                "must be sent together"
+            ),
+        )
+    return await find_or_create_account(db, identity_provider, user_id, username)

@@ -63,10 +63,10 @@ def test_create_run_records_the_account_and_source(client, db):
     _create(
         client,
         {
-            "X-Source": "bugzilla",
-            "X-Identity-Provider": "bugzilla",
-            "X-User-Id": "560562",
-            "X-Username": "alice@example.com",
+            "Hackbot-Source": "bugzilla",
+            "Hackbot-Requester-Identity-Provider": "bugzilla",
+            "Hackbot-Requester-Id": "560562",
+            "Hackbot-Requester-Username": "alice@example.com",
         },
     )
 
@@ -90,10 +90,10 @@ def test_create_run_reuses_a_returning_persons_account_without_writing_it(client
     _create(
         client,
         {
-            "X-Source": "bugzilla",
-            "X-Identity-Provider": "bugzilla",
-            "X-User-Id": "560562",
-            "X-Username": "alice@example.com",
+            "Hackbot-Source": "bugzilla",
+            "Hackbot-Requester-Identity-Provider": "bugzilla",
+            "Hackbot-Requester-Id": "560562",
+            "Hackbot-Requester-Username": "alice@example.com",
         },
     )
 
@@ -101,7 +101,24 @@ def test_create_run_reuses_a_returning_persons_account_without_writing_it(client
     assert db.added.account_id == 5
 
 
-@pytest.mark.parametrize("header", ["X-Source", "X-Identity-Provider"])
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Hackbot-Requester-Identity-Provider": "bugzilla"},
+        {"Hackbot-Requester-Id": "560562"},
+    ],
+)
+def test_create_run_rejects_an_identity_sent_in_part(client, db, headers):
+    resp = client.post(
+        "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers=headers
+    )
+    assert resp.status_code == 422
+    assert db.added is None
+
+
+@pytest.mark.parametrize(
+    "header", ["Hackbot-Source", "Hackbot-Requester-Identity-Provider"]
+)
 def test_create_run_rejects_an_unknown_source_or_identity_provider(client, header):
     resp = client.post(
         "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers={header: "pulse"}
