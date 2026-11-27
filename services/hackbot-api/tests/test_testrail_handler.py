@@ -164,8 +164,8 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "labels": ["AI Generated"],
         "preconditions": "A PDF is available.",
         "steps": [
-            testrail_models.SeparatedStep(content="Open the PDF", expected=""),
-            testrail_models.SeparatedStep(
+            testrail_models.CaseStep(content="Open the PDF", expected=""),
+            testrail_models.CaseStep(
                 content="Select some text",
                 expected="Text selection is highlighted in the PDF.",
             ),
@@ -240,9 +240,9 @@ def test_separated_steps_maps_expectations_from_step_objects():
             ],
         }
     ) == [
-        testrail_models.SeparatedStep(content="Open the PDF", expected=""),
-        testrail_models.SeparatedStep(content="Select text", expected=""),
-        testrail_models.SeparatedStep(content="Copy text", expected="Text is copied."),
+        testrail_models.CaseStep(content="Open the PDF", expected=""),
+        testrail_models.CaseStep(content="Select text", expected=""),
+        testrail_models.CaseStep(content="Copy text", expected="Text is copied."),
     ]
 
 

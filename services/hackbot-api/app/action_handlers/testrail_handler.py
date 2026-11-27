@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from testrail_client import CaseResult, SeparatedStep, TestRailClient
+from testrail_client import CaseResult, CaseStep, TestRailClient
 
 from app.action_handlers.base import ActionResult, ApplyContext
 
@@ -51,9 +51,9 @@ async def _resolve_status_ids(client: TestRailClient) -> dict[str, int]:
     }
 
 
-def _separated_steps(test_case: dict[str, Any]) -> list[SeparatedStep]:
+def _separated_steps(test_case: dict[str, Any]) -> list[CaseStep]:
     return [
-        SeparatedStep(
+        CaseStep(
             content=str(step["action"]),
             expected=str(step.get("expectation") or ""),
         )

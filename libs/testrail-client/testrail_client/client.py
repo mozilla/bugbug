@@ -8,11 +8,11 @@ from testrail_client.config import TestRailSettings
 from testrail_client.models import (
     Case,
     CaseResult,
+    CaseStep,
     CaseType,
     Result,
     Run,
     Section,
-    SeparatedStep,
     Status,
     Suite,
     Template,
@@ -93,7 +93,7 @@ class TestRailClient:
         title: str,
         type_id: int,
         template_id: int,
-        steps: list[SeparatedStep],
+        steps: list[CaseStep],
         preconditions: str | None = None,
         labels: list[str] | None = None,
     ) -> Case:

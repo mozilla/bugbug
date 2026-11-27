@@ -8,21 +8,21 @@ class _Model(BaseModel):
 
 
 class CaseType(_Model):
-    """A test case type configured in TestRail (e.g. "Functional")."""
+    """A test case type configured in TestRail."""
 
     id: int
     name: str
 
 
 class Template(_Model):
-    """A test case template configured in TestRail (e.g. "Test Case (Steps)")."""
+    """A test case template configured in TestRail."""
 
     id: int
     name: str
 
 
 class Status(_Model):
-    """A test result status configured in TestRail (e.g. "Passed", "Failed")."""
+    """A test result status configured in TestRail."""
 
     id: int
     name: str
@@ -58,21 +58,15 @@ class Result(_Model):
     id: int
 
 
-class SeparatedStep(_Model):
-    """One step of a test case, sent in TestRail's `custom_steps_separated` field.
-
-    `content` is the action to perform, and `expected` is the expected outcome.
-    """
+class CaseStep(_Model):
+    """One step of a test case, with its expected outcome."""
 
     content: str
     expected: str = ""
 
 
 class CaseResult(_Model):
-    """A result to record for one test case in a run.
-
-    Sent to TestRail's `add_results_for_cases` endpoint.
-    """
+    """A result to record for one test case in a run."""
 
     case_id: int
     status_id: int
