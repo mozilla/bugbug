@@ -869,9 +869,15 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     hg_base_rev = utils.git2hg(base_rev)
     LOGGER.info("Mapped git base rev %s to hg rev %s", base_rev, hg_base_rev)
 
-    # Pull the base revision to the local repository
-    LOGGER.info("Pulling base revision from the remote repository...")
-    repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
+    # Pull the base revision to the local repository, unless it is already there, as a pull
+    # makes requests to hg.mozilla.org even when there is nothing new.
+    if repository.has_revision(REPO_DIR, hg_base_rev):
+        LOGGER.info("Base revision already in the local repository")
+        with hglib.open(REPO_DIR) as hg:
+            hg.update(hg_base_rev.encode("ascii"), clean=True)
+    else:
+        LOGGER.info("Pulling base revision from the remote repository...")
+        repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
 
     LOGGER.info("Generating commit(s) from patch...")
     revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)
