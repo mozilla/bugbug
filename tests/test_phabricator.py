@@ -301,6 +301,80 @@ async def test_conduit_does_not_retry_conduit_errors(monkeypatch) -> None:
     assert client.post.await_count == 1
 
 
+@pytest.mark.asyncio
+async def test_create_inline_comment_params_and_id(monkeypatch) -> None:
+    monkeypatch.setenv("PHABRICATOR_API_KEY", "api-key")
+    client = _conduit_client((200, {"result": {"id": 77}, "error_code": None}))
+    monkeypatch.setattr(phab_platform, "get_http_client", lambda: client)
+
+    comment_id = await phab_platform.create_inline_comment(
+        revision_id=1,
+        diff_id=2,
+        file_path="a.cpp",
+        is_new_file=True,
+        line_number=10,
+        line_length=3,
+        content="hi",
+    )
+
+    assert comment_id == 77
+    (url,), kwargs = client.post.await_args
+    assert url.endswith("/api/differential.createinline")
+    assert json.loads(kwargs["data"]["params"]) == {
+        "revisionID": 1,
+        "diffID": 2,
+        "filePath": "a.cpp",
+        "isNewFile": True,
+        "lineNumber": 10,
+        "lineLength": 3,
+        "content": "hi",
+        "__conduit__": {"token": "api-key"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_revision_comment_params(monkeypatch) -> None:
+    monkeypatch.setenv("PHABRICATOR_API_KEY", "api-key")
+    client = _conduit_client((200, {"result": {}, "error_code": None}))
+    monkeypatch.setattr(phab_platform, "get_http_client", lambda: client)
+
+    await phab_platform.create_revision_comment(5, "msg")
+
+    (url,), kwargs = client.post.await_args
+    assert url.endswith("/api/differential.createcomment")
+    assert json.loads(kwargs["data"]["params"]) == {
+        "revision_id": 5,
+        "attach_inlines": 1,
+        "message": "msg",
+        "__conduit__": {"token": "api-key"},
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "write",
+    [
+        lambda: phab_platform.create_inline_comment(1, 2, "a", True, 1, 0, "c"),
+        lambda: phab_platform.create_revision_comment(1, "m"),
+    ],
+)
+@pytest.mark.parametrize(
+    "failure", [httpx.ReadTimeout("timeout"), (502, {})], ids=["timeout", "502"]
+)
+async def test_conduit_writes_are_not_retried(monkeypatch, write, failure) -> None:
+    ok = (200, {"result": {"id": 1}, "error_code": None})
+    if isinstance(failure, Exception):
+        client = _conduit_client(ok)
+        client.post.side_effect = [failure, *client.post.side_effect]
+    else:
+        client = _conduit_client(failure, ok)
+    monkeypatch.setattr(phab_platform, "get_http_client", lambda: client)
+
+    with pytest.raises(httpx.HTTPError):
+        await write()
+    assert client.post.await_count == 1
+
+
 _REVISION = {
     "id": 12,
     "phid": "PHID-DREV-12",
