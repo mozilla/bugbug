@@ -296,6 +296,7 @@ class CodeReviewTool(GenerativeModelTool):
         return result["structured_response"].comments[:1]
 
     async def run(self, patch: Patch) -> CodeReviewToolResponse:
+        await patch.load()
         if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 

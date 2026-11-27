@@ -9,7 +9,6 @@ Fetches review-context.toml from a GitHub repository, matches changed files
 against the rules, and pre-loads the referenced content.
 """
 
-import asyncio
 import fnmatch
 import hashlib
 import json
@@ -50,7 +49,6 @@ from bugbug.tools.code_review.review_context_schema import (
     parse_review_context_toml,
     tomllib,
 )
-from bugbug.tools.core.connection import get_github_api_headers, get_http_client
 
 logger = getLogger(__name__)
 
@@ -338,15 +336,11 @@ async def _fetch_revision(
             return None
         rev_num = int(m.group(1))
         try:
-            from bugbug.tools.core.platforms.phabricator import get_phabricator_client
+            from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
-            def _load():
-                phab = get_phabricator_client()
-                revision = phab.load_revision(rev_id=rev_num)
-                diff_id = revision["fields"]["diffID"]
-                return phab.load_raw_diff(diff_id)
-
-            content = await asyncio.get_event_loop().run_in_executor(None, _load)
+            patch = PhabricatorPatch(revision_id=rev_num)
+            await patch.load()
+            content = patch.raw_diff
             name = f"Revision D{rev_num}"
             return (
                 name,
@@ -361,15 +355,10 @@ async def _fetch_revision(
 
     if repo and commit_hash:
         try:
-            response = await get_http_client().get(
+            response = await _fetch_url(
                 f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-                headers={
-                    "Accept": "application/vnd.github.diff",
-                    **get_github_api_headers(),
-                },
-                timeout=30,
+                headers={"Accept": "application/vnd.github.diff"},
             )
-            response.raise_for_status()
             source = f"{repo}@{commit_hash}"
             return (
                 f"{repo}@{commit_hash[:12]}",

@@ -67,6 +67,7 @@ async def patch_review(
             ) from exc
 
     patch = PhabricatorPatch(revision_id=revision_id)
+    await patch.load()
 
     tool = get_code_review_tool()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
@@ -175,13 +176,13 @@ def bugzilla_quick_search(
     return result
 
 
-def _get_revision_md(revision_id: int) -> str:
+async def _get_revision_md(revision_id: int) -> str:
     patch = SanitizedPhabricatorPatch(revision_id=revision_id)
-    if not patch.is_accessible() or not patch.is_public():
+    if not await patch.is_accessible() or not patch.is_public():
         raise ToolError(
             f"Revision D{revision_id} was not found. It may not exist or may be private."
         )
-    return patch.to_md()
+    return await patch.to_md()
 
 
 @mcp.resource(
@@ -189,15 +190,15 @@ def _get_revision_md(revision_id: int) -> str:
     name="Phabricator Revision Content",
     mime_type="text/markdown",
 )
-def handle_revision_view_resource(revision_id: int) -> str:
+async def handle_revision_view_resource(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
-def get_phabricator_revision(revision_id: int) -> str:
+async def get_phabricator_revision(revision_id: int) -> str:
     """Retrieve a revision from Phabricator alongside its comments."""
-    return _get_revision_md(revision_id)
+    return await _get_revision_md(revision_id)
 
 
 llms_txt = FileResource(
