@@ -33,7 +33,8 @@ fetches the Google identity token, writes it to the token-file env var's path
 and keeps it fresh in a background thread for as long as :func:`configure`'s
 context is open — Google identity tokens live ~1h, and the clients re-read the
 file on every exchange, so a periodically-rewritten file transparently keeps
-auth alive for runs longer than a token's lifetime.
+auth alive for runs longer than a token's lifetime. Weave also caches the W&B
+access token past the point W&B accepts it, so each W&B refresh drops that cache.
 
 When a provider's enabling env var is absent the runtime is in API-key mode and
 :func:`configure` is inert for it, so local/compose runs keep using the API key.
@@ -44,7 +45,7 @@ import logging
 import os
 import tempfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Annotated, ClassVar, Protocol
 
@@ -85,6 +86,10 @@ class WifSettings(Protocol):
         """True when the deploy provisioned federation for this provider."""
         ...
 
+    def on_token_refresh(self) -> None:
+        """Called after each background rewrite of the identity token file."""
+        ...
+
 
 class _WifSettingsBase(BaseModel):
     """Base model for settings shared by all WIF providers."""
@@ -92,6 +97,9 @@ class _WifSettingsBase(BaseModel):
     identity_token_file: Path | None = None
     identity_token_refresh_seconds: PositiveFloat = DEFAULT_REFRESH_INTERVAL
     api_key: str | None = None
+
+    def on_token_refresh(self) -> None:
+        pass
 
 
 # See https://platform.claude.com/docs/en/manage-claude/wif-providers/gcp
@@ -158,6 +166,27 @@ class WandbWifSettings(_WifSettingsBase):
     @property
     def enabled(self) -> bool:
         return bool(self.audience)
+
+    def on_token_refresh(self) -> None:
+        """Make weave exchange the freshly written identity token on its next request.
+
+        weave keeps the W&B access token it exchanged, in memory and in its
+        credentials file, until its stated expiry, but W&B stops accepting it sooner.
+        """
+        try:
+            from weave.wandb_interface.auth import (
+                IdentityTokenCredentials,
+                get_wandb_credentials,
+            )
+
+            credentials = get_wandb_credentials()
+            if not isinstance(credentials, IdentityTokenCredentials):
+                return
+            with credentials._lock:
+                credentials._cached_access_token = None
+                credentials.credentials_file.unlink(missing_ok=True)
+        except Exception:
+            log.exception("Failed to drop weave's cached W&B access token")
 
     @classmethod
     def from_env(cls) -> WandbWifSettings:
@@ -227,11 +256,13 @@ class TokenFileRefresher:
         audience: str,
         provider_id: str,
         name: str,
+        on_refresh: Callable[[], None] | None = None,
     ):
         self._token_file = token_file
         self._interval = interval
         self._audience = audience
         self._name = name
+        self._on_refresh = on_refresh
         self._stop = threading.Event()
         self._thread = threading.Thread(
             target=self._loop, name=f"{provider_id}-wif-refresh", daemon=True
@@ -267,6 +298,9 @@ class TokenFileRefresher:
                     self._name,
                     exc,
                 )
+                continue
+            if self._on_refresh:
+                self._on_refresh()
 
     def start(self) -> None:
         self._write_token()
@@ -308,7 +342,12 @@ def configure(config: WifSettings) -> Iterator[None]:
     token_file = config.identity_token_file or _default_token_path(config.provider_id)
     interval = config.identity_token_refresh_seconds
     refresher = TokenFileRefresher(
-        token_file, interval, config.audience, config.provider_id, config.name
+        token_file,
+        interval,
+        config.audience,
+        config.provider_id,
+        config.name,
+        config.on_token_refresh,
     )
     refresher.start()
     try:
