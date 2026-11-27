@@ -52,6 +52,7 @@ triage run but swaps it for `phabricator.update_patch` on a follow-up.
 | `email.send`                 | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
 | `feedback.report_problem`    | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
 | `agents.start_run`           | Start another agent on this run's output   | `agent`                                                         |
+| `lando.backout`              | Back out a landed commit                   | `lando_repo`, `commit`                                          |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. Each tool returns the
@@ -61,6 +62,11 @@ recorded action's ID, which a later action can reference (see cross-references b
 code calls directly rather than the model choosing to — for an action the agent always takes
 once it has a result, not one the model decides on. `email` provides `record_email`
 alongside its tool for the same reason.
+
+`lando.backout` has only a `record_backout` helper, no model-facing tool. The handler has
+Lando revert the commit through its headless API, which only backs out commits landed in
+the last 24 hours. It needs `LANDO_HEADLESS_API_TOKEN` for an account with
+`main.can_revert_commits`, on a repo in Lando's `REVERT_ALLOWED_REPOS`.
 
 `slack.post_message` is posted without Slack's link and media previews; they can
 be turned back on for a recorded message by passing `unfurl=True` to `record_message`.
