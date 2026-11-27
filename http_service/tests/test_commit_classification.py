@@ -285,3 +285,231 @@ def test_classify_commits_not_scored(monkeypatch) -> None:
         assert result["prob"] == [0.25, 0.75]
         assert result["risk_band"] == "h"
     assert _get_result(nodes["merge"], "try") == {"available": False}
+
+
+def _bug_job_key(bug_id: int) -> str:
+    return str(JobInfo(models.get_bug_commits, bug_id))
+
+
+def _get_bug_result(bug_id: int):
+    job = JobInfo(models.get_bug_commits, bug_id)
+    result = models.redis.get(job.result_key)
+    assert result is not None
+    return orjson.loads(result)
+
+
+def _commit_prediction(node: str, risk_band: str | None, ignored_reason: str | None):
+    return {
+        **PREDICTION,
+        "node": node,
+        "risk_band": risk_band,
+        "ignored_reason": ignored_reason,
+    }
+
+
+def test_bugs_endpoint(client, jobs, add_result) -> None:
+    endpoint = "/regressor/predict/bugs/autoland"
+
+    assert client.post(endpoint, json={"bugs": [1]}).status_code == 401
+
+    response = client.post(
+        "/component/predict/bugs/autoland",
+        json={"bugs": [1]},
+        headers={API_TOKEN: "test"},
+    )
+    assert response.status_code == 404
+
+    # The commits of bugs are only found on autoland.
+    response = client.post(
+        "/regressor/predict/bugs/try", json={"bugs": [1]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 404
+
+    bodies: tuple[object, ...] = (
+        {},
+        {"bugs": []},
+        {"bugs": ["1"]},
+        {"bugs": [0]},
+        {"bugs": [1] * 21},
+        [1],
+    )
+    for body in bodies:
+        response = client.post(endpoint, json=body, headers={API_TOKEN: "test"})
+        assert response.status_code == 400, body
+
+    response = client.post(
+        endpoint, json={"bugs": [1, 2, 3, 1]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 202
+    assert _response_json(response) == {
+        "bugs": {"1": {"ready": False}, "2": {"ready": False}, "3": {"ready": False}}
+    }
+    # The bugs are looked up by a single job.
+    assert len(jobs) == 1
+    assert next(iter(jobs.values()))[:3] == [_bug_job_key(rev) for rev in (1, 2, 3)]
+
+    # The bugs are not queued again while they are being processed.
+    response = client.post(
+        endpoint, json={"bugs": [1, 2, 3]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 202
+    assert len(jobs) == 1
+
+    rev3, rev4 = "c" * 40, "d" * 40
+    add_result(
+        _bug_job_key(1), {"commits": [REV1, REV2, rev3, rev4], "backedout": [REV2]}
+    )
+    add_result(_bug_job_key(2), {"commits": [REV1], "backedout": []})
+    add_result(_bug_job_key(3), {"commits": [], "backedout": []})
+
+    response = client.post(
+        endpoint, json={"bugs": [1, 2, 3]}, headers={API_TOKEN: "test"}
+    )
+    assert response.status_code == 202
+    assert _response_json(response) == {
+        "bugs": {
+            "1": {"ready": False},
+            "2": {"ready": False},
+            "3": {"commits": {}, "risk_band": None},
+        }
+    }
+    # The commits of the bug are queued.
+    assert len(jobs) == 2
+    assert list(jobs.values())[1][:4] == [
+        _job_key(rev) for rev in (REV1, REV2, rev3, rev4)
+    ]
+
+    add_result(_job_key(REV1), _commit_prediction(REV1, "a", None))
+    add_result(_job_key(REV2), _commit_prediction(REV2, "v", "backedout"))
+    add_result(_job_key(rev3), {"available": False})
+
+    response = client.post(endpoint, json={"bugs": [1]}, headers={API_TOKEN: "test"})
+    assert response.status_code == 202
+    assert _response_json(response) == {"bugs": {"1": {"ready": False}}}
+
+    add_result(_job_key(rev4), _commit_prediction(rev4, "h", None))
+
+    response = client.post(endpoint, json={"bugs": [1, 2]}, headers={API_TOKEN: "test"})
+    assert response.status_code == 200
+    assert _response_json(response) == {
+        "bugs": {
+            "1": {
+                "commits": {
+                    REV1: {"risk_band": "a", "ignored_reason": None},
+                    REV2: {"risk_band": "v", "ignored_reason": "backedout"},
+                    rev3: {"available": False},
+                    rev4: {"risk_band": "h", "ignored_reason": None},
+                },
+                # The backed-out commit doesn't count.
+                "risk_band": "h",
+            },
+            "2": {
+                "commits": {REV1: {"risk_band": "a", "ignored_reason": None}},
+                "risk_band": "a",
+            },
+        }
+    }
+
+
+def test_bugs_endpoint_not_scored(client, jobs, add_result) -> None:
+    add_result(_bug_job_key(1), {"commits": [REV1, REV2], "backedout": [REV2]})
+    add_result(_job_key(REV1), _commit_prediction(REV1, None, "backout"))
+    add_result(_job_key(REV2), _commit_prediction(REV2, "l", "backedout"))
+
+    response = client.post(
+        "/regressor/predict/bugs/autoland",
+        json={"bugs": [1]},
+        headers={API_TOKEN: "test"},
+    )
+    assert response.status_code == 200
+    assert _response_json(response)["bugs"]["1"]["risk_band"] is None
+
+
+def test_bugs_endpoint_backed_out_after_classification(client, add_result) -> None:
+    add_result(_bug_job_key(1), {"commits": [REV1, REV2], "backedout": [REV2]})
+    add_result(_job_key(REV1), _commit_prediction(REV1, "a", None))
+    # Classified before it was backed out.
+    add_result(_job_key(REV2), _commit_prediction(REV2, "v", None))
+
+    response = client.post(
+        "/regressor/predict/bugs/autoland",
+        json={"bugs": [1]},
+        headers={API_TOKEN: "test"},
+    )
+    assert response.status_code == 200
+    assert _response_json(response)["bugs"]["1"] == {
+        "commits": {
+            REV1: {"risk_band": "a", "ignored_reason": None},
+            REV2: {"risk_band": "v", "ignored_reason": "backedout"},
+        },
+        "risk_band": "a",
+    }
+
+
+def test_get_bug_commits(monkeypatch) -> None:
+    calls = []
+
+    def refresh_commits():
+        calls.append("refresh")
+        return True
+
+    monkeypatch.setattr("bugbug_http.boot.refresh_commits", refresh_commits)
+    monkeypatch.setattr(models.hglib, "open", lambda repo_dir: contextlib.nullcontext())
+
+    nodes = ["1" * 40, "2" * 40, "3" * 40, "4" * 40]
+
+    def get_bug_nodes_in_db(bug_ids):
+        # The latest commits are added to the commits DB first.
+        assert calls == ["refresh"]
+        return {
+            bug_id: {1: nodes[:3], 2: [nodes[2], nodes[3]]}.get(bug_id, [])
+            for bug_id in bug_ids
+        }
+
+    def get_commits_from_db(db_nodes):
+        assert db_nodes == nodes
+        # The second one was backed out when it was mined, by a backout which is too far from it
+        # to be found in the repository.
+        return {
+            node: {"node": node, "backedoutby": "9" * 40 if node == nodes[1] else ""}
+            for node in db_nodes
+        }
+
+    def get_backedoutby(hg, revs):
+        assert revs == [node.encode() for node in nodes]
+        # The third one was backed out after it was mined.
+        return {
+            rev.decode(): "8" * 40 if rev == nodes[2].encode() else "" for rev in revs
+        }
+
+    monkeypatch.setattr(models.repository, "get_bug_nodes_in_db", get_bug_nodes_in_db)
+    monkeypatch.setattr(models.repository, "get_commits_from_db", get_commits_from_db)
+    monkeypatch.setattr(models.repository, "get_backedoutby", get_backedoutby)
+
+    assert models.get_bug_commits([1, 2, 3, 1]) == "OK"
+
+    assert _get_bug_result(1) == {"commits": nodes[:3], "backedout": nodes[1:3]}
+    assert _get_bug_result(2) == {
+        "commits": [nodes[2], nodes[3]],
+        "backedout": [nodes[2]],
+    }
+    assert _get_bug_result(3) == {"commits": [], "backedout": []}
+    job = JobInfo(models.get_bug_commits, 1)
+    expirations = models.redis.expirations  # type: ignore[attr-defined]
+    assert expirations[job.result_key] == models.BUG_COMMITS_EXPIRATION_TTL
+
+
+def test_get_bug_commits_refresh_failure(monkeypatch) -> None:
+    # The commits of the bugs which are not in the DB yet would be missing.
+    monkeypatch.setattr("bugbug_http.boot.refresh_commits", lambda: False)
+
+    def get_bug_nodes_in_db(bug_ids):
+        raise AssertionError("The commits DB is not up to date")
+
+    monkeypatch.setattr(models.repository, "get_bug_nodes_in_db", get_bug_nodes_in_db)
+
+    assert models.get_bug_commits([1]) == "NOK"
+
+    # Without a result, the bug is looked up again on the next request.
+    job = JobInfo(models.get_bug_commits, 1)
+    assert models.redis.get(job.result_key) is None

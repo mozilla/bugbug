@@ -403,6 +403,9 @@ class Model:
         """Subclasses can return a weight for each training sample, passed to the estimator."""
         return None
 
+    def post_training(self) -> None:
+        """Subclasses can update the final model once it's trained (e.g. on the entire dataset), before it's saved."""
+
     def fit_classifier(self, X, y):
         sample_weight = self.get_sample_weights(X, y)
         if sample_weight is None:
@@ -704,6 +707,8 @@ class Model:
             logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
             self.fit_classifier(X_train, self.le.transform(y_train))
+
+        self.post_training()
 
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)

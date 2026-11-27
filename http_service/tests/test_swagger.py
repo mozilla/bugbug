@@ -14,3 +14,11 @@ def test_swagger(client):
     batch = spec["paths"]["/{model_name}/predict/broken_site_report/batch"]["post"]
     schema = batch["requestBody"]["content"]["application/json"]["schema"]
     assert schema["properties"]["reports"]["type"] == "array"
+
+    # The results of the bugs are described by their component, not by its name.
+    bugs = spec["paths"]["/{model_name}/predict/bugs/{branch}"]["post"]
+    schema = bugs["responses"]["200"]["content"]["application/json"]["schema"]
+    assert schema["properties"]["bugs"]["additionalProperties"] == {
+        "$ref": "#/components/schemas/BugCommitsPrediction"
+    }
+    assert "BugCommitsPrediction" in spec["components"]["schemas"]
