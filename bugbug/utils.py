@@ -662,3 +662,13 @@ def git2hg(hash: str) -> str:
     r = get_session("lando").get(f"https://lando.moz.tools/api/git2hg/firefox/{hash}")
     r.raise_for_status()
     return r.json()["hg_hash"]
+
+
+def get_github_try_task_config(repo: str, rev: str) -> dict:
+    """Get the try_task_config.json of a revision of a GitHub repository (e.g. "mozilla-firefox/firefox-dev")."""
+    r = get_session("github").get(
+        f"https://raw.githubusercontent.com/{repo}/{rev}/try_task_config.json",
+        headers={"User-Agent": get_user_agent()},
+    )
+    r.raise_for_status()
+    return r.json()

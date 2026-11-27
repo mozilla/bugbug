@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import json
+import subprocess
 from typing import Callable
 
 import hglib
@@ -13,6 +14,7 @@ import responses
 import zstandard
 from responses import matchers
 
+import bugbug_http
 from bugbug import test_scheduling
 from bugbug.models import testselect
 from bugbug_http import models
@@ -855,3 +857,157 @@ diff --git a/test.txt b/test.txt
     result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose
+
+
+def git(repo_dir, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-c", "user.name=bugbug", "-c", "user.email=bugbug@mozilla.com", *args],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+@pytest.fixture
+def mock_git_try(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, Callable[[str | None], str]]:
+    """Create a git repository standing for the GitHub repository of git try pushes.
+
+    It contains a base commit, with the same content as the base history of mock_repo, and a
+    commit changing the test file. Returns the base commit, and a function pushing a commit with
+    the try parameters (recording the given base revision) and returning it.
+    """
+    monkeypatch.setattr(bugbug_http, "GIT_REPO_DIR", str(tmp_path / "git"))
+
+    remote = tmp_path / "git-remote"
+    remote.mkdir()
+    git(remote, "init", "--quiet")
+    # Allow partial fetches of commits by hash, as GitHub does.
+    git(remote, "config", "uploadpack.allowFilter", "true")
+    git(remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+    (remote / "test.txt").write_text("Version 3", encoding="utf-8")
+    git(remote, "add", "test.txt")
+    git(remote, "commit", "--quiet", "-m", "Base")
+    base_rev = git(remote, "rev-parse", "HEAD")
+
+    (remote / "test.txt").write_text("Version 4", encoding="utf-8")
+    git(remote, "commit", "--quiet", "-am", "Bug 123 - Change the test file")
+
+    orig_get_git_patch = models.repository.get_git_patch
+
+    def get_git_patch(repo_dir, url, base, head):
+        assert url == "https://github.com/mozilla-firefox/firefox-dev"
+        return orig_get_git_patch(repo_dir, f"file://{remote}", base, head)
+
+    monkeypatch.setattr(models.repository, "get_git_patch", get_git_patch)
+
+    def push(recorded_base_rev: str | None) -> str:
+        parameters = (
+            {} if recorded_base_rev is None else {"base_rev": recorded_base_rev}
+        )
+        try_task_config = json.dumps({"parameters": parameters, "version": 2})
+        (remote / "try_task_config.json").write_text(try_task_config, encoding="utf-8")
+        git(remote, "add", "try_task_config.json")
+        git(remote, "commit", "--quiet", "-m", "Try parameters")
+        rev = git(remote, "rev-parse", "HEAD")
+        responses.add(
+            responses.GET,
+            f"https://raw.githubusercontent.com/mozilla-firefox/firefox-dev/{rev}/try_task_config.json",
+            body=try_task_config,
+        )
+        return rev
+
+    return base_rev, push
+
+
+@pytest.mark.parametrize(
+    "base_desc, pulled", [("Base history 3", False), ("Pulled from remote", True)]
+)
+def test_schedule_git_try(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_hgmo: None,
+    mock_repo: tuple[str, str],
+    mock_git_try: tuple[str, Callable[[str | None], str]],
+    mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
+    base_desc: str,
+    pulled: bool,
+) -> None:
+    repo_dir, remote_repo_dir = mock_repo
+
+    # As on autoland, the base history is public.
+    for d in (repo_dir, remote_repo_dir):
+        with hglib.open(str(d)) as hg:
+            hg.phase(revs=[b"all()"], public=True)
+    with hglib.open(str(remote_repo_dir)) as hg:
+        hg_base_rev = hg.log(revrange=f"desc('{base_desc}')".encode())[0].node.decode(
+            "ascii"
+        )
+
+    git_base_rev, push = mock_git_try
+    rev = push(git_base_rev)
+    responses.add(
+        responses.GET,
+        f"https://lando.moz.tools/api/git2hg/firefox/{git_base_rev}",
+        json={"git_hash": git_base_rev, "hg_hash": hg_base_rev},
+    )
+
+    stacks = []
+    orig_get_stack = models.repository.get_stack
+
+    def get_stack(repo_dir, branch, r):
+        stack = orig_get_stack(repo_dir, branch, r)
+        stacks.append(stack)
+        return stack
+
+    monkeypatch.setattr(models.repository, "get_stack", get_stack)
+
+    pulls = []
+    orig_pull = models.repository.pull
+
+    def pull(*args, **kwargs):
+        pulls.append(args)
+        return orig_pull(*args, **kwargs)
+
+    monkeypatch.setattr(models.repository, "pull", pull)
+
+    labels_to_choose = {"test-linux1804-64-opt-label1": 0.9}
+    groups_to_choose = {"test-group2": 0.9}
+    mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
+
+    assert models.schedule_tests("firefox-dev", rev) == "OK"
+
+    # The base revision is only pulled when it isn't in the local repository.
+    assert len(pulls) == pulled
+
+    # The commits are imported on top of their base, pulled from autoland, and the
+    # ones which only specify try parameters are not analyzed.
+    with hglib.open(str(repo_dir)) as hg:
+        imported = hg.log(revrange=f"descendants(children({hg_base_rev}))".encode())
+    assert [c.desc for c in imported] == [
+        b"Bug 123 - Change the test file",
+        b"Try parameters",
+    ]
+    assert stacks == [[imported[0].node]]
+
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:firefox-dev_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
+
+
+def test_schedule_git_try_without_base(
+    mock_repo: tuple[str, str],
+    mock_git_try: tuple[str, Callable[[str | None], str]],
+) -> None:
+    _, push = mock_git_try
+    rev = push(None)
+
+    assert models.schedule_tests("firefox-dev", rev) == "NOK"
+    assert (
+        models.redis.get(f"bugbug:job_result:schedule_tests:firefox-dev_{rev}") is None
+    )
