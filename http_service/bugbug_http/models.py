@@ -6,6 +6,8 @@
 import concurrent.futures
 import logging
 import os
+import re
+import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -30,6 +32,7 @@ from bugbug.perf.calibration import Calibration, load_calibrations
 from bugbug.perf.commit_risk import get_ignore_reason, score_patch
 from bugbug.perf.datasets import PERF_RISK_CALIBRATION_DB
 from bugbug.utils import get_hgmo_stack_changesets
+from bugbug_http import GIT_TRY_REPOSITORIES
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +44,7 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 BUG_COMMITS_EXPIRATION_TTL = 15 * 60
 
 TREEHERDER_API_URL = "https://treeherder.mozilla.org/api"
+
 # "expected fail", "intermittent", "infra", "autoclassified intermittent" and
 # "intermittent needs bugid".
 IGNORED_CLASSIFICATION_IDS = {3, 4, 5, 7, 8}
@@ -782,11 +786,72 @@ def select_configs(
     return {group: selected.get(group) or ["*"] for group in groups}
 
 
+def _pull_base_revision(hg_base_rev: str) -> None:
+    """Pull a landed revision from autoland and update the working directory to it.
+
+    The revision is not pulled when it is already in the local repository, as a pull makes
+    requests to hg.mozilla.org even when there is nothing new.
+    """
+    from bugbug_http import REPO_DIR
+
+    if repository.has_revision(REPO_DIR, hg_base_rev):
+        LOGGER.info("Base revision already in the local repository")
+        with hglib.open(REPO_DIR) as hg:
+            hg.update(hg_base_rev.encode("ascii"), clean=True)
+    else:
+        LOGGER.info("Pulling base revision from the remote repository...")
+        repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
+
+
+def _import_git_push(repo: str, rev: str) -> list[bytes]:
+    """Import the commits of a push to a git try repository into the local repository.
+
+    The commits are fetched from the GitHub repository `repo`, from the base recorded by
+    `mach try` in the try_task_config.json of the push, and imported on top of the base
+    (see _pull_base_revision). Like for hg try pushes (see repository.get_stack), the changesets
+    which only specify try parameters are not returned.
+    """
+    from bugbug_http import GIT_REPO_DIR, REPO_DIR
+
+    if not re.fullmatch(r"[0-9a-f]{40}", rev):
+        raise ValueError(f"{rev} is not a full git hash")
+
+    # Github reports a null base revision for a push creating a branch, as try pushes do, so
+    # `mach try` records the base in the try_task_config.json of the push.
+    base_rev = (
+        utils.get_github_try_task_config(repo, rev)
+        .get("parameters", {})
+        .get("base_rev")
+    )
+    if base_rev is None:
+        raise ValueError(f"No base revision in the try_task_config.json of {rev}")
+
+    LOGGER.info("Fetching the commits from %s to %s...", base_rev, rev)
+    patch = repository.get_git_patch(
+        GIT_REPO_DIR, f"https://github.com/{repo}", base_rev, rev
+    )
+
+    hg_base_rev = utils.git2hg(base_rev)
+    LOGGER.info("Mapped git base rev %s to hg rev %s", base_rev, hg_base_rev)
+
+    _pull_base_revision(hg_base_rev)
+
+    LOGGER.info("Importing the commits...")
+    repository.import_commits(REPO_DIR, hg_base_rev, patch=patch)
+    with hglib.open(REPO_DIR) as hg:
+        head = hg.log(revrange=b".")[0].node.decode("ascii")
+
+    # The imported changesets are draft and the base, from autoland, is public, so the stack is
+    # computed as for hg try pushes.
+    return repository.get_stack(REPO_DIR, "try", head)
+
+
 def schedule_tests(branch: str, rev: str) -> str:
     """Select the tasks and manifests to run for a push and store the result in Redis.
 
     The push is identified by the head revision `rev` on the hg.mozilla.org
-    repository `branch` (e.g. "integration/autoland" or "try"). When the push
+    repository `branch` (e.g. "integration/autoland" or "try"), or on a git try
+    repository (see GIT_TRY_REPOSITORIES, e.g. "firefox-dev"). When the push
     contains backouts, the tasks and manifests which failed recently on the
     corresponding Treeherder project are selected too.
     """
@@ -796,25 +861,37 @@ def schedule_tests(branch: str, rev: str) -> str:
     job = JobInfo(schedule_tests, branch, rev)
     LOGGER.info("Processing %s...", job)
 
-    # Pull the revision to the local repository
-    LOGGER.info("Pulling commits from the remote repository...")
-    repository.pull(REPO_DIR, branch, rev, update=False)
+    is_try = branch == "try" or branch in GIT_TRY_REPOSITORIES
+    if branch in GIT_TRY_REPOSITORIES:
+        try:
+            revs = _import_git_push(GIT_TRY_REPOSITORIES[branch], rev)
+        except (
+            requests.exceptions.RequestException,
+            subprocess.SubprocessError,
+            ValueError,
+        ):
+            LOGGER.warning("Push not found for %s @ %s!", branch, rev, exc_info=True)
+            return "NOK"
+    else:
+        # Pull the revision to the local repository
+        LOGGER.info("Pulling commits from the remote repository...")
+        repository.pull(REPO_DIR, branch, rev, update=False)
 
-    # Load the full stack of patches leading to that revision
-    LOGGER.info("Loading the commits to analyze...")
-    try:
-        revs = repository.get_stack(REPO_DIR, branch, rev)
-    except requests.exceptions.RequestException:
-        LOGGER.warning("Push not found for %s @ %s!", branch, rev)
-        return "NOK"
+        # Load the full stack of patches leading to that revision
+        LOGGER.info("Loading the commits to analyze...")
+        try:
+            revs = repository.get_stack(REPO_DIR, branch, rev)
+        except requests.exceptions.RequestException:
+            LOGGER.warning("Push not found for %s @ %s!", branch, rev)
+            return "NOK"
 
-    # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
+    # On try, consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
     # On other repos, only consider "default" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
-    repo_branch = None if branch == "try" else "default"
+    repo_branch = None if is_try else "default"
 
-    # On "try", recent failures are specific to each developer's push, so they are
+    # On try, recent failures are specific to each developer's push, so they are
     # not relevant for backouts.
-    treeherder_project = None if branch == "try" else branch.split("/")[-1]
+    treeherder_project = None if is_try else branch.split("/")[-1]
 
     data = _analyze_patch(revs, repo_branch, treeherder_project)
 
@@ -869,15 +946,7 @@ def schedule_tests_from_patch(base_rev: str, patch_hash: str) -> str:
     hg_base_rev = utils.git2hg(base_rev)
     LOGGER.info("Mapped git base rev %s to hg rev %s", base_rev, hg_base_rev)
 
-    # Pull the base revision to the local repository, unless it is already there, as a pull
-    # makes requests to hg.mozilla.org even when there is nothing new.
-    if repository.has_revision(REPO_DIR, hg_base_rev):
-        LOGGER.info("Base revision already in the local repository")
-        with hglib.open(REPO_DIR) as hg:
-            hg.update(hg_base_rev.encode("ascii"), clean=True)
-    else:
-        LOGGER.info("Pulling base revision from the remote repository...")
-        repository.pull(REPO_DIR, "integration/autoland", hg_base_rev, update=True)
+    _pull_base_revision(hg_base_rev)
 
     LOGGER.info("Generating commit(s) from patch...")
     revs = repository.import_commits(REPO_DIR, hg_base_rev, patch=patch_data_raw)

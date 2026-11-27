@@ -2057,6 +2057,137 @@ def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
             yield get_commit_patch(hg, rev)
 
 
+def _run_git(repo_dir: str, *args: str, timeout: int = 600) -> bytes:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+        timeout=timeout,
+    ).stdout
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
+    reraise=True,
+    after=tenacity.after_log(logger, logging.DEBUG),
+    retry=tenacity.retry_if_exception_type(subprocess.CalledProcessError),
+)
+def _fetch_git_commit(repo_dir: str, url: str, rev: str, depth: int | None) -> None:
+    # Only the commits and trees are fetched: the contents of the files are fetched
+    # when needed. No ref nor FETCH_HEAD is written, so that the repository can be
+    # shared and the commits are pruned when the repository is garbage collected.
+    args = ["fetch", "--quiet", "--no-write-fetch-head", "--filter=blob:none"]
+    if depth is not None:
+        args.append(f"--depth={depth}")
+    _run_git(repo_dir, *args, url, rev)
+
+
+# The number of objects passed to a git command at once.
+GIT_OBJECTS_CHUNK_SIZE = 500
+
+
+def _prefetch_git_blobs(repo_dir: str, url: str, base_rev: str, head_rev: str) -> None:
+    """Fetch the contents of the files changed from `base_rev` to `head_rev` at once.
+
+    Otherwise, git fetches the contents one by one when they are read, with a request for
+    each of them. It is best effort, as git still fetches the missing contents when needed.
+    """
+    try:
+        raw = _run_git(
+            repo_dir,
+            "log",
+            "--raw",
+            "--no-abbrev",
+            "--no-renames",
+            "--format=",
+            f"{base_rev}..{head_rev}",
+        )
+    except subprocess.SubprocessError:
+        logger.warning("Failed to list the changed files", exc_info=True)
+        return
+
+    oids = set()
+    for line in raw.decode("utf-8", errors="replace").splitlines():
+        # ":<old mode> <new mode> <old oid> <new oid> <status>\t<path>"
+        if not line.startswith(":"):
+            continue
+        old_mode, new_mode, old_oid, new_oid, _ = line[1:].split(None, 4)
+        for mode, oid in ((old_mode, old_oid), (new_mode, new_oid)):
+            # Submodules are commits of other repositories, and a null oid stands for a
+            # missing file.
+            if mode != "160000" and oid.strip("0"):
+                oids.add(oid)
+
+    # The contents are not checked to be missing before fetching them, as checking them
+    # would fetch them, and they are rarely there already.
+    sorted_oids = sorted(oids)
+    logger.info("Fetching %d file contents...", len(sorted_oids))
+    try:
+        for i in range(0, len(sorted_oids), GIT_OBJECTS_CHUNK_SIZE):
+            # Like the fetches git makes to get missing objects, without negotiating the
+            # commits in common, as the objects are requested by hash.
+            _run_git(
+                repo_dir,
+                "-c",
+                "fetch.negotiationAlgorithm=noop",
+                "fetch",
+                "--quiet",
+                "--no-write-fetch-head",
+                "--filter=blob:none",
+                url,
+                *sorted_oids[i : i + GIT_OBJECTS_CHUNK_SIZE],
+            )
+    except subprocess.SubprocessError:
+        logger.warning("Failed to prefetch the file contents", exc_info=True)
+
+
+def get_git_patch(repo_dir: str, url: str, base_rev: str, head_rev: str) -> bytes:
+    """Get the commits from `base_rev` (excluded) to `head_rev` of a remote git repository.
+
+    The commits are fetched in a local repository, which is created if needed and can be
+    reused for other commits. The patch is in git format-patch style, with a patch for
+    each commit.
+    """
+    if not os.path.exists(repo_dir):
+        _run_git(os.path.dirname(repo_dir) or ".", "init", "--quiet", repo_dir)
+
+    has_base = (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{base_rev}^{{commit}}"],
+            cwd=repo_dir,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if not has_base:
+        _fetch_git_commit(repo_dir, url, base_rev, depth=1)
+
+    # The local repository is shallow at the base, so only the commits after it are
+    # fetched.
+    _fetch_git_commit(repo_dir, url, head_rev, depth=None)
+
+    if (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", base_rev, head_rev], cwd=repo_dir
+        ).returncode
+        != 0
+    ):
+        raise ValueError(f"{base_rev} is not an ancestor of {head_rev}")
+
+    _prefetch_git_blobs(repo_dir, url, base_rev, head_rev)
+
+    return _run_git(
+        repo_dir,
+        "format-patch",
+        "--binary",
+        "--no-signature",
+        "--stdout",
+        f"{base_rev}..{head_rev}",
+    )
+
+
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
     """Import commits from a git format-patch style patches into a Mercurial repository."""
     with hglib.open(repo_dir) as hg:

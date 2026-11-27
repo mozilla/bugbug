@@ -31,6 +31,7 @@ ARG TAG
 ENV TAG="${TAG}"
 
 ENV BUGBUG_REPO_DIR=/code/bugbug-hg
+ENV BUGBUG_GIT_REPO_DIR=/code/bugbug-git
 
 RUN bash /code/http_service/ensure_models.sh
 
