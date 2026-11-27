@@ -85,7 +85,7 @@ async def patch_review(
         extra_context_toml=extra_context_toml,
         content_overrides=overrides,
     )
-    initial_prompt = tool.generate_initial_prompt(
+    initial_prompt = await tool.generate_initial_prompt(
         patch, patch_summary, external_context
     )
 

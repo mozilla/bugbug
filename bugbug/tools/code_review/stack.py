@@ -5,11 +5,14 @@
 
 """Describe the stack of patches that a reviewed patch belongs to."""
 
+import asyncio
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Optional
 
-from bugbug.tools.core.platforms.base import FileChange, Patch
+from unidiff import PatchSet
+
+from bugbug.tools.core.platforms.base import Patch
 
 logger = getLogger(__name__)
 
@@ -40,8 +43,8 @@ class StackEntry:
 
     title: str
 
-    # The files the patch touches, or `None` when they were not loaded.
-    file_changes: Optional[list[FileChange]] = None
+    # The changes of the patch, or `None` when they were not loaded.
+    patch_set: Optional[PatchSet] = None
 
 
 @dataclass(frozen=True)
@@ -62,59 +65,60 @@ class PatchStack:
         return bool(self.ancestors or self.descendants or self.errors)
 
 
-def load_patch_stack(patch: Patch) -> PatchStack:
-    """Load the titles and changes of the patches around `patch`.
+async def load_patch_stack(patch: Patch) -> PatchStack:
+    """Load the titles and changes of the patches around `patch`, concurrently.
 
     The stack is optional context, so a failure to load it is recorded in
     `errors` rather than raised.
     """
-    ancestors: list[StackEntry] = []
-    descendants: list[StackEntry] = []
-    errors = []
+    (
+        (ancestors, ancestors_error),
+        (descendants, descendants_error),
+    ) = await asyncio.gather(load_ancestors(patch), load_descendants(patch))
+    errors = [error for error in (ancestors_error, descendants_error) if error]
+    return PatchStack(ancestors, descendants, errors)
 
+
+async def load_ancestors(patch: Patch) -> tuple[list[StackEntry], Optional[str]]:
+    """Return the ancestors of `patch` with their changes, or the reason they failed."""
     logger.debug("Loading the ancestors of patch %s.", patch.patch_id)
     try:
-        stack_ancestors = patch.stack_ancestors
-        file_changes = patch.load_stack_file_changes(
-            stack_ancestors[-MAX_DETAILED_ANCESTORS:]
-        )
-        ancestors = [
-            StackEntry(
-                ancestor.display_id,
-                ancestor.patch_title,
-                file_changes.get(ancestor.patch_id),
-            )
-            for ancestor in stack_ancestors
-        ]
+        ancestors = await patch.get_stack_ancestors()
     except Exception as error:
         logger.warning("Could not load the ancestors of %s: %s", patch.patch_id, error)
-        errors.append(f"The patches before this one could not be loaded ({error}).")
+        return [], f"The patches before this one could not be loaded ({error})."
 
+    return [
+        StackEntry(ancestor.display_id, ancestor.patch_title, ancestor.patch_set)
+        for ancestor in ancestors
+    ], None
+
+
+async def load_descendants(patch: Patch) -> tuple[list[StackEntry], Optional[str]]:
+    """Return the descendants of `patch` by title, or the reason they failed."""
     logger.debug("Loading the descendants of patch %s.", patch.patch_id)
     try:
-        descendants = [
-            StackEntry(descendant.display_id, descendant.patch_title)
-            for descendant in patch.stack_descendants
-        ]
+        descendants = await patch.get_stack_descendants()
     except Exception as error:
         logger.warning(
             "Could not load the descendants of %s: %s", patch.patch_id, error
         )
-        errors.append(f"The patches after this one could not be loaded ({error}).")
+        return [], f"The patches after this one could not be loaded ({error})."
 
-    return PatchStack(ancestors, descendants, errors)
+    return [
+        StackEntry(descendant.display_id, descendant.patch_title)
+        for descendant in descendants
+    ], None
 
 
-def format_file_changes(file_changes: list[FileChange]) -> list[str]:
+def format_file_changes(patch_set: PatchSet) -> list[str]:
     """Return one line per file the patch touches, with its line counts."""
     lines = [
-        f"  - {change.path} (+{change.added} -{change.removed})"
-        for change in file_changes[:MAX_FILES_PER_ANCESTOR]
+        f"  - {patched_file.path} (+{patched_file.added} -{patched_file.removed})"
+        for patched_file in patch_set[:MAX_FILES_PER_ANCESTOR]
     ]
-    if len(file_changes) > MAX_FILES_PER_ANCESTOR:
-        lines.append(
-            f"  - … and {len(file_changes) - MAX_FILES_PER_ANCESTOR} more files"
-        )
+    if len(patch_set) > MAX_FILES_PER_ANCESTOR:
+        lines.append(f"  - … and {len(patch_set) - MAX_FILES_PER_ANCESTOR} more files")
     return lines
 
 
@@ -122,10 +126,10 @@ def format_ancestors(ancestors: list[StackEntry]) -> list[str]:
     """List the ancestors nearest first, with the files the nearest ones touch."""
     nearest_first = list(reversed(ancestors))
     lines = [f"{len(ancestors)} patches come before this one, nearest first:"]
-    for ancestor in nearest_first[:MAX_LISTED_ANCESTORS]:
+    for position, ancestor in enumerate(nearest_first[:MAX_LISTED_ANCESTORS]):
         lines.append(f"- {ancestor.display_id}: {ancestor.title}")
-        if ancestor.file_changes is not None:
-            lines.extend(format_file_changes(ancestor.file_changes))
+        if position < MAX_DETAILED_ANCESTORS and ancestor.patch_set is not None:
+            lines.extend(format_file_changes(ancestor.patch_set))
     if len(nearest_first) > MAX_LISTED_ANCESTORS:
         lines.append(f"- … and {len(nearest_first) - MAX_LISTED_ANCESTORS} older")
     return lines

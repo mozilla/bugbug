@@ -7,7 +7,6 @@
 
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from logging import getLogger
@@ -18,17 +17,6 @@ from unidiff import Hunk, PatchedFile, PatchSet
 from bugbug.tools.core.data_types import InlineComment
 
 logger = getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class FileChange:
-    """A file touched by a patch, with its line counts."""
-
-    path: str
-
-    added: int
-
-    removed: int
 
 
 class Patch(ABC):
@@ -60,30 +48,19 @@ class Patch(ABC):
         """Return the patch whose base precedes the entire stack."""
         return self
 
-    @property
-    def stack_ancestors(self) -> Sequence[Patch]:
-        """Return the patches applied before this one, oldest first.
+    async def get_stack_ancestors(self) -> Sequence[Patch]:
+        """Return the loaded patches applied before this one, oldest first.
 
         Raises `ValueError` when the stack cannot be determined.
         """
         return []
 
-    @property
-    def stack_descendants(self) -> Sequence[Patch]:
-        """Return the patches that build on this one, nearest first."""
-        return []
+    async def get_stack_descendants(self) -> Sequence[Patch]:
+        """Return the patches that build on this one, nearest first.
 
-    def load_stack_file_changes(
-        self, ancestors: Sequence[Patch]
-    ) -> dict[str, list[FileChange]]:
-        """Return the files each of `ancestors` touches, keyed by `patch_id`."""
-        return {
-            ancestor.patch_id: [
-                FileChange(patched_file.path, patched_file.added, patched_file.removed)
-                for patched_file in ancestor.patch_set
-            ]
-            for ancestor in ancestors
-        }
+        Only their titles and identifiers are guaranteed to be loaded.
+        """
+        return []
 
     @property
     def display_id(self) -> str:

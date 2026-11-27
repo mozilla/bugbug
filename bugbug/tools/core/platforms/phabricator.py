@@ -8,7 +8,7 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import UTC, datetime
 from functools import cache, cached_property
 from logging import getLogger
@@ -928,6 +928,53 @@ class PhabricatorPatch(Patch):
         ]
         await asyncio.gather(*(patch.load() for patch in stack))
         return stack
+
+    async def get_stack_ancestors(self) -> list[PhabricatorPatch]:
+        return (await self.get_stack_patches())[:-1]
+
+    @alru_cache
+    async def get_stack_descendants(self) -> list[PhabricatorPatch]:
+        """Return the revisions that depend on this one, nearest first.
+
+        Unlike the ancestry, descendants may branch, so every revision that
+        transitively depends on this one is returned. Their revisions are
+        loaded with one search, and their diffs are not loaded.
+        """
+        stack_graph = self.stack_graph
+        children: defaultdict[str, list[str]] = defaultdict(list)
+        for phid, deps in stack_graph.items():
+            for dep in deps:
+                children[dep].append(phid)
+
+        current_phid = self._revision_metadata["phid"]
+        ordered_phids = []
+        seen = {current_phid}
+        queue = deque(children[current_phid])
+        while queue:
+            phid = queue.popleft()
+            if phid in seen:
+                continue
+            seen.add(phid)
+            ordered_phids.append(phid)
+            queue.extend(children[phid])
+
+        if not ordered_phids:
+            return []
+
+        logger.debug("Searching for %s descendant revisions.", len(ordered_phids))
+        response = await _conduit(
+            "differential.revision.search", constraints={"phids": ordered_phids}
+        )
+        revisions = {revision["phid"]: revision for revision in response["data"]}
+
+        descendants = []
+        for phid in ordered_phids:
+            if phid not in revisions:
+                continue
+            descendant = self.__class__(revision_phid=phid)
+            descendant._revision_metadata = revisions[phid]
+            descendants.append(descendant)
+        return descendants
 
     @property
     def display_id(self) -> str:

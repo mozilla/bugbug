@@ -215,7 +215,7 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(
+    async def generate_initial_prompt(
         self,
         patch: Patch,
         patch_summary: str,
@@ -224,7 +224,7 @@ class CodeReviewTool(GenerativeModelTool):
     ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
         if stack is None:
-            stack = load_patch_stack(patch)
+            stack = await load_patch_stack(patch)
         stack_context = format_stack_context(stack)
 
         return FIRST_MESSAGE_TEMPLATE.format(
@@ -260,7 +260,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         messages = [
             HumanMessage(
-                self.generate_initial_prompt(
+                await self.generate_initial_prompt(
                     patch, patch_summary, external_context, stack
                 )
             )
@@ -321,7 +321,7 @@ class CodeReviewTool(GenerativeModelTool):
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
-        stack = load_patch_stack(patch)
+        stack = await load_patch_stack(patch)
 
         agent_response, external_content_manifest = await self.generate_review_comments(
             patch, patch_summary, stack
