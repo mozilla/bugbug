@@ -13,6 +13,9 @@ FIX_AGENT = "test-repair-fix"
 # Where the verdict is reported.
 SLACK_CHANNEL = "#sheriff-notifications"
 
+# Lando repo a backout of a culprit lands on, by Treeherder project.
+LANDO_REPOS = {"autoland": "firefox-autoland"}
+
 # Bugzilla MCP tool names as exposed to the agent (mcp__<server>__<tool>).
 BUGZILLA_READ_TOOLS = [
     "mcp__bugzilla__search_bugs",
