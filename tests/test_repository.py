@@ -3536,3 +3536,44 @@ def test_get_git_patch_not_ancestor(tmp_path, git_remote: tuple[str, str, str]) 
 
     with pytest.raises(ValueError, match="is not an ancestor"):
         repository.get_git_patch(str(tmp_path / "local"), url, head, base)
+
+
+def test_get_git_patch_prefetches_blobs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, git_remote: tuple[str, str, str]
+) -> None:
+    url, base, head = git_remote
+    local = str(tmp_path / "local")
+
+    fetches = []
+    orig_run_git = repository._run_git
+
+    def run_git(repo_dir, *args, **kwargs):
+        if "fetch" in args:
+            fetches.append(args)
+        return orig_run_git(repo_dir, *args, **kwargs)
+
+    monkeypatch.setattr(repository, "_run_git", run_git)
+
+    missing_after_prefetch = []
+    orig_prefetch = repository._prefetch_git_blobs
+
+    def prefetch(repo_dir, *args):
+        orig_prefetch(repo_dir, *args)
+        out = _git(
+            repo_dir, "rev-list", "--objects", "--missing=print", f"{base}..{head}"
+        )
+        missing_after_prefetch.extend(
+            line for line in out.splitlines() if line.startswith("?")
+        )
+
+    monkeypatch.setattr(repository, "_prefetch_git_blobs", prefetch)
+
+    repository.get_git_patch(local, url, base, head)
+
+    # The contents of the changed files are fetched at once, before the patch is
+    # generated.
+    assert missing_after_prefetch == []
+    assert len(fetches) == 3
+    assert "fetch.negotiationAlgorithm=noop" in fetches[2]
+    # The old and new contents of file1, the old content of file2 and the content of file3.
+    assert len(fetches[2]) - fetches[2].index(url) - 1 == 4

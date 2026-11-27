@@ -2084,6 +2084,65 @@ def _fetch_git_commit(repo_dir: str, url: str, rev: str, depth: int | None) -> N
     _run_git(repo_dir, *args, url, rev)
 
 
+# The number of objects passed to a git command at once.
+GIT_OBJECTS_CHUNK_SIZE = 500
+
+
+def _prefetch_git_blobs(repo_dir: str, url: str, base_rev: str, head_rev: str) -> None:
+    """Fetch the contents of the files changed from `base_rev` to `head_rev` at once.
+
+    Otherwise, git fetches the contents one by one when they are read, with a request for
+    each of them. It is best effort, as git still fetches the missing contents when needed.
+    """
+    try:
+        raw = _run_git(
+            repo_dir,
+            "log",
+            "--raw",
+            "--no-abbrev",
+            "--no-renames",
+            "--format=",
+            f"{base_rev}..{head_rev}",
+        )
+    except subprocess.SubprocessError:
+        logger.warning("Failed to list the changed files", exc_info=True)
+        return
+
+    oids = set()
+    for line in raw.decode("utf-8", errors="replace").splitlines():
+        # ":<old mode> <new mode> <old oid> <new oid> <status>\t<path>"
+        if not line.startswith(":"):
+            continue
+        old_mode, new_mode, old_oid, new_oid, _ = line[1:].split(None, 4)
+        for mode, oid in ((old_mode, old_oid), (new_mode, new_oid)):
+            # Submodules are commits of other repositories, and a null oid stands for a
+            # missing file.
+            if mode != "160000" and oid.strip("0"):
+                oids.add(oid)
+
+    # The contents are not checked to be missing before fetching them, as checking them
+    # would fetch them, and they are rarely there already.
+    sorted_oids = sorted(oids)
+    logger.info("Fetching %d file contents...", len(sorted_oids))
+    try:
+        for i in range(0, len(sorted_oids), GIT_OBJECTS_CHUNK_SIZE):
+            # Like the fetches git makes to get missing objects, without negotiating the
+            # commits in common, as the objects are requested by hash.
+            _run_git(
+                repo_dir,
+                "-c",
+                "fetch.negotiationAlgorithm=noop",
+                "fetch",
+                "--quiet",
+                "--no-write-fetch-head",
+                "--filter=blob:none",
+                url,
+                *sorted_oids[i : i + GIT_OBJECTS_CHUNK_SIZE],
+            )
+    except subprocess.SubprocessError:
+        logger.warning("Failed to prefetch the file contents", exc_info=True)
+
+
 def get_git_patch(repo_dir: str, url: str, base_rev: str, head_rev: str) -> bytes:
     """Get the commits from `base_rev` (excluded) to `head_rev` of a remote git repository.
 
@@ -2116,6 +2175,8 @@ def get_git_patch(repo_dir: str, url: str, base_rev: str, head_rev: str) -> byte
         != 0
     ):
         raise ValueError(f"{base_rev} is not an ancestor of {head_rev}")
+
+    _prefetch_git_blobs(repo_dir, url, base_rev, head_rev)
 
     return _run_git(
         repo_dir,
