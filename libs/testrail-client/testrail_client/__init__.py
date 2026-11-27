@@ -2,26 +2,26 @@ from testrail_client.client import TestRailClient
 from testrail_client.config import TestRailSettings
 from testrail_client.models import (
     Case,
+    CaseResult,
     CaseType,
     Result,
-    ResultInput,
     Run,
     Section,
+    SeparatedStep,
     Status,
-    Step,
     Suite,
     Template,
 )
 
 __all__ = [
     "Case",
+    "CaseResult",
     "CaseType",
     "Result",
-    "ResultInput",
     "Run",
     "Section",
+    "SeparatedStep",
     "Status",
-    "Step",
     "Suite",
     "Template",
     "TestRailClient",

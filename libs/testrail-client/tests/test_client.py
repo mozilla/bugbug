@@ -3,7 +3,7 @@
 import httpx
 import pytest
 from pydantic import ValidationError
-from testrail_client import CaseType, ResultInput, Step, Suite
+from testrail_client import CaseResult, CaseType, SeparatedStep, Suite
 from testrail_client import TestRailClient as Client
 from testrail_client import TestRailSettings as Settings
 from testrail_client import client as client_module
@@ -180,7 +180,7 @@ async def test_endpoint_wrappers(monkeypatch):
         title="Case",
         type_id=6,
         template_id=2,
-        steps=[Step(content="Open", expected="It opens")],
+        steps=[SeparatedStep(content="Open", expected="It opens")],
         preconditions="A PDF is available.",
         labels=["AI Generated"],
     )
@@ -205,7 +205,7 @@ async def test_endpoint_wrappers(monkeypatch):
     }
 
     await client.add_results_for_cases(
-        301, [ResultInput(case_id=101, status_id=1, comment="ok")]
+        301, [CaseResult(case_id=101, status_id=1, comment="ok")]
     )
     assert captured["url"].endswith("/add_results_for_cases/301")
     assert captured["json"] == {

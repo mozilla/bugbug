@@ -7,13 +7,13 @@ import httpx
 from testrail_client.config import TestRailSettings
 from testrail_client.models import (
     Case,
+    CaseResult,
     CaseType,
     Result,
-    ResultInput,
     Run,
     Section,
+    SeparatedStep,
     Status,
-    Step,
     Suite,
     Template,
     _CaseTypesResponse,
@@ -93,7 +93,7 @@ class TestRailClient:
         title: str,
         type_id: int,
         template_id: int,
-        steps: list[Step],
+        steps: list[SeparatedStep],
         preconditions: str | None = None,
         labels: list[str] | None = None,
     ) -> Case:
@@ -134,7 +134,7 @@ class TestRailClient:
         return Run.model_validate(response)
 
     async def add_results_for_cases(
-        self, run_id: int, results: list[ResultInput]
+        self, run_id: int, results: list[CaseResult]
     ) -> list[Result]:
         response = await self.request(
             "POST",

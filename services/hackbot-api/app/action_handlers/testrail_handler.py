@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from testrail_client import ResultInput, Step, TestRailClient
+from testrail_client import CaseResult, SeparatedStep, TestRailClient
 
 from app.action_handlers.base import ActionResult, ApplyContext
 
@@ -51,9 +51,9 @@ async def _resolve_status_ids(client: TestRailClient) -> dict[str, int]:
     }
 
 
-def _separated_steps(test_case: dict[str, Any]) -> list[Step]:
+def _separated_steps(test_case: dict[str, Any]) -> list[SeparatedStep]:
     return [
-        Step(
+        SeparatedStep(
             content=str(step["action"]),
             expected=str(step.get("expectation") or ""),
         )
@@ -78,14 +78,14 @@ def _executed_results(
     params: dict[str, Any],
     created_case_ids: dict[int, int],
     status_ids: dict[str, int],
-) -> list[ResultInput]:
+) -> list[CaseResult]:
     """One TestRail result per generated case, in generation order.
 
     ``SubmitTestPlanHandler.apply`` has already checked that every case carries a
     recognised status, so indexing here cannot silently drop one.
     """
     return [
-        ResultInput(
+        CaseResult(
             case_id=created_case_ids[int(test_case["id"])],
             status_id=status_ids[test_case["result"]["status"]],
             comment=_result_comment(test_case["result"]),

@@ -164,8 +164,8 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "labels": ["AI Generated"],
         "preconditions": "A PDF is available.",
         "steps": [
-            testrail_models.Step(content="Open the PDF", expected=""),
-            testrail_models.Step(
+            testrail_models.SeparatedStep(content="Open the PDF", expected=""),
+            testrail_models.SeparatedStep(
                 content="Select some text",
                 expected="Text selection is highlighted in the PDF.",
             ),
@@ -184,12 +184,12 @@ async def test_submit_test_plan_creates_suite_section_and_cases(monkeypatch):
         "add_results_for_cases",
         301,
         [
-            testrail_models.ResultInput(
+            testrail_models.CaseResult(
                 case_id=101,
                 status_id=1,
                 comment="The PDF behaved as expected.",
             ),
-            testrail_models.ResultInput(
+            testrail_models.CaseResult(
                 case_id=102,
                 status_id=2,
                 comment=(
@@ -240,9 +240,9 @@ def test_separated_steps_maps_expectations_from_step_objects():
             ],
         }
     ) == [
-        testrail_models.Step(content="Open the PDF", expected=""),
-        testrail_models.Step(content="Select text", expected=""),
-        testrail_models.Step(content="Copy text", expected="Text is copied."),
+        testrail_models.SeparatedStep(content="Open the PDF", expected=""),
+        testrail_models.SeparatedStep(content="Select text", expected=""),
+        testrail_models.SeparatedStep(content="Copy text", expected="Text is copied."),
     ]
 
 
