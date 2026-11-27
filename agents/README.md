@@ -88,6 +88,9 @@ the repo's root `docker-compose.yml`, so running it is three steps:
    BUG_ID=1234567 docker compose up bug-fix-agent --build
    ```
 
+   On Linux, run `mkdir -p ~/hackbot/artifacts` before your first run. Otherwise
+   Docker creates it as root and the agent can't write its results there.
+
    Here `bug-fix-agent` is the service name defined in the agent's `compose.yml` —
    use that agent's own service name when you run a different one. Compose builds and
    runs the agent against that bug. The run's `summary.json`, logs, attachments, and
