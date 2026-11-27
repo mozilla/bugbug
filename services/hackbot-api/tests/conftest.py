@@ -100,6 +100,8 @@ class FakeSession:
         # What the last find-or-create asked for, and the ID it is answered with.
         self.account = None
         self.account_id = 17
+        # The account a lookup finds; None means a person seen for the first time.
+        self.existing_account = None
         self.conflict = False
         self.statements: list = []
         self.commits = 0
@@ -134,6 +136,9 @@ class FakeSession:
                 return _Result([])
             self.added = Run(**_statement_values(stmt))
             return _Result([self.added])
+
+        if Account.__table__ in stmt.columns_clause_froms:
+            return _Result([self.existing_account] if self.existing_account else [])
 
         # Only queries selecting from `runs` (joined or not) return rows;
         # anything else a handler runs for effect gets an empty result.

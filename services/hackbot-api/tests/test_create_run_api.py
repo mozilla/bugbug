@@ -15,7 +15,8 @@ from types import SimpleNamespace
 import pytest
 from app import gcs, jobs
 from app.auth import require_api_key
-from app.schemas import RunStatus
+from app.database.models import Account
+from app.schemas import IdentityProvider, RunStatus
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +77,28 @@ def test_create_run_records_the_account_and_source(client, db):
     }
     assert db.added.account_id == db.account_id
     assert db.added.source == "bugzilla"
+
+
+def test_create_run_reuses_a_returning_persons_account_without_writing_it(client, db):
+    db.existing_account = Account(
+        id=5,
+        identity_provider=IdentityProvider.bugzilla,
+        external_id="560562",
+        username="alice@example.com",
+    )
+
+    _create(
+        client,
+        {
+            "X-Source": "bugzilla",
+            "X-Identity-Provider": "bugzilla",
+            "X-User-Id": "560562",
+            "X-Username": "alice@example.com",
+        },
+    )
+
+    assert db.account is None
+    assert db.added.account_id == 5
 
 
 @pytest.mark.parametrize("header", ["X-Source", "X-Identity-Provider"])
