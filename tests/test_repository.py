@@ -3469,3 +3469,70 @@ def test_parse_hg_export_mercurial_diff_header():
     )
     assert export.message == "Speed up"
     assert export.diff == "diff -r def -r abc w.py\n--- a/w.py\n"
+
+
+def _git(repo_dir, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-c", "user.name=bugbug", "-c", "user.email=bugbug@mozilla.com", *args],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+@pytest.fixture
+def git_remote(tmp_path) -> tuple[str, str, str]:
+    """A git repository with a base commit and two commits on top of it.
+
+    Returns the URL of the repository, the base commit and the head commit.
+    """
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    _git(remote, "init", "--quiet")
+    # Allow partial fetches of commits by hash, as GitHub does.
+    _git(remote, "config", "uploadpack.allowFilter", "true")
+    _git(remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+
+    (remote / "file1.txt").write_text("1\n")
+    (remote / "file2.txt").write_text("2\n")
+    _git(remote, "add", ".")
+    _git(remote, "commit", "--quiet", "-m", "Old")
+    (remote / "file1.txt").write_text("1\n1\n")
+    _git(remote, "commit", "--quiet", "-am", "Base")
+    base = _git(remote, "rev-parse", "HEAD")
+
+    (remote / "file1.txt").write_text("1\n1\n1\n")
+    _git(remote, "commit", "--quiet", "-am", "Bug 1 - Change file1")
+    (remote / "file2.txt").unlink()
+    (remote / "file3.bin").write_bytes(b"\x00\x01")
+    _git(remote, "add", "-A")
+    _git(remote, "commit", "--quiet", "-m", "Bug 2 - Replace file2")
+    head = _git(remote, "rev-parse", "HEAD")
+
+    return f"file://{remote}", base, head
+
+
+def test_get_git_patch(tmp_path, git_remote: tuple[str, str, str]) -> None:
+    url, base, head = git_remote
+    local = str(tmp_path / "local")
+
+    patch = repository.get_git_patch(local, url, base, head)
+
+    assert re.findall(rb"^Subject: (.+)$", patch, re.MULTILINE) == [
+        b"[PATCH 1/2] Bug 1 - Change file1",
+        b"[PATCH 2/2] Bug 2 - Replace file2",
+    ]
+    assert b"GIT binary patch" in patch
+    # Only the commits of the push are fetched, without the history of the base.
+    assert _git(local, "rev-list", "--count", head) == "3"
+
+    # The repository is reused, with the base and the push already there.
+    assert repository.get_git_patch(local, url, base, head) == patch
+
+
+def test_get_git_patch_not_ancestor(tmp_path, git_remote: tuple[str, str, str]) -> None:
+    url, base, head = git_remote
+
+    with pytest.raises(ValueError, match="is not an ancestor"):
+        repository.get_git_patch(str(tmp_path / "local"), url, head, base)

@@ -2057,6 +2057,76 @@ def get_commit_patches(repo_dir: str, revs: list[bytes]) -> Iterator[bytes]:
             yield get_commit_patch(hg, rev)
 
 
+def _run_git(repo_dir: str, *args: str, timeout: int = 600) -> bytes:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+        timeout=timeout,
+    ).stdout
+
+
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
+    reraise=True,
+    after=tenacity.after_log(logger, logging.DEBUG),
+    retry=tenacity.retry_if_exception_type(subprocess.CalledProcessError),
+)
+def _fetch_git_commit(repo_dir: str, url: str, rev: str, depth: int | None) -> None:
+    # Only the commits and trees are fetched: the contents of the files are fetched
+    # when needed. No ref nor FETCH_HEAD is written, so that the repository can be
+    # shared and the commits are pruned when the repository is garbage collected.
+    args = ["fetch", "--quiet", "--no-write-fetch-head", "--filter=blob:none"]
+    if depth is not None:
+        args.append(f"--depth={depth}")
+    _run_git(repo_dir, *args, url, rev)
+
+
+def get_git_patch(repo_dir: str, url: str, base_rev: str, head_rev: str) -> bytes:
+    """Get the commits from `base_rev` (excluded) to `head_rev` of a remote git repository.
+
+    The commits are fetched in a local repository, which is created if needed and can be
+    reused for other commits. The patch is in git format-patch style, with a patch for
+    each commit.
+    """
+    if not os.path.exists(repo_dir):
+        _run_git(os.path.dirname(repo_dir) or ".", "init", "--quiet", repo_dir)
+
+    has_base = (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{base_rev}^{{commit}}"],
+            cwd=repo_dir,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if not has_base:
+        _fetch_git_commit(repo_dir, url, base_rev, depth=1)
+
+    # The local repository is shallow at the base, so only the commits after it are
+    # fetched.
+    _fetch_git_commit(repo_dir, url, head_rev, depth=None)
+
+    if (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", base_rev, head_rev], cwd=repo_dir
+        ).returncode
+        != 0
+    ):
+        raise ValueError(f"{base_rev} is not an ancestor of {head_rev}")
+
+    return _run_git(
+        repo_dir,
+        "format-patch",
+        "--binary",
+        "--no-signature",
+        "--stdout",
+        f"{base_rev}..{head_rev}",
+    )
+
+
 def import_commits(repo_dir: str, base_rev: str, patch: bytes) -> list[bytes]:
     """Import commits from a git format-patch style patches into a Mercurial repository."""
     with hglib.open(repo_dir) as hg:
