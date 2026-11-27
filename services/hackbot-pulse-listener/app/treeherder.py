@@ -43,7 +43,6 @@ _ATTEMPTS = 3
 # deliberately shorter than the regression check's poll interval, so a walk waiting
 # on an unsettled ancestor still sees fresh results on its next attempt.
 _TTL_SECONDS = 60
-_group_cache: TTLCache = TTLCache(maxsize=128, ttl=_TTL_SECONDS)
 _jobs_cache: TTLCache = TTLCache(maxsize=512, ttl=_TTL_SECONDS)
 # A revision never maps to a different push, so this one is held far longer.
 _push_id_cache: TTLCache = TTLCache(maxsize=512, ttl=6 * 60 * 60)
@@ -131,28 +130,6 @@ def _get(path: str) -> dict | list:
     return _fetch(url).json()
 
 
-def group_results(
-    project: str, revision: str, refresh: bool = False
-) -> dict[str, dict[str, bool]]:
-    """``{task_id: {group: passed}}`` for a push, as Treeherder recorded it.
-
-    Needs the full 40-character revision; a short one 404s.
-
-    Note a group can be recorded as failing on a task whose job did not fail (wpt
-    expected-fail metadata), so this is only meaningful for a task already known to
-    have failed.
-    """
-    key = (project, revision)
-    with _cache_lock:
-        if not refresh and key in _group_cache:
-            return _group_cache[key]
-
-    results = _get(f"{project}/push/group_results/?revision={revision}")
-    with _cache_lock:
-        _group_cache[key] = results
-    return results
-
-
 def push_id(project: str, revision: str) -> int | None:
     """Treeherder's push id for a revision, or None if it has no push."""
     key = (project, revision)
@@ -172,6 +149,7 @@ def _summarize(job: dict) -> dict:
         "result": job.get("result"),
         "state": job.get("state"),
         "task_id": job.get("task_id"),
+        "label": job.get("job_type_name"),
         "platform_option": job.get("platform_option"),
     }
 
@@ -230,35 +208,6 @@ def config_jobs(
         (project, revision, "platform", platform),
     )
     return [job for job in jobs if job["platform_option"] == platform_option]
-
-
-class GroupResultsUnavailable(Exception):
-    """Treeherder records no per-manifest results for a task."""
-
-
-def failing_groups(project: str, revision: str, task_id: str) -> list[str]:
-    """The manifests this task reported as failing.
-
-    An empty list means the task failed nothing at manifest level. Raises when the
-    task has no results at all -- which is not the same thing, and must not be
-    mistaken for it: a task-level failure (crash, timeout, harness error) or a log
-    that is still being parsed would otherwise be silently dropped. Network errors
-    propagate for the same reason.
-    """
-    results = group_results(project, revision)
-    if task_id not in results:
-        # A cached snapshot can predate this task's ingestion; refetch once before
-        # concluding that Treeherder has nothing for it.
-        results = group_results(project, revision, refresh=True)
-    if task_id not in results:
-        raise GroupResultsUnavailable(
-            f"Treeherder records no group results for task {task_id}"
-        )
-    return [
-        group
-        for group, passed in results[task_id].items()
-        if not passed and group.strip() and group != "/"
-    ]
 
 
 def job_for_task(project: str, task_id: str) -> dict | None:

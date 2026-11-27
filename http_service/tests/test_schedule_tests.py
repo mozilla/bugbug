@@ -287,34 +287,66 @@ def mock_treeherder_recent_failures() -> None:
             "next": None,
         },
     )
-    responses.add(
-        responses.GET,
-        "https://treeherder.mozilla.org/api/project/autoland/push/group_results/",
-        match=[matchers.query_param_matcher({"revision": "rev1"})],
-        json={
-            "task1": {
-                "test-group1:test-group-parent": False,
-                "test-group2": True,
-                "/wpt-dir": False,
-                ":/_mozilla/wpt-dir": False,
+    mock_errorsummary(
+        "task1",
+        [
+            {
+                "action": "test_groups",
+                "groups": [
+                    "test-group1:test-group-parent",
+                    "test-group2",
+                    "test-group3",
+                    "/wpt-dir",
+                    ":/_mozilla/wpt-dir",
+                ],
             },
-            "task2": {"test-group2": False},
-            "task5": {"test-group2": False},
-            "task6": {"test-group2": False},
-        },
+            # A crash of a test which was retried and passed is still written, but
+            # its group passes.
+            {
+                "action": "crash",
+                "test": "test3.html",
+                "group": "test-group3",
+                "signature": "crash",
+            },
+            group_result("test-group1:test-group-parent", "ERROR"),
+            group_result("test-group2", "OK"),
+            group_result("test-group3", "OK"),
+            group_result("/wpt-dir", "ERROR"),
+            group_result(":/_mozilla/wpt-dir", "ERROR"),
+        ],
     )
+    mock_errorsummary(
+        "task3",
+        [
+            {"action": "test_groups", "groups": ["test-unknown-group"]},
+            group_result("test-unknown-group", "ERROR"),
+        ],
+    )
+    # An aborted task, which didn't write the group results.
+    mock_errorsummary(
+        "task7",
+        [
+            # Groups which did not fail are not selected.
+            {"action": "test_groups", "groups": ["test-group2", "test-group3"]},
+            {
+                "action": "test_result",
+                "test": "test1.html",
+                "group": "test-group2",
+                "status": "FAIL",
+                "expected": "PASS",
+            },
+        ],
+    )
+
+
+def group_result(group: str, status: str) -> dict:
+    return {"action": "group_result", "group": group, "status": status, "duration": 1}
+
+
+def mock_errorsummary(task_id: str, lines: list[dict]) -> None:
     responses.add(
         responses.GET,
-        "https://treeherder.mozilla.org/api/project/autoland/push/group_results/",
-        match=[matchers.query_param_matcher({"revision": "rev2"})],
-        json={
-            "task3": {"test-unknown-group": False},
-            "task4": {"test-group2": False},
-        },
-    )
-    responses.add(
-        responses.GET,
-        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts",
+        f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}/artifacts",
         json={
             "artifacts": [
                 {"name": "public/logs/live_backing.log"},
@@ -324,21 +356,8 @@ def mock_treeherder_recent_failures() -> None:
     )
     responses.add(
         responses.GET,
-        "https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/task7/artifacts/public/test_info/mochitest-plain_errorsummary.log",
-        body=b"\n".join(
-            orjson.dumps(line)
-            for line in [
-                # Groups which did not fail are not selected.
-                {"action": "test_groups", "groups": ["test-group2", "test-group3"]},
-                {
-                    "action": "test_result",
-                    "test": "test1.html",
-                    "group": "test-group2",
-                    "status": "FAIL",
-                    "expected": "PASS",
-                },
-            ]
-        ),
+        f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}/artifacts/public/test_info/mochitest-plain_errorsummary.log",
+        body=b"\n".join(orjson.dumps(line) for line in lines),
     )
 
 

@@ -107,9 +107,8 @@ def test_not_ingested_returns_none(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _clear_group_cache():
+def _clear_caches():
     caches = (
-        treeherder._group_cache,
         treeherder._jobs_cache,
         treeherder._push_id_cache,
         treeherder._bug_suggestions_cache,
@@ -119,49 +118,6 @@ def _clear_group_cache():
     yield
     for cache in caches:
         cache.clear()
-
-
-def test_group_results_are_fetched_once_per_push(monkeypatch):
-    # A push emits many failing tasks; they must share one fetch.
-    calls = []
-
-    def fake_get(url, **kwargs):
-        calls.append(url)
-        return _response({"TASK1": {"a.ini": False}, "TASK2": {"b.ini": True}})
-
-    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
-    first = treeherder.group_results("autoland", "abc" * 13 + "d")
-    second = treeherder.group_results("autoland", "abc" * 13 + "d")
-    assert first == second
-    assert len(calls) == 1
-    assert "group_results/?revision=" in calls[0]
-
-
-def test_group_results_refresh_bypasses_the_cache(monkeypatch):
-    calls = []
-
-    def fake_get(url, **kwargs):
-        calls.append(url)
-        return _response({"TASK1": {"a.ini": False}})
-
-    monkeypatch.setattr(treeherder.httpx, "get", fake_get)
-    rev = "abc" * 13 + "d"
-    treeherder.group_results("autoland", rev)
-    treeherder.group_results("autoland", rev, refresh=True)
-    assert len(calls) == 2
-
-
-def test_group_results_cached_per_project_and_revision(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        treeherder.httpx,
-        "get",
-        lambda url, **k: (calls.append(url), _response({}))[1],
-    )
-    treeherder.group_results("autoland", "a" * 40)
-    treeherder.group_results("autoland", "b" * 40)
-    treeherder.group_results("mozilla-central", "a" * 40)
-    assert len(calls) == 3
 
 
 def test_label_jobs_filters_by_push_and_label(monkeypatch):
@@ -211,26 +167,6 @@ def test_label_jobs_cached_per_push_and_label(monkeypatch):
     assert sum("job_type_name=" in u for u in calls) == 2
 
 
-def test_absent_task_raises_rather_than_reporting_nothing(monkeypatch):
-    # A task-level failure (crash, timeout) records no per-manifest results, and so
-    # does a log still being parsed. Neither means "nothing failed".
-    monkeypatch.setattr(
-        treeherder, "group_results", lambda p, rev, refresh=False: {"OTHER": {}}
-    )
-    with pytest.raises(treeherder.GroupResultsUnavailable):
-        treeherder.failing_groups("autoland", "a" * 40, "T1")
-
-
-def test_task_present_with_no_failures_reports_nothing(monkeypatch):
-    # Distinct from the case above: Treeherder has results, none of them failing.
-    monkeypatch.setattr(
-        treeherder,
-        "group_results",
-        lambda p, rev, refresh=False: {"T1": {"a.ini": True, "b.ini": True}},
-    )
-    assert treeherder.failing_groups("autoland", "a" * 40, "T1") == []
-
-
 def test_recheck_reads_the_current_classification(monkeypatch):
     monkeypatch.setattr(treeherder, "_job", lambda p, t: _job(4))
     assert treeherder.recheck_skip_reason("autoland", "T1") == "intermittent"
@@ -250,30 +186,6 @@ def test_recheck_error_does_not_drop_the_failure(monkeypatch):
 
     monkeypatch.setattr(treeherder, "_job", boom)
     assert treeherder.recheck_skip_reason("autoland", "T1") is None
-
-
-def test_failing_groups_returns_only_failures(monkeypatch):
-    monkeypatch.setattr(
-        treeherder,
-        "group_results",
-        lambda p, rev, refresh=False: {
-            "T1": {"a.ini": False, "b.ini": True, "/": False}
-        },
-    )
-    assert treeherder.failing_groups("autoland", "a" * 40, "T1") == ["a.ini"]
-
-
-def test_failing_groups_refetches_when_task_absent(monkeypatch):
-    calls = []
-
-    def fake(project, rev, refresh=False):
-        calls.append(refresh)
-        return {"OTHER": {"a.ini": False}} if refresh else {}
-
-    monkeypatch.setattr(treeherder, "group_results", fake)
-    with pytest.raises(treeherder.GroupResultsUnavailable):
-        treeherder.failing_groups("autoland", "a" * 40, "T1")
-    assert calls == [False, True]
 
 
 def test_config_jobs_filters_platform_option_client_side(monkeypatch):

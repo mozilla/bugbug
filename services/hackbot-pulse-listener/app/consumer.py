@@ -325,7 +325,11 @@ def _process_test(body: dict, tags: dict) -> str | None:
             job_link,
         )
         return None
-    config = ((job or {}).get("platform"), (job or {}).get("platform_option"))
+    config = (
+        (job or {}).get("platform"),
+        (job or {}).get("platform_option"),
+        regression.suite(label),
+    )
 
     def claimed_elsewhere() -> bool:
         return _push_claimed(hg_revision)
@@ -333,18 +337,18 @@ def _process_test(body: dict, tags: dict) -> str | None:
     trigger = (project, hg_revision, task_id, label)
     whole_task = False
     try:
-        groups = treeherder.failing_groups(project, hg_revision, task_id)
-    except treeherder.GroupResultsUnavailable as exc:
+        groups = taskcluster.failing_groups(task_id)
+    except taskcluster.GroupResultsUnavailable as exc:
         # Routine for a suite that reports no manifests (gtest, junit, talos, raptor,
-        # jittest, ...), for a task-level failure (crash, timeout, harness error), and
-        # for a log still being parsed. With no group to compare, fall back to comparing
-        # the task as a whole: the agent may still find the culprit commit even where it
-        # cannot re-run the failing manifest to reproduce.
+        # jittest, ...), and for a task-level failure (crash, timeout, harness error).
+        # With no group to compare, fall back to comparing the task as a whole: the
+        # agent may still find the culprit commit even where it cannot re-run the
+        # failing manifest to reproduce.
         logger.info("%s; comparing the task as a whole -- %s", exc, job_link)
         groups, whole_task = [], True
     except Exception:
-        # A Treeherder error, so comparing the label would only hit the same broken
-        # API; investigate rather than drop the failure.
+        # The errorsummary logs could not be read; investigate rather than drop the
+        # failure.
         logger.exception(
             "Could not read the failing groups of task %s; "
             "running the agent on the whole task -- %s",
@@ -564,7 +568,7 @@ def _fresh_groups(
     candidates: list[str],
     project: str,
     hg_revision: str,
-    config: tuple[str, str],
+    config: tuple[str, str, str],
     should_abort=None,
 ) -> list[str]:
     """The groups whose failure this push introduced."""
