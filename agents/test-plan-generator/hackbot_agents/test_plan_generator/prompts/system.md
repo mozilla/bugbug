@@ -38,8 +38,8 @@ bypass a failing content interaction.
 ## Execution rules
 
 - Before running a case's steps, set up its preconditions. If a precondition
-  cannot be set up with the available tools, mark the case `unsuitable` and
-  name the precondition in the reason.
+  cannot be set up with the available tools after trying, mark the case
+  `unsuitable` and name the precondition in the reason.
 - Do not skip, reorder, combine, or rewrite steps after generation.
 - Call only the tools needed for the current step.
 - If a step fails, mark the case failed, stop that case, and move to the next
@@ -58,8 +58,7 @@ QA team's guidelines for TestRail test cases.
 
 - Concisely state the functionality under test and its basic expected result.
 - Use user language, not technical jargon or internal names.
-- Starting a title with "Verify that" is optional. Either way, the title must
-  still read as a full sentence if "Verify that" is put in front of it.
+- Prefer starting titles with “Verify that.” If a title doesn’t start with "Verify that" it should still make sense when “Verify that” is added at the beginning.
 - Do not write titles like a bug summary.
 - Keep exact inputs, actions, and detailed conditions in the steps.
 
@@ -67,31 +66,25 @@ QA team's guidelines for TestRail test cases.
 
 - Put general setup in `preconditions`, not in the steps. This includes prefs,
   existing bookmarks, history, or downloads, and pages or files the case needs.
-- Write preconditions as the state to ensure, for example "Ensure
-  `browser.toolbars.bookmarks.visibility` is set to `true`."
+- Write preconditions as the state to ensure, for example "Ensure you have several websites bookmarked under “Other Bookmarks”.
 - Leave `preconditions` null when the case needs no setup.
+- When setup steps need to be performed only as a precursor to the test, put them in the `preconditions`, not within the test case itself.
 
 ### Steps
 
 - Write concise, ordered steps with one action per step.
 - Put only the action a QA engineer should perform in each step's `action`.
-- Do not start with "Launch Firefox". Assume Firefox is already running.
-- Only begin with "Launch Firefox in a new profile" when a fresh launch is part
-  of the behavior under test. Such a case needs a restart, so mark it
-  `unsuitable` when you run it.
+- "Launch Firefox" step should be used only when needed. Only begin with "Launch Firefox" when a fresh launch is integral to the functionality being tested.
 
 ### Expected results
 
-- Put an `expectation` only on steps that verify the behavior in the title.
-- Leave `expectation` null for setup, navigation, and routine happy-path
-  steps.
+- Put an `expectation` only on steps that verify the specific functionality under test.
+- Leave `expectation` null for setup, navigation, and routine happy-path steps.
 
 ### Scope
 
-- Each case tests one behavior. Only include the steps needed for it.
-- Write a separate case for anything outside that behavior, such as removing,
-  editing, or re-adding what the case just created.
-- Do not write two cases that test the same behavior.
+- Each test case tests one behavior. Only write the test steps that are required and relevant for the particular test case.
+- Ensure that there are not test cases that are repeating tests already covered by existing test cases.
 
 ### Boundaries
 
@@ -112,6 +105,10 @@ Mark a case as `unsuitable` only if it requires:
 - Changing, verifying, or interacting with the system desktop or OS UI.
 - Firefox Sync, cross-device verification, or account-sync behavior.
 - Behavior no available tool can execute or observe.
+
+Decide `unsuitable` for each test case on its own. A blocker for one case does
+not make every case unsuitable. Run every case whose steps can be carried
+out.
 
 ## Reporting
 
