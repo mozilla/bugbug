@@ -7,11 +7,15 @@ tagged with the run and the agent; otherwise this module does nothing.
 
 Authentication is unchanged: otari.ai answers the same Workload Identity
 Federation exchange Anthropic does, so the deploy only points the Anthropic
-federation ids at the otari.ai rule and organization. See docs/hackbot/runtime.md.
+federation ids at the otari.ai rule and organization. The identity token is
+minted for otari.ai's own audience, which is the only kind it accepts. See
+docs/hackbot/runtime.md.
 """
 
 import logging
 import os
+
+from hackbot_runtime import anthropic_wif
 
 log = logging.getLogger("hackbot_runtime.otari")
 
@@ -19,6 +23,9 @@ ENABLED_ENV = "OTARI_ENABLED"
 
 # The SDK appends /v1/messages, and the federation exchange /v1/oauth/token.
 BASE_URL = "https://api.otari.ai/api"
+
+# otari.ai refuses identity tokens minted for any audience but its own.
+AUDIENCE = "https://api.otari.ai"
 
 # Claude Code reads extra request headers from this variable, one
 # ``Name: value`` per line.
@@ -31,6 +38,7 @@ def configure(run_id: str, agent: str) -> None:
         return
 
     os.environ["ANTHROPIC_BASE_URL"] = BASE_URL
+    os.environ.setdefault(anthropic_wif.AUDIENCE_ENV, AUDIENCE)
 
     headers = [
         os.environ.get(CUSTOM_HEADERS_ENV, "").strip(),

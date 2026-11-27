@@ -119,8 +119,9 @@ the SDK at `https://api.otari.ai/api` and tags every request with
 ([hackbot_runtime/otari.py](../../libs/hackbot-runtime/hackbot_runtime/otari.py)).
 It also sends `Otari-Web-Search: auto`, so otari.ai answers Claude Code's `WebSearch` for
 models with no search of their own. Authentication stays Workload Identity Federation: the
-Anthropic federation ids point at an otari.ai rule that matches the same
-`https://api.anthropic.com` audience.
+Anthropic federation ids point at an otari.ai rule, and the identity token is minted for
+the `https://api.otari.ai` audience, the only one otari.ai accepts (`ANTHROPIC_WIF_AUDIENCE`
+overrides it).
 
 ## Tools and actions
 
