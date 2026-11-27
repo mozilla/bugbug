@@ -11,6 +11,7 @@ from app.schemas import (
     AutowebcompatReproInputs,
     BugFixInputs,
     BuildRepairInputs,
+    CrashInfoInputs,
     DatasetEvalInputs,
     FrontendTriageInputs,
     GeckoTriageInputs,
@@ -233,5 +234,16 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         job_name="hackbot-agent-dataset-eval",
         input_schema=DatasetEvalInputs,
         execution_timeout_seconds=48 * 60 * 60,
+    ),
+    "crash-info": AgentSpec(
+        name="crash-info",
+        description=(
+            "Finds the information missing from a crash bug, guided by an "
+            "empirical taxonomy, recovers what Bugzilla, crash-stats and the "
+            "source establish, infers the rest, and writes notes for bug-fix "
+            "(read-only)."
+        ),
+        job_name="hackbot-agent-crash-info",
+        input_schema=CrashInfoInputs,
     ),
 }
