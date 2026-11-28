@@ -17,7 +17,15 @@ from app.slack.listeners.actions.start_agent_run import (
     StartAgentRunValue,
     start_agent_run_callback,
 )
-from hackbot_client import ApplyActionsResponse, RunAction, RunStatus, TriggeredRun
+from hackbot_client import (
+    ApplyActionsResponse,
+    Identity,
+    IdentityProvider,
+    RunAction,
+    RunStatus,
+    Source,
+    TriggeredRun,
+)
 from pydantic import ValidationError
 from slack_bolt.context.ack.async_ack import AsyncAck
 from slack_bolt.context.async_context import AsyncBoltContext
@@ -99,7 +107,7 @@ class TestStartAgentRun:
         )
         self.context = AsyncBoltContext({"hackbot_client": self.fake_client})
         self.body = {
-            "user": {"id": "U0CLICKER"},
+            "user": {"id": "U0CLICKER", "username": "clicker"},
             "channel": {"id": "C0TRIAGE"},
             "message": _message(_action()),
         }
@@ -133,16 +141,16 @@ class TestStartAgentRun:
     async def test_starts_the_run_the_button_asks_for(self):
         await self._call()
 
-        self.fake_client.trigger_run.assert_awaited_once_with(
-            "bug-fix", {"bug_id": 1234}, dedupe_key=DEDUPE_KEY
-        )
+        self.fake_client.trigger_run.assert_awaited_once()
+        args = self.fake_client.trigger_run.await_args
+        assert args.args == ("bug-fix", {"bug_id": 1234})
+        assert args.kwargs["dedupe_key"] == DEDUPE_KEY
 
     async def test_the_agent_and_inputs_come_from_the_buttons_value(self):
         await self._call(_action(agent_name="test-repair", inputs={"task_id": "abc"}))
 
-        self.fake_client.trigger_run.assert_awaited_once_with(
-            "test-repair", {"task_id": "abc"}, dedupe_key=DEDUPE_KEY
-        )
+        args = self.fake_client.trigger_run.await_args
+        assert args.args == ("test-repair", {"task_id": "abc"})
 
     async def test_the_key_is_forwarded_so_the_api_can_collapse_repeats(self):
         # The whole of #6732: the receiver keeps no state, so this key reaching
@@ -151,6 +159,17 @@ class TestStartAgentRun:
 
         assert self.fake_client.trigger_run.await_args.kwargs["dedupe_key"] == (
             "frontend-triage-run:abc"
+        )
+
+    async def test_the_clicker_is_recorded_as_the_runs_account(self):
+        await self._call()
+
+        kwargs = self.fake_client.trigger_run.await_args.kwargs
+        assert kwargs["source"] == Source.slack
+        assert kwargs["identity"] == Identity(
+            identity_provider=IdentityProvider.slack,
+            user_id="U0CLICKER",
+            username="clicker",
         )
 
     async def test_the_click_is_acknowledged(self):
