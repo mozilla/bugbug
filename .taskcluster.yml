@@ -336,8 +336,8 @@ tasks:
                 command:
                   - "/bin/sh"
                   - "-cxe"
-                  - "git clone --quiet ${repository} /bugbug &&
-                    cd /bugbug &&
+                  - "git clone --quiet ${repository} /ai-dev &&
+                    cd /ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cd ui/changes &&
                     npm install --no-progress &&
@@ -345,7 +345,7 @@ tasks:
                 artifacts:
                   public/frontend:
                     expires: { $fromNow: "2 weeks" }
-                    path: /bugbug/ui/changes/dist
+                    path: /ai-dev/ui/changes/dist
                     type: directory
               metadata:
                 name: bugbug ui build
@@ -359,8 +359,8 @@ tasks:
                 command:
                   - "/bin/sh"
                   - "-cxe"
-                  - "git clone --quiet ${repository} /bugbug &&
-                    cd /bugbug &&
+                  - "git clone --quiet ${repository} /ai-dev &&
+                    cd /ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cd services/hackbot-ui &&
                     npm ci --no-progress &&
@@ -424,8 +424,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} /tmp/bugbug &&
-                    cd /tmp/bugbug &&
+                  - "git clone --quiet ${repository} /tmp/ai-dev &&
+                    cd /tmp/ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                     cd agents/bug-fix &&
@@ -456,8 +456,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&
@@ -493,8 +493,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&
@@ -529,8 +529,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&

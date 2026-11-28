@@ -66,15 +66,15 @@ tasks:
         command:
           - "/bin/sh"
           - "-cxe"
-          - "git clone --quiet ${repository} /bugbug &&
-            cd /bugbug &&
+          - "git clone --quiet ${repository} /ai-dev &&
+            cd /ai-dev &&
             git -c advice.detachedHead=false checkout ${version} &&
             cd ui/changes &&
             npm install --no-progress &&
             npm run release"
         artifacts:
           public/frontend:
-            path: /bugbug/ui/changes/dist
+            path: /ai-dev/ui/changes/dist
             type: directory
       routes:
         - notify.email.bugbug-team@mozilla.com.on-failed
