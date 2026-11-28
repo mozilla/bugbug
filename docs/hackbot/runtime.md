@@ -111,6 +111,23 @@ Federation and the container holds no long-lived key; locally each falls back to
 env var, with no special casing needed either side. Mechanism and failure modes:
 [security.md](security.md).
 
+Optionally, model traffic goes through [otari.ai](https://otari.ai), an LLM gateway that
+records cost per run and per agent, enforces budgets, and can serve a run from a
+non-Anthropic model through the agent's usual `model` input. Setting `OTARI_ENABLED=1`
+points both the Claude SDK and Codex at `https://api.otari.ai/api` (`OTARI_BASE_URL`
+overrides it) and tags every request with `Otari-Conversation-Id: hackbot-<run_id>`,
+`Otari-Tags: app=hackbot,agent=<agent>` and `Otari-Web-Search: auto`, so otari.ai answers
+web search for models with no search of their own
+([hackbot_runtime/otari.py](../../libs/hackbot-runtime/hackbot_runtime/otari.py)).
+
+Authentication stays Workload Identity Federation, the same for both: the Anthropic
+federation ids point at an otari.ai rule, and the identity token is minted for the
+`https://api.otari.ai` audience, the only one otari.ai accepts (`ANTHROPIC_AUDIENCE`
+overrides it). Claude Code makes the exchange itself. Codex's own federation only talks to
+OpenAI, so the runtime gives it a private `CODEX_HOME` whose `otari` model provider gets its
+token from `python -m hackbot_runtime.otari`, which makes the same exchange, and drops
+`OPENAI_FEDERATION_RULE_ID`.
+
 ## Tools and actions
 
 The tools a model can call are **not** in this library — read tools live in [agent-tools/](../../libs/agent-tools/)
