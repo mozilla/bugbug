@@ -104,6 +104,15 @@ whiteboard field, `meta_summary` is the summary pattern of a meta bug, and `whit
 holds the agent's skip tag, `[gecko-triage:skip]`, and the fix tags it may add to an
 analyzed bug, `easy_fix` and `gfb_candidate`.
 
+`left_to_owner` in `shared/bugzilla.toml` has two lists of components, as
+`"Product :: Component"`: `severity` and `priority`. The owners of a listed component set
+that field themselves, for example because they find new bugs with a query for severity
+`--`. The lists apply with or without a team. On a bug in a listed component, the user
+prompt tells the model not to set the field, and the update hook refuses a change to it,
+also on a move into such a component. The comment and the other changes stay as they
+are. A bug filed by staff in a component of the `severity` list keeps severity `--`, so
+the preflight skip for staff bugs with a severity does not apply to it.
+
 The team's `meta-bugs.md` table is also the list of meta bugs the agent may add to
 `blocks`. Every table row must carry a bug id, or the run stops. A run with no team has
 no list, so it adds no meta bug.

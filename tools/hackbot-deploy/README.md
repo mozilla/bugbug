@@ -175,15 +175,17 @@ mirror the Terraform in webservices-infra. Change one, change both.
 
 Prod is never deployed by a build, and never without an approval. From the
 Actions tab, the **Hackbot prod deploy** workflow's `promote` compares stage
-with prod for one agent or service (`promotion`), and if they differ, waits for
-a reviewer in the GitHub environment for its kind: `hackbot-prod-agents` or
-`hackbot-prod-services`. On approval it runs `promote --expect`, which puts on
-exactly the digests that were planned, or reports `superseded` if stage has
-moved on. The approver is recorded as `deployed_by`. For a service, it also
-marks its Sentry release (`<service>@<version>`) deployed to production.
+with prod (`promotions`) for one agent or service, or for `all` of them, and
+for each that differs, a job waits for a reviewer in the GitHub environment
+for its kind: `hackbot-prod-agents` or `hackbot-prod-services` (a reviewer can
+approve every waiting job of an environment at once). On approval each runs
+`promote --expect`, which puts on exactly the digests that were planned, or
+reports `superseded` if stage has moved on. The approver is recorded as
+`deployed_by`. For a service, it also marks its Sentry release
+(`<service>@<version>`) deployed to production.
 
-`rollback` steps prod back through its history in the `hackbot-prod-rollback`
-environment. The prod deploy account is bound to those three environments, so no workflow can
+`rollback` steps one name back through its history in the
+`hackbot-prod-rollback` environment (never `all`). The prod deploy account is bound to those three environments, so no workflow can
 deploy prod without passing their protection. A shape change reaches prod by
 applying the infra PR's prod directory instead, which puts on the images pinned
 for it.
@@ -200,13 +202,16 @@ Six Cloud Build triggers, created in webservices-infra, run the build configs:
 | --------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `stage-agents`                          | the default branch, touching `agents/*/VERSION`                 | to stage, every agent whose version isn't the one stage runs, one after another |
 | `stage-hackbot-api`, `stage-hackbot-ui` | the default branch, touching `services/<service>/VERSION`       | to stage, if its version isn't the one stage runs                               |
-| `dev-agents`                            | `dev/agents/<agent>` or `dev/agents/<agent>/<anything>`         | that agent to dev, always                                                       |
+| `dev-agents`                            | `dev/agents/<agent>` or `dev/agents/<agent>/<anything>`         | that agent to dev, always (`dev/agents/all`: every agent)                       |
 | `dev-hackbot-api`, `dev-hackbot-ui`     | `dev/services/<service>` or `dev/services/<service>/<anything>` | the service to dev, always                                                      |
 
 ```sh
 git push -f upstream HEAD:dev/agents/bug-fix               # try a branch in dev
 git push -f upstream HEAD:dev/services/hackbot-api/my-fix  # a suffix keeps branches apart
+git push -f upstream HEAD:dev/agents/all                   # every agent, one after another
 ```
+
+`all` is reserved: no agent can be called that.
 
 Dev is a shared sandbox: the last push wins. The branches have to be in
 mozilla/bugbug, not a fork.

@@ -9,12 +9,12 @@ Fetches review-context.toml from a GitHub repository, matches changed files
 against the rules, and pre-loads the referenced content.
 """
 
-import asyncio
 import fnmatch
 import hashlib
 import json
 import re
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from logging import getLogger
 from typing import Literal
@@ -34,6 +34,7 @@ from bugbug.tools.code_review.review_context_schema import (
     AnyFilePredicate,
     AnyPredicate,
     BugzillaPredicate,
+    DiffSide,
     FetchRevisionAction,
     FilePredicate,
     LoadFileAction,
@@ -48,7 +49,6 @@ from bugbug.tools.code_review.review_context_schema import (
     parse_review_context_toml,
     tomllib,
 )
-from bugbug.tools.core.connection import get_github_api_headers, get_http_client
 
 logger = getLogger(__name__)
 
@@ -138,20 +138,59 @@ def _action_to_dict(action: RuleAction) -> dict:
     return {key: value for key, value in action.__dict__.items() if value is not None}
 
 
-def parse_diff_files(diff: str) -> set[str]:
-    """Return the set of file paths added or modified by the diff."""
+@dataclass(frozen=True)
+class ChangedFile:
+    path: str
+    # Lines as they were before the patch (context and removed) and after it
+    # (context and added), without line endings. Empty when the diff could not
+    # be parsed.
+    old_lines: tuple[str, ...] = ()
+    new_lines: tuple[str, ...] = ()
+
+
+def parse_changed_files(diff: str) -> dict[str, ChangedFile]:
+    """Return the files the diff touches, keyed by path.
+
+    Removed files are included with only their old lines.
+    """
     try:
-        return {f.path for f in PatchSet.from_string(diff) if not f.is_removed_file}
+        patch = PatchSet.from_string(diff)
     except Exception:
-        files = set()
+        logger.warning("Could not parse diff; file contents will not match rules")
+        changed = {}
         for line in diff.splitlines():
             if line.startswith("+++ b/"):
-                files.add(line[6:].strip())
-        return files
+                path = line[6:].strip()
+                changed[path] = ChangedFile(path=path)
+        return changed
+
+    # Git can emit several entries for one path (e.g. a symlink replaced by a
+    # regular file: a deletion, then an addition), so lines are merged by path.
+    lines_by_path: dict[str, tuple[list[str], list[str]]] = {}
+    for patched_file in patch:
+        old_lines, new_lines = lines_by_path.setdefault(patched_file.path, ([], []))
+        for hunk in patched_file:
+            for line in hunk:
+                value = line.value.rstrip("\r\n")
+                if line.is_added:
+                    new_lines.append(value)
+                elif line.is_removed:
+                    old_lines.append(value)
+                elif line.is_context:
+                    old_lines.append(value)
+                    new_lines.append(value)
+    return {
+        path: ChangedFile(
+            path=path, old_lines=tuple(old_lines), new_lines=tuple(new_lines)
+        )
+        for path, (old_lines, new_lines) in lines_by_path.items()
+    }
 
 
 def rule_matches(
-    rule: Rule, changed_files: set[str], bug_component: str | None = None
+    rule: Rule,
+    changed_files: Mapping[str, ChangedFile],
+    bug_component: str | None = None,
 ) -> bool:
     return predicate_matches(rule.when, changed_files, bug_component)
 
@@ -163,8 +202,20 @@ def _normalise_path(path: str) -> str:
     return path
 
 
-def _file_matches(predicate: FilePredicate, path: str) -> bool:
-    path = _normalise_path(path)
+def _diff_matches(
+    pattern: re.Pattern[str], side: DiffSide | None, changed: ChangedFile
+) -> bool:
+    if side == "old":
+        lines = changed.old_lines
+    elif side == "new":
+        lines = changed.new_lines
+    else:
+        lines = changed.old_lines + changed.new_lines
+    return any(pattern.search(line) for line in lines)
+
+
+def _file_matches(predicate: FilePredicate, changed: ChangedFile) -> bool:
+    path = _normalise_path(changed.path)
     if predicate.include and not any(
         fnmatch.fnmatchcase(path, pattern) for pattern in predicate.include
     ):
@@ -173,7 +224,11 @@ def _file_matches(predicate: FilePredicate, path: str) -> bool:
         fnmatch.fnmatchcase(path, pattern) for pattern in predicate.exclude
     ):
         return False
-    return not predicate.ext or any(path.endswith(ext) for ext in predicate.ext)
+    if predicate.ext and not any(path.endswith(ext) for ext in predicate.ext):
+        return False
+    if predicate.diff_regex is None:
+        return True
+    return _diff_matches(predicate.diff_regex, predicate.side, changed)
 
 
 def _bugzilla_matches(
@@ -196,7 +251,7 @@ def _patch_matches(predicate: PatchPredicate) -> bool:
 
 def predicate_matches(
     predicate: Predicate,
-    changed_files: set[str],
+    changed_files: Mapping[str, ChangedFile],
     bug_component: str | None = None,
 ) -> bool:
     match predicate:
@@ -213,10 +268,10 @@ def predicate_matches(
         case NotPredicate(child=child):
             return not predicate_matches(child, changed_files, bug_component)
         case AnyFilePredicate(predicate=file_predicate):
-            return any(_file_matches(file_predicate, f) for f in changed_files)
+            return any(_file_matches(file_predicate, f) for f in changed_files.values())
         case AllFilesPredicate(predicate=file_predicate):
             return bool(changed_files) and all(
-                _file_matches(file_predicate, f) for f in changed_files
+                _file_matches(file_predicate, f) for f in changed_files.values()
             )
         case BugzillaPredicate():
             return _bugzilla_matches(predicate, bug_component)
@@ -281,15 +336,11 @@ async def _fetch_revision(
             return None
         rev_num = int(m.group(1))
         try:
-            from bugbug.tools.core.platforms.phabricator import get_phabricator_client
+            from bugbug.tools.core.platforms.phabricator import PhabricatorPatch
 
-            def _load():
-                phab = get_phabricator_client()
-                revision = phab.load_revision(rev_id=rev_num)
-                diff_id = revision["fields"]["diffID"]
-                return phab.load_raw_diff(diff_id)
-
-            content = await asyncio.get_event_loop().run_in_executor(None, _load)
+            patch = PhabricatorPatch(revision_id=rev_num)
+            await patch.load()
+            content = patch.raw_diff
             name = f"Revision D{rev_num}"
             return (
                 name,
@@ -304,15 +355,10 @@ async def _fetch_revision(
 
     if repo and commit_hash:
         try:
-            response = await get_http_client().get(
+            response = await _fetch_url(
                 f"https://api.github.com/repos/{repo}/commits/{commit_hash}",
-                headers={
-                    "Accept": "application/vnd.github.diff",
-                    **get_github_api_headers(),
-                },
-                timeout=30,
+                headers={"Accept": "application/vnd.github.diff"},
             )
-            response.raise_for_status()
             source = f"{repo}@{commit_hash}"
             return (
                 f"{repo}@{commit_hash[:12]}",
@@ -373,11 +419,11 @@ def collect_actions(
             rules=_merge_rules(config.rules, extra_context_toml),
         )
 
-    changed_files = parse_diff_files(diff)
+    changed_files = parse_changed_files(diff)
     logger.debug(
         "Matching rules against %d changed file(s): %s",
         len(changed_files),
-        changed_files,
+        sorted(changed_files),
     )
 
     actions_by_key: dict[tuple, MatchedAction] = {}
@@ -566,6 +612,30 @@ def format_external_content(content_items: list[ExternalContentItem]) -> str:
         "\n\n<external_context>\n"
         f"{content}\n"
         "</external_context>"
+    )
+
+
+async def resolve_external_context_for_review(
+    patch,
+    review_context_repo: str | None = None,
+    review_context_branch: str | None = None,
+    extra_context_toml: str | None = None,
+    content_overrides: dict[str, str] | None = None,
+) -> tuple[str, list[dict]]:
+    """Resolve the context repository and load matching review context."""
+    if review_context_repo is None:
+        repo_ref = await patch.github_repo_ref()
+        if repo_ref:
+            review_context_repo, inferred_branch = repo_ref
+            review_context_branch = review_context_branch or inferred_branch
+    if not review_context_repo:
+        return "", []
+    return await load_external_context_for_review(
+        patch,
+        review_context_repo,
+        review_context_branch=review_context_branch or "main",
+        extra_context_toml=extra_context_toml,
+        content_overrides=content_overrides,
     )
 
 

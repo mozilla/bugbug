@@ -8,15 +8,18 @@
 # kept here.
 #
 # From the Actions tab (anyone with write access):
-#   promote   `plan` compares what stage runs with what prod runs. If they
-#             differ, it pins stage's digests and `promote` waits for
-#             approval, then puts on exactly those, unless stage has moved on
-#             in the meantime (superseded). Each run first cancels older runs
-#             of the same name still waiting for approval, so there is at most
-#             one request per agent or service. A service's promote also marks
-#             its Sentry release (<service>@<version>) deployed to production.
-#   rollback  step prod back to its previous recorded deployment, in the
-#             `hackbot-prod-rollback` environment.
+#   promote   `plan` compares what stage runs with what prod runs, for one name
+#             or for `all` of them. For each that differs, it pins stage's
+#             digests and a `promote` job waits for approval in its kind's
+#             environment (a reviewer can approve every waiting job of an
+#             environment at once), then puts on exactly those, unless stage
+#             has moved on in the meantime (superseded). A run cancels older
+#             runs still waiting for approval of any of the same names, so
+#             there is at most one request per agent or service. A service's
+#             promote also marks its Sentry release (<service>@<version>)
+#             deployed to production.
+#   rollback  step one name back to its previous recorded deployment, in the
+#             `hackbot-prod-rollback` environment (not `all`).
 #
 # Shape changes don't come through here: applying the infra PR's prod
 # directory moves prod to the new shape together with the images pinned for
@@ -34,23 +37,27 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        description: "What to deploy: agents/<name> or services/<name>"
+        description: "What to deploy: all (promote only), agents/<name> or services/<name>"
         required: true
         type: choice
-        # Every agent with a [deploy] table, then the services. Filled in by the
-        # hackbot-deploy-names pre-commit hook; don't edit by hand.
+        # all, every agent with a [deploy] table, then the services. Filled in
+        # by the hackbot-deploy-names pre-commit hook; don't edit by hand.
         # hackbot-deploy: names
         options:
+          - all
           - agents/autowebcompat-diagnosis
+          - agents/autowebcompat-intervention
           - agents/autowebcompat-repro
           - agents/bug-fix
           - agents/build-repair
           - agents/dataset-eval
           - agents/frontend-triage
           - agents/gecko-triage
+          - agents/perf-triage
           - agents/test-plan-generator
           - agents/test-repair
           - agents/test-repair-fix
+          - agents/uplift-resolve
           - services/hackbot-api
           - services/hackbot-ui
       action:
@@ -76,36 +83,11 @@ jobs:
       id-token: write
 
     outputs:
-      name: ${{ steps.name.outputs.name }}
-      promotion: ${{ steps.plan.outputs.promotion }}
-      environment: ${{ steps.plan.outputs.environment }}
+      promotions: ${{ steps.plan.outputs.promotions }}
+      count: ${{ steps.plan.outputs.count }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Name
-        id: name
-        env:
-          INPUT_NAME: ${{ inputs.name }}
-        run: echo "name=$INPUT_NAME" >> "$GITHUB_OUTPUT"
-
-      # They haven't started deploying (that only begins after approval), so
-      # cancelling can't interrupt one. Matched by the promote job's name.
-      - name: Cancel older requests for the same name
-        env:
-          NAME: ${{ steps.name.outputs.name }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow hackbot-prod-deploy.yml \
-              --status waiting --json databaseId --jq '.[].databaseId' |
-            while read -r run; do
-              [ "$run" -lt "$GITHUB_RUN_ID" ] || continue
-              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
-                  --jq '.jobs[] | select(.status == "waiting") | .name' | grep -qxF "promote $NAME"; then
-                echo "Cancelling run $run: an older request to promote $NAME"
-                gh run cancel "$run" --repo "$GITHUB_REPOSITORY"
-              fi
-            done
 
       - uses: astral-sh/setup-uv@v6
 
@@ -115,47 +97,74 @@ jobs:
           workload_identity_provider: ${{ vars.GCPV2_GITHUB_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.HACKBOT_MANIFEST_SYNC_SA }}
 
+      # One entry per name whose stage and prod differ; an empty list when
+      # there is nothing to promote.
       - name: What stage runs that prod doesn't
         id: plan
         env:
-          NAME: ${{ steps.name.outputs.name }}
+          NAME: ${{ inputs.name }}
         run: |
-          uv run --frozen --package hackbot-deploy python -m hackbot_deploy promotion "$NAME" \
-            --from stage --to prod --output "$RUNNER_TEMP/promotion.json"
-          echo "promotion=$(jq -c . "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
-          echo "environment=$(jq -r '.environment // ""' "$RUNNER_TEMP/promotion.json")" >> "$GITHUB_OUTPUT"
+          uv run --frozen --package hackbot-deploy python -m hackbot_deploy promotions "$NAME" \
+            --from stage --to prod --output "$RUNNER_TEMP/promotions.json"
+          echo "promotions=$(jq -c . "$RUNNER_TEMP/promotions.json")" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq length "$RUNNER_TEMP/promotions.json")" >> "$GITHUB_OUTPUT"
           {
-            if [ "$(jq length "$RUNNER_TEMP/promotion.json")" -eq 0 ]; then
+            if [ "$(jq length "$RUNNER_TEMP/promotions.json")" -eq 0 ]; then
               echo "### $NAME: nothing to promote"
               echo "Prod already runs what stage runs."
-            else
-              echo "### Promote $NAME to prod (approval in $(jq -r .environment "$RUNNER_TEMP/promotion.json"))"
-              jq -r --arg repo "$GITHUB_REPOSITORY" '
-                "- commit: \(.revision // "unknown")",
-                "- built: \(.created // "unknown"), deployed to stage by \(.deployed_by // "unknown")",
-                (if .replaces then
-                  "- replaces: \(.replaces.revision // "unknown") (changes: https://github.com/\($repo)/compare/\(.replaces.revision)...\(.revision))"
-                 else "- first deploy to prod" end),
-                "",
-                (.images | to_entries[] | "- `\(.key)`: `\(.value)`")
-              ' "$RUNNER_TEMP/promotion.json"
             fi
+            jq -r --arg repo "$GITHUB_REPOSITORY" '.[] |
+              "### Promote \(.name) to prod (approval in \(.environment))",
+              "- commit: \(.revision // "unknown")",
+              "- built: \(.created // "unknown"), deployed to stage by \(.deployed_by // "unknown")",
+              (if .replaces then
+                "- replaces: \(.replaces.revision // "unknown") (changes: https://github.com/\($repo)/compare/\(.replaces.revision)...\(.revision))"
+               else "- first deploy to prod" end),
+              "",
+              (.images | to_entries[] | "- `\(.key)`: `\(.value)`"),
+              ""
+            ' "$RUNNER_TEMP/promotions.json"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # They haven't started deploying (that only begins after approval), so
+      # cancelling can't interrupt one. Matched by the promote jobs' names.
+      - name: Cancel older requests for the same names
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq -r '.[].name' "$RUNNER_TEMP/promotions.json" > "$RUNNER_TEMP/names.txt"
+          [ -s "$RUNNER_TEMP/names.txt" ] || exit 0
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow hackbot-prod-deploy.yml \
+              --status waiting --json databaseId --jq '.[].databaseId' |
+            while read -r run; do
+              [ "$run" -lt "$GITHUB_RUN_ID" ] || continue
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" \
+                  --jq '.jobs[] | select(.status == "waiting") | .name' |
+                sed -n 's/^promote //p' > "$RUNNER_TEMP/waiting.txt"
+              if grep -qxFf "$RUNNER_TEMP/names.txt" "$RUNNER_TEMP/waiting.txt"; then
+                echo "Cancelling run $run: an older request for some of the same names"
+                gh run cancel "$run" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
 
   promote:
     # The plan job of a newer run finds and cancels this one by this name.
-    name: promote ${{ needs.plan.outputs.name }}
+    name: promote ${{ matrix.name }}
     needs: plan
-    if: needs.plan.outputs.promotion != '{}' && !inputs.dry_run
+    if: needs.plan.outputs.count != '0' && !inputs.dry_run
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.promotions) }}
     # Chosen by the deploy tool from the kind: hackbot-prod-agents or
     # hackbot-prod-services.
-    environment: ${{ needs.plan.outputs.environment }}
+    environment: ${{ matrix.environment }}
 
     # One deploy of a given agent or service at a time; different ones in
     # parallel.
     concurrency:
-      group: hackbot-prod-deploy-${{ needs.plan.outputs.name }}
+      group: hackbot-prod-deploy-${{ matrix.name }}
       cancel-in-progress: false
 
     permissions:
@@ -176,13 +185,16 @@ jobs:
 
       - name: Deploy what was approved
         env:
-          NAME: ${{ needs.plan.outputs.name }}
-          PROMOTION: ${{ needs.plan.outputs.promotion }}
+          NAME: ${{ matrix.name }}
+          ENVIRONMENT: ${{ matrix.environment }}
+          PROMOTION: ${{ toJSON(matrix) }}
           GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$PROMOTION" > "$RUNNER_TEMP/promotion.json"
-          approver=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" \
-            --jq '[.[] | select(.state == "approved")] | last | .user.login // empty')
+          # A run can wait in both environments; the approver is whoever
+          # approved this job's.
+          approver=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" | jq -r --arg env "$ENVIRONMENT" \
+            '[.[] | select(.state == "approved" and any(.environments[]; .name == $env))] | last | .user.login // empty')
           export HACKBOT_DEPLOY_ACTOR="github:${approver:-$GITHUB_ACTOR}"
 
           set +e
@@ -197,7 +209,7 @@ jobs:
             cat "$RUNNER_TEMP/out.txt"
             echo '```'
             if grep -q ": superseded" "$RUNNER_TEMP/out.txt"; then
-              echo "Stage has moved on since this was planned; the newer build's run asks for its own approval."
+              echo "Stage has moved on since this was planned; promote again to put on what it runs now."
             fi
             if [ "$status" -eq 3 ]; then
               echo "Prod hasn't applied the shape this image was built for. Apply the infra PR's prod directory first; that apply puts on the images pinned for the new shape."
@@ -208,10 +220,10 @@ jobs:
       # The stage build made the release (<service>@<version>, with its
       # commits); a promote puts that same release in production.
       - name: Mark the Sentry release deployed to production
-        if: startsWith(needs.plan.outputs.name, 'services/')
+        if: startsWith(matrix.name, 'services/')
         env:
-          NAME: ${{ needs.plan.outputs.name }}
-          PROMOTION: ${{ needs.plan.outputs.promotion }}
+          NAME: ${{ matrix.name }}
+          PROMOTION: ${{ toJSON(matrix) }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: mozilla
         run: |
@@ -227,9 +239,11 @@ jobs:
           service="${NAME#services/}"
           SENTRY_PROJECT="$service" npx --yes @sentry/cli@2 deploys new --release "$service@$version" -e production
 
+  # One name at a time: rolling everything back at once is rarely meant.
   rollback:
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' &&
+      inputs.name != 'all' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     environment: hackbot-prod-rollback

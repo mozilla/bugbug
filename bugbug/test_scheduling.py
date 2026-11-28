@@ -5,8 +5,10 @@
 
 import bisect
 import collections
+import dataclasses
 import glob
 import itertools
+import json
 import logging
 import math
 import os
@@ -16,6 +18,7 @@ import re
 import shelve
 import shutil
 import struct
+import subprocess
 import tomllib
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +38,7 @@ from typing import (
     cast,
 )
 
+import orjson
 from tqdm import tqdm
 
 from bugbug import db, repository
@@ -75,10 +79,16 @@ db.register(
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
 PAST_FAILURES_GROUP_DB = "past_failures_group.lmdb.tar.zst"
 TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
+# The number of commits at the end of the commits DB among which the last commit analyzed for the
+# touched together DB is looked for, and how many of them before it are read too (see
+# _get_commits_from). The window allows the DB to be updated quickly with up to about two weeks of
+# commits.
+TOUCHED_TOGETHER_RECENT_COMMITS = 10000
+TOUCHED_TOGETHER_RECENT_MARGIN = 2000
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    1,
+    2,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
@@ -167,6 +177,52 @@ def filter_runnables(
             for runnable in runnables
             if runnable in all_runnables and not is_ignored_group(runnable)
         )
+
+
+def normalize_group(group: str) -> str:
+    """Convert a group name from Treeherder or the taskgraph to the name used by the models."""
+    # mozci.data needs to be imported before mozci.task to avoid a circular import.
+    import mozci.data  # noqa: F401
+    from mozci.task import wpt_workaround
+
+    # WPT groups are relative to the root of the WPT suite (sometimes prefixed with
+    # ":"), while the models use the names normalized by mozci.
+    if group.startswith(("/", ":/")):
+        return wpt_workaround(group)
+
+    # Manifests included by another manifest are reported as "manifest:parent".
+    return group.split(":")[0]
+
+
+def get_full_graph_tasks(content: bytes, labels: set[str]) -> dict[str, dict]:
+    """The definitions of some tasks from a decision task's full-task-graph.json, by label.
+
+    The full task graph is hundreds of MB, and much more once parsed, so only the definitions of
+    the given tasks are parsed, where they are in the text. If one isn't found this way (e.g. if
+    the format of the file changed), the whole graph is parsed.
+    """
+    text = content.decode()
+    decoder = json.JSONDecoder()
+    tasks: dict[str, dict] = {}
+    for label in labels:
+        key = f"{json.dumps(label)}:{{"
+        start = text.find(key)
+        while start != -1:
+            try:
+                task, _ = decoder.raw_decode(text, start + len(key) - 1)
+            except ValueError:
+                task = None
+            if isinstance(task, dict) and task.get("label") == label:
+                tasks[label] = task
+                break
+            start = text.find(key, start + 1)
+
+    missing = labels - tasks.keys()
+    if missing:
+        del text
+        graph = orjson.loads(content)
+        tasks.update({label: graph[label] for label in missing if label in graph})
+    return tasks
 
 
 def rename_task(task: str) -> str:
@@ -384,8 +440,7 @@ def _configs_by_group(config_groups: Iterable[Runnable]) -> dict[Group, set[str]
 
 def get_config_select_regressions(
     push_data_factory: Callable[[], Iterable[PushResult]],
-    recent_pushes: int = 1000,
-) -> tuple[list[ConfigSelectRegression], set[str]]:
+) -> list[ConfigSelectRegression]:
     """The regressions of config/group push data, with the configs they failed on and passed on.
 
     A config the regressed group ran on without failing passed, both on the culprit push and on the
@@ -394,9 +449,6 @@ def get_config_select_regressions(
     run after the culprit failed and the failure was attributed to a later push (e.g. because the config
     didn't run on the culprit): with no run in between, the attribution can't tell the pushes apart, so
     the config didn't verifiably pass. A failure after a pass doesn't matter (as in get_non_run_negatives).
-
-    Also returns the configs that ran in the last `recent_pushes` pushes, used to name the configs of
-    the tasks in the current task graph (see testconfigselect.live_candidates).
     """
     rev_index: dict[Revision, int] = {}
     culprits: list[
@@ -409,7 +461,6 @@ def get_config_select_regressions(
         ]
     ] = []
     failures_at: dict[int, dict[Group, set[str]]] = {}
-    num_pushes = 0
     for index, push in enumerate(push_data_factory()):
         (
             revisions,
@@ -418,7 +469,6 @@ def get_config_select_regressions(
             possible_regressions,
             likely_regressions,
         ) = push
-        num_pushes += 1
         for revision in revisions:
             rev_index[revision] = index
         if possible_regressions or likely_regressions:
@@ -452,16 +502,13 @@ def get_config_select_regressions(
 
     # The first push of the window each config ran the group on.
     later_runs: dict[tuple[int, Group], dict[str, int]] = collections.defaultdict(dict)
-    recent: set[str] = set()
     for index, push in enumerate(push_data_factory()):
         groups_needed = needed.get(index)
-        if groups_needed is None and index < num_pushes - recent_pushes:
+        if groups_needed is None:
             continue
 
         for group, configs in _configs_by_group(push[2]).items():
-            if index >= num_pushes - recent_pushes:
-                recent |= configs
-            for culprit in groups_needed.get(group, ()) if groups_needed else ():
+            for culprit in groups_needed.get(group, ()):
                 for config in configs:
                     later_runs[(culprit, group)].setdefault(config, index)
 
@@ -487,7 +534,7 @@ def get_config_select_regressions(
                 )
             )
 
-    return regressions, recent
+    return regressions
 
 
 def get_push_data(
@@ -619,6 +666,7 @@ class PastFailures:
         else:
             raise UnexpectedGranularityError(granularity)
         self.granularity = granularity
+        self.readonly = readonly
 
         self.db = shelve.Shelf(
             LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
@@ -642,17 +690,23 @@ class PastFailures:
     def all_runnables(self, value) -> None:
         self.db["all_runnables"] = value
 
+    def _get(self, key: str) -> ExpQueue | None:
+        if not self.readonly:
+            return self.db.get(key, None)
+
+        # Read the underlying DB directly, as shelve looks keys up twice (to check
+        # they exist, and then to read them).
+        value = self.db.dict.get(key.encode("utf-8"))
+        return pickle.loads(value) if value is not None else None
+
     def get(self, key: str) -> ExpQueue | None:
-        value = self.db.get(key, None)
+        value = self._get(key)
 
         # Fallback on INI if the group is now TOML.
         if value is None and self.granularity == "group" and key.endswith(".toml"):
-            ini_key = f"{key[:-4]}ini"
-            try:
-                value = self.db[ini_key]
+            value = self._get(f"{key[:-4]}ini")
+            if value is not None and not self.readonly:
                 self.db[key] = value
-            except KeyError:
-                return None
 
         return value
 
@@ -923,12 +977,8 @@ def get_touched_together_key(f1: str, f2: str) -> bytes:
 def get_touched_together(f1: str, f2: str) -> int:
     touched_together = get_touched_together_db(True)
 
-    key = get_touched_together_key(f1, f2)
-
-    try:
-        return struct.unpack("I", touched_together[key])[0]
-    except KeyError:
-        return 0
+    value = touched_together.get(get_touched_together_key(f1, f2))
+    return struct.unpack("I", value)[0] if value is not None else 0
 
 
 def set_touched_together(f1: str, f2: str) -> None:
@@ -1035,6 +1085,45 @@ def get_cochange_pmi(source_dirs: Iterable[str], runnable_dirs: Iterable[str]) -
     return best
 
 
+def _get_commits_from(
+    last_analyzed: bytes | memoryview | None,
+) -> Iterable[repository.CommitDict]:
+    """The commits of the commits DB from where the touched together DB needs to be updated.
+
+    They are filtered like repository.get_commits does. When the last analyzed commit is among the last TOUCHED_TOGETHER_RECENT_COMMITS commits, the
+    commits start TOUCHED_TOGETHER_RECENT_MARGIN commits before it, so that the revisions sent to
+    update_touched_together which are slightly before it (as commits can be in a different order
+    in mozilla-central and autoland) are found. Otherwise, all the commits are read, which is much
+    slower as the commits DB is very large.
+    """
+    if last_analyzed is not None:
+        last_analyzed = bytes(last_analyzed)
+        lines = db.read_last_lines(
+            repository.COMMITS_DB, TOUCHED_TOGETHER_RECENT_COMMITS
+        )
+        # Only the commit with the node is deserialized (if the serialization changed, the commit
+        # wouldn't be found, and all the commits would be read).
+        needle = b'"node":"' + last_analyzed + b'"'
+        position = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if needle in line
+                and orjson.loads(line)["node"] == last_analyzed.decode()
+            ),
+            None,
+        )
+        if position is not None and position >= TOUCHED_TOGETHER_RECENT_MARGIN:
+            del lines[: position - TOUCHED_TOGETHER_RECENT_MARGIN]
+            return repository.filter_commits(orjson.loads(line) for line in lines)
+
+        logger.info(
+            "The last analyzed commit is not among the last commits, reading all commits"
+        )
+
+    return repository.get_commits()
+
+
 def update_touched_together(
     runnable_dirs: Collection[str] = (),
 ) -> Generator[None, Revision | None, None]:
@@ -1054,7 +1143,8 @@ def update_touched_together(
 
     end_revision = yield
 
-    for commit in repository.get_commits():
+    commits = _get_commits_from(last_analyzed)
+    for commit in commits:
         seen.add(commit["node"])
 
         if can_start:
@@ -1233,9 +1323,12 @@ def generate_data(
     likely_regressions: Iterable[str],
 ):
     if granularity != "label":
+        # Each directory counts once, however many of the push's files are in it.
         source_file_dirs = tuple(
-            os.path.dirname(source_file) for source_file in commit["files"]
+            set(os.path.dirname(source_file) for source_file in commit["files"])
         )
+        # Runnables in the same directories have the same touched together values.
+        touched_together_by_dirs: dict[tuple[str, ...], tuple[int, int, float]] = {}
 
     for runnable in runnables:
         if granularity != "label":
@@ -1243,19 +1336,26 @@ def generate_data(
                 runnable[1] if isinstance(runnable, tuple) else runnable
             )
 
-            touched_together_files = sum(
-                get_touched_together(source_file, runnable_dir)
-                for source_file in commit["files"]
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_directories = sum(
-                get_touched_together(source_file_dir, runnable_dir)
-                for source_file_dir in source_file_dirs
-                for runnable_dir in runnable_dirs
-            )
-            touched_together_pmi = get_cochange_pmi(
-                set(source_file_dirs), runnable_dirs
-            )
+            if runnable_dirs not in touched_together_by_dirs:
+                touched_together_by_dirs[runnable_dirs] = (
+                    sum(
+                        get_touched_together(source_file, runnable_dir)
+                        for source_file in commit["files"]
+                        for runnable_dir in runnable_dirs
+                    ),
+                    sum(
+                        get_touched_together(source_file_dir, runnable_dir)
+                        for source_file_dir in source_file_dirs
+                        for runnable_dir in runnable_dirs
+                    ),
+                    get_cochange_pmi(source_file_dirs, runnable_dirs),
+                )
+
+            (
+                touched_together_files,
+                touched_together_directories,
+                touched_together_pmi,
+            ) = touched_together_by_dirs[runnable_dirs]
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions
@@ -1385,8 +1485,6 @@ def get_test_info(date: datetime) -> dict[str, Any]:
     return r.json()
 
 
-manifest_by_path: dict[str, set[str]] | None = None
-
 # If a modified file is close to more manifests than this, it is too broad
 # (e.g. dom/moz.build) for the sibling heuristic to be informative, so we
 # don't schedule any of them and leave the decision to the model.
@@ -1450,40 +1548,171 @@ def get_suite_test_dirs(repo_dir: str) -> dict[str, tuple[str, ...]]:
 MAX_SIBLING_MANIFESTS = 42
 
 
-def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
-    global manifest_by_path
+@dataclasses.dataclass
+class _RepoFiles:
+    """The files of a repository at the last revision analyzed, to compute the ones at the next one."""
 
-    repo_dir = Path(repo_dir_str)
+    rev: str = ""
+    # The files at the revision, sorted.
+    files: list[str] = dataclasses.field(default_factory=list)
+    # The test manifests parsed at the revision (None when not a test manifest), by path.
+    parsed_manifests: dict[str, dict | None] = dataclasses.field(default_factory=dict)
+    # The test manifests at the revision, by the paths they include.
+    manifest_by_path: dict[str, set[str]] | None = None
 
-    manifests = set()
 
+_files_by_repo: dict[str, _RepoFiles] = collections.defaultdict(_RepoFiles)
+
+
+def _hg(repo_dir: str, *args: str) -> bytes:
+    # Not using the command server, as it is slow to read a large output.
+    return subprocess.run(
+        ["hg", *args], cwd=repo_dir, check=True, capture_output=True
+    ).stdout
+
+
+def _get_files(repo_dir: str, rev: str) -> list[str]:
+    """The sorted files of the repository at a revision.
+
+    They are listed with Mercurial, without updating the working directory, as it is slow on a
+    large repository. They are computed from the files at the last revision analyzed and the
+    files changed between the two revisions, which is faster than listing them all.
+    """
+    cached = _files_by_repo[repo_dir]
+    if rev == cached.rev:
+        return cached.files
+
+    if not cached.rev:
+        out = _hg(repo_dir, "files", "-r", rev, "-0")
+        cached.files = sorted(
+            path for path in out.decode("utf-8", "surrogateescape").split("\0") if path
+        )
+        cached.manifest_by_path = None
+    else:
+        added = set()
+        removed = set()
+        manifests_changed = False
+        out = _hg(repo_dir, "status", "--rev", cached.rev, "--rev", rev, "-amr", "-0")
+        for entry in out.decode("utf-8", "surrogateescape").split("\0"):
+            if not entry:
+                continue
+
+            status, path = entry.split(" ", 1)
+            if status == "A":
+                added.add(path)
+            elif status == "R":
+                removed.add(path)
+            if path.endswith(".toml"):
+                cached.parsed_manifests.pop(path, None)
+                manifests_changed = True
+
+        if added or removed:
+            cached.files = sorted((set(cached.files) - removed) | added)
+
+        # The test manifests by the paths they include only change if test manifests change,
+        # or if files are added or removed, as they might match the globs of support files.
+        if manifests_changed or added or removed:
+            cached.manifest_by_path = None
+
+    cached.rev = rev
+    return cached.files
+
+
+def _files_under(files: list[str], path: str) -> list[str]:
+    """The files (recursively) in a directory, from a sorted list of files."""
+    if not path:
+        return files
+    start = bisect.bisect_left(files, f"{path}/")
+    # "0" is the character after "/".
+    end = bisect.bisect_left(files, f"{path}0", lo=start)
+    return files[start:end]
+
+
+def _glob(files: list[str], pattern: str) -> list[str]:
+    """The files matching a recursive glob pattern, from a sorted list of files."""
+    regex = re.compile(glob.translate(pattern, recursive=True))
+    # Only the files in the folder before the first wildcard can match.
+    folder = os.path.dirname(pattern.split("*", 1)[0])
+    return [f for f in _files_under(files, folder) if regex.match(f)]
+
+
+def _is_in(files: list[str], path: str) -> bool:
+    """Whether a path is in a sorted list of files."""
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
+
+
+def _read_files(repo_dir: str, rev: str, paths: list[str]) -> dict[str, bytes]:
+    """The contents of files at a revision, skipping the ones which don't exist."""
+    files = _get_files(repo_dir, rev)
+    paths = [path for path in paths if _is_in(files, path)]
+    if not paths:
+        return {}
+
+    out = _hg(repo_dir, "cat", "-r", rev, "-T", "json", *(f"path:{p}" for p in paths))
+    return {
+        entry["path"]: entry["data"].encode("utf-8", "surrogateescape")
+        for entry in orjson.loads(out)
+    }
+
+
+def find_manifests_for_paths(repo_dir: str, paths: list[str], rev: str) -> set[str]:
+    """The test manifests and web-platform test directories to run for modified paths.
+
+    The files of the repository at revision `rev` are used, read with Mercurial without
+    updating the working directory, as it is slow on a large repository.
+    """
+    repo_files = _get_files(repo_dir, rev)
+    cached = _files_by_repo[repo_dir]
+
+    manifest_by_path = cached.manifest_by_path
     if manifest_by_path is None:
-        manifest_by_path = collections.defaultdict(set)
+        manifest_by_path = cached.manifest_by_path = collections.defaultdict(set)
 
-        for toml_path in repo_dir.rglob("*.toml"):
+        toml_paths = []
+        for toml_rel in repo_files:
+            if not toml_rel.endswith(".toml"):
+                continue
+
+            parts = toml_rel.split("/")
             # HACK: These are not test manifests, skip them.
             if (
-                toml_path.name in ("Cargo.toml", "pyproject.toml")
-                or toml_path.parent.name == "test-manifest-toml"
-                or "third_party" in toml_path.parts
-                or "manifestparser" in toml_path.parts
+                parts[-1] in ("Cargo.toml", "pyproject.toml")
+                or (len(parts) > 1 and parts[-2] == "test-manifest-toml")
+                or "third_party" in parts
+                or "manifestparser" in parts
             ):
                 continue
 
-            with open(toml_path, "rb") as toml_f:
-                data = tomllib.load(toml_f)
+            toml_paths.append(toml_rel)
+
+        # Only parse the manifests which changed since the revision the files were computed from.
+        to_parse = [p for p in toml_paths if p not in cached.parsed_manifests]
+        for toml_rel, content in _read_files(repo_dir, rev, to_parse).items():
+            try:
+                data = tomllib.loads(content.decode("utf-8"))
+            except UnicodeDecodeError, tomllib.TOMLDecodeError:
+                logger.warning("Failed to parse %s", toml_rel)
+                data = None
 
             # HACK: If there is no "DEFAULT" key and there is no key that starts with "test", this is unlikely a test manifest.
-            if "DEFAULT" not in data and not any(
-                key.startswith("test") for key in data
+            if data is not None and (
+                "DEFAULT" not in data
+                and not any(key.startswith("test") for key in data)
             ):
+                data = None
+
+            cached.parsed_manifests[toml_rel] = data
+
+        for toml_rel in toml_paths:
+            data = cached.parsed_manifests.get(toml_rel)
+            if data is None:
                 continue
 
-            toml_rel = toml_path.relative_to(repo_dir)
-            toml_dir = toml_path.parent
+            toml_dir = os.path.dirname(toml_rel)
 
             # The manifest path itself, so we schedule it when it is touched.
-            manifest_by_path[str(toml_rel)].add(str(toml_rel))
+            manifest_by_path[toml_rel].add(toml_rel)
 
             # Collect head files.
             head_value = data.get("DEFAULT", {}).get("head", [])
@@ -1495,8 +1724,8 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                     continue
 
                 manifest_by_path[
-                    str((toml_dir / head_file).resolve().relative_to(repo_dir))
-                ].add(str(toml_rel))
+                    os.path.normpath(os.path.join(toml_dir, head_file))
+                ].add(toml_rel)
 
             # Collect support files.
             def collect_support_files(value, toml_dir=toml_dir, toml_rel=toml_rel):
@@ -1512,22 +1741,19 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                         support_file = support_file[1:]
 
                     if support_file.startswith("/"):
-                        support_file_path = (repo_dir / support_file[1:]).resolve()
+                        support_file_path = os.path.normpath(support_file[1:])
                     else:
-                        support_file_path = (toml_dir / support_file).resolve()
+                        support_file_path = os.path.normpath(
+                            os.path.join(toml_dir, support_file)
+                        )
 
                     if "*" in support_file:
-                        files = [
-                            Path(f)
-                            for f in glob.glob(str(support_file_path), recursive=True)
-                        ]
+                        files = _glob(repo_files, support_file_path)
                     else:
                         files = [support_file_path]
 
                     for f in files:
-                        manifest_by_path[str(f.relative_to(repo_dir))].add(
-                            str(toml_rel)
-                        )
+                        manifest_by_path[f].add(toml_rel)
 
             collect_support_files(data.get("DEFAULT", {}))
 
@@ -1536,26 +1762,31 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
                 if key != "DEFAULT" and isinstance(val, dict):
                     collect_support_files(val)
 
-                    manifest_by_path[
-                        str((toml_dir / key).resolve().relative_to(repo_dir))
-                    ].add(str(toml_rel))
+                    manifest_by_path[os.path.normpath(os.path.join(toml_dir, key))].add(
+                        toml_rel
+                    )
+
+    manifests = set()
 
     for path in paths:
+        parent = os.path.dirname(path)
+
         # If a manifest, a test, or a support file is modified, run the manifest that includes it.
         if path in manifest_by_path:
             manifests.update(manifest_by_path[path])
         # Skip root-level files, otherwise we'd walk the whole repository and
         # schedule every manifest.
-        elif (repo_dir / path).parent != repo_dir:
+        elif parent:
             # Find manifests that are in test subfolders close to a modified file (e.g. if dom/battery/BatteryManager.cpp is modified, we should run dom/battery/test/chrome.toml and dom/battery/test/mochitest.toml).
-            sibling_manifests: set[str] = set()
-            for sibling in (repo_dir / path).parent.rglob("*"):
-                if sibling.is_dir() and repository.is_test(f"{str(sibling)}/"):
-                    sibling_manifests.update(
-                        str(f.relative_to(repo_dir))
-                        for f in sibling.rglob("*.toml")
-                        if f.is_file()
-                    )
+            # As is_test checks for substrings, a folder is a test folder if any of the folders
+            # containing it is.
+            sibling_manifests = {
+                f
+                for f in _files_under(repo_files, parent)
+                if f.endswith(".toml")
+                and os.path.dirname(f) != parent
+                and repository.is_test(f"/{os.path.dirname(f)}/")
+            }
 
             if len(sibling_manifests) <= MAX_SIBLING_MANIFESTS:
                 manifests.update(sibling_manifests)
@@ -1570,31 +1801,91 @@ def find_manifests_for_paths(repo_dir_str: str, paths: list[str]) -> set[str]:
 
                     relative = Path(path).relative_to(f"{base}/{sub}")
 
-                    test_root = repo_dir / base / "tests"
+                    test_root = Path(base) / "tests"
                     cur_dir = test_root / relative.parent
 
-                    def is_wpt_file(p: Path) -> bool:
-                        return any(
-                            str(p).endswith(suffix)
-                            for suffix in (".html", ".any.js", ".worker.js")
-                        )
+                    def is_wpt_file(name: str) -> bool:
+                        return name.endswith((".html", ".any.js", ".worker.js"))
 
                     def has_wpt_files(d: Path) -> bool:
-                        return d.is_dir() and any(is_wpt_file(p) for p in d.iterdir())
+                        # Check the names of the files and folders directly in the folder.
+                        return any(
+                            is_wpt_file(f.removeprefix(f"{d}/").split("/")[0])
+                            for f in _files_under(repo_files, str(d))
+                        )
 
                     while cur_dir != test_root and not has_wpt_files(cur_dir):
                         cur_dir = cur_dir.parent
 
-                    # Ignore files in top level "meta" or "tests".
-                    if len(cur_dir.parts) == 1:
-                        break
-
                     if has_wpt_files(cur_dir):
-                        manifests.add(str(cur_dir.relative_to(repo_dir)))
+                        manifests.add(str(cur_dir))
 
                     break
 
     return manifests
+
+
+def approximate_manifests_for_paths(
+    paths: Iterable[str], groups: Collection[str]
+) -> set[str]:
+    """The groups among `groups` that find_manifests_for_paths likely runs for modified paths.
+
+    Without the repository, the files included by each manifest aren't known: a manifest is assumed
+    to include the files in its directory, and a web-platform test directory to be the closest one
+    among `groups` that contains the modified file. On autoland pushes, ~85% of the groups returned
+    are also run by find_manifests_for_paths, and they include ~95% of its groups.
+    """
+    manifests = [
+        (group, os.path.dirname(group))
+        for group in groups
+        if not group.startswith(WPT_ROOTS)
+    ]
+    wpt_groups = {group for group in groups if group.startswith(WPT_ROOTS)}
+
+    result: set[str] = set()
+    for path in paths:
+        parent = os.path.dirname(path)
+
+        result.update(
+            group
+            for group, group_dir in manifests
+            if path == group or (group_dir and path.startswith(f"{group_dir}/"))
+        )
+
+        # The manifests in test subfolders close to a modified file, as find_manifests_for_paths.
+        if parent:
+            siblings = {
+                group
+                for group, group_dir in manifests
+                if group_dir.startswith(f"{parent}/")
+                and repository.is_test(f"/{group_dir}/")
+            }
+            if len(siblings) <= MAX_SIBLING_MANIFESTS:
+                result |= siblings
+
+        if path.endswith(("/META.yml", "/README.md")):
+            continue
+        for root in WPT_ROOTS:
+            prefix = next(
+                (
+                    f"{root}/{sub}/"
+                    for sub in ("tests", "meta")
+                    if path.startswith(f"{root}/{sub}/")
+                ),
+                None,
+            )
+            if prefix is None:
+                continue
+
+            # The closest directory containing the file.
+            cur_dir = os.path.dirname(path[len(prefix) :])
+            while cur_dir and f"{root}/tests/{cur_dir}" not in wpt_groups:
+                cur_dir = os.path.dirname(cur_dir)
+            if cur_dir:
+                result.add(f"{root}/tests/{cur_dir}")
+            break
+
+    return result
 
 
 _GTEST_RE = re.compile(rb"^[ \t]*(?:TEST|TEST_F)\(", re.MULTILINE)
@@ -1606,22 +1897,31 @@ _CPPUNIT_INFRA_FILES = {
 }
 
 
-def _get_cppunit_test_names(repo_dir: Path) -> set[str]:
-    try:
-        with open(repo_dir / "testing" / "cppunittest.toml", "rb") as f:
-            data = tomllib.load(f)
-        return {f"{key}.cpp" for key in data if key != "DEFAULT"}
-    except FileNotFoundError:
+def _get_cppunit_test_names(repo_dir: str, rev: str) -> set[str]:
+    path = "testing/cppunittest.toml"
+    content = _read_files(repo_dir, rev, [path]).get(path)
+    if content is None:
         logger.error(
             "testing/cppunittest.toml wasn't found, cppunit heuristic won't work"
         )
         return set()
 
+    data = tomllib.loads(content.decode("utf-8"))
+    return {f"{key}.cpp" for key in data if key != "DEFAULT"}
+
 
 def find_tasks_for_paths(
-    repo_dir_str: str, known_tasks: tuple[str, ...], paths: list[str]
+    repo_dir: str,
+    known_tasks: tuple[str, ...],
+    paths: list[str],
+    rev: str,
 ) -> list[str]:
-    repo_dir = Path(repo_dir_str)
+    """The tasks to run for modified paths, according to some heuristics.
+
+    The files of the repository at revision `rev` are used, read with Mercurial without
+    updating the working directory, as it is slow on a large repository.
+    """
+    files = _get_files(repo_dir, rev)
 
     select_gtest = False
     select_cppunit = False
@@ -1642,34 +1942,35 @@ def find_tasks_for_paths(
     # Any file in a folder close to a gtest folder is modified (e.g. dom/media/CubebUtils.cpp and we have dom/media/gtest/).
     if not select_gtest:
         for path in paths:
+            parent = os.path.dirname(path)
             # Skip root-level files, otherwise we'd walk the whole repository.
-            if (repo_dir / path).parent == repo_dir:
+            if not parent:
                 continue
 
-            for sibling in (repo_dir / path).parent.rglob("*"):
-                if sibling.is_dir() and any(
-                    part in _GTEST_FOLDERS for part in sibling.parts
-                ):
-                    select_gtest = True
-                    break
-            if select_gtest:
+            # The folders in the parent folder are the ones of the files in it.
+            if any(
+                part in _GTEST_FOLDERS
+                for f in _files_under(files, parent)
+                for part in os.path.dirname(f)[len(parent) + 1 :].split("/")
+            ):
+                select_gtest = True
                 break
 
     # Any C/C++ file containing gtests is modified.
     if not select_gtest:
-        for path in paths:
-            if repository.get_type(path) in ["C/C++", "Objective-C/C++"]:
-                try:
-                    with open(repo_dir / path, "rb") as f:
-                        select_gtest = _GTEST_RE.search(f.read()) is not None
-                        if select_gtest:
-                            break
-                except OSError:
-                    pass
+        cpp_paths = [
+            path
+            for path in paths
+            if repository.get_type(path) in ["C/C++", "Objective-C/C++"]
+        ]
+        select_gtest = any(
+            _GTEST_RE.search(content) is not None
+            for content in _read_files(repo_dir, rev, cpp_paths).values()
+        )
 
     # Cppunit: run if infrastructure files are modified, or any .cpp file whose
     # name matches a stem listed in testing/cppunittest.toml is modified.
-    cppunit_test_names = _get_cppunit_test_names(repo_dir)
+    cppunit_test_names = _get_cppunit_test_names(repo_dir, rev)
     for path in paths:
         if path in _CPPUNIT_INFRA_FILES or Path(path).name in cppunit_test_names:
             select_cppunit = True
@@ -1686,3 +1987,51 @@ def find_tasks_for_paths(
             selected_tasks.append(task)
 
     return selected_tasks
+
+
+def get_gtest_folders(repo_dir: str) -> tuple[str, ...]:
+    """The gtest folders of a Firefox tree (see find_tasks_for_paths), from its moz.build files.
+
+    Only the moz.build files are needed (e.g. a sparse checkout), as gtest folders contain one.
+    """
+    folders = set()
+    for root, subdirs, files in os.walk(repo_dir):
+        subdirs[:] = [d for d in subdirs if not d.startswith((".", "obj-"))]
+        rel_root = os.path.relpath(root, repo_dir).replace(os.sep, "/")
+        if "moz.build" in files and any(
+            part in _GTEST_FOLDERS for part in rel_root.split("/")
+        ):
+            folders.add(rel_root)
+    return tuple(sorted(folders))
+
+
+def approximate_tasks_for_paths(
+    paths: Iterable[str], tasks: Iterable[str], gtest_folders: Collection[str]
+) -> set[str]:
+    """The tasks among `tasks` that find_tasks_for_paths likely runs for modified paths.
+
+    Without the repository, the gtest folders close to the modified files are among `gtest_folders`
+    (see get_gtest_folders), and the C/C++ files containing gtests and the cppunit tests aren't known.
+    On autoland pushes, the tasks returned are run by find_tasks_for_paths, and include ~98% of its
+    tasks.
+    """
+    paths = list(paths)
+    select_rusttests = any(repository.get_type(path) == "Rust" for path in paths)
+    select_gtest = any(
+        f"/{folder}/" in path for path in paths for folder in _GTEST_FOLDERS
+    ) or any(
+        any(part in _GTEST_FOLDERS for part in folder[len(parent) + 1 :].split("/"))
+        for parent in {os.path.dirname(path) for path in paths}
+        if parent
+        for folder in gtest_folders
+        if folder.startswith(f"{parent}/")
+    )
+    select_cppunit = any(path in _CPPUNIT_INFRA_FILES for path in paths)
+
+    return {
+        task
+        for task in tasks
+        if (select_gtest and "gtest" in task)
+        or (select_cppunit and "cppunit" in task)
+        or (select_rusttests and "rusttests" in task)
+    }

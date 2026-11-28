@@ -36,7 +36,7 @@ dependencies = [
     "matplotlib>=3.10.8,<3.12.0",
     "mercurial~=7.2",
     "microannotate~=0.0.24",
-    "mozci~=2.6.0",
+    "mozci~=2.6.3",
     "numpy>=2.4.3,<2.6.0",
     "orjson>=3.11.7,<3.14.0",
     "ortools~=9.15.6755",
@@ -148,6 +148,8 @@ members = ["http_service", "agents/*", "libs/*", "services/*", "tools/*"]
 exclude = [
     # JavaScript package (no pyproject.toml).
     "services/hackbot-ui",
+    # Compose configuration, not a Python package.
+    "services/github-mcp",
     # Not migrated to the workspace yet.
     "services/buildrepair",
 ]

@@ -1,10 +1,14 @@
 """Test Phabricator trusted user filtering functionality."""
 
+import asyncio
+import copy
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
+from bugbug.tools.core.connection import close_http_client
 from bugbug.tools.core.platforms.phabricator import (
     EDITBUGS_GROUP_PHID,
     TRUSTED_BOT_PHIDS,
@@ -224,19 +228,22 @@ class TestToMdEndToEnd:
         "attachments": {},
     }
 
-    MOCK_DIFF = [
-        {
-            "id": 123456,
-            "type": "DIFF",
-            "phid": "PHID-DIFF-testdiff",
-            "revisionPHID": "PHID-DREV-testrevision",
-            "authorPHID": PHAB_BOT_PHID,
-            "dateCreated": 1700000000,
-            "dateModified": 1700000100,
-            "baseRevision": "abc123",
-            "refs": {"base": {"type": "base", "identifier": "abc123"}},
-        }
-    ]
+    MOCK_DIFF = {
+        "data": [
+            {
+                "id": 123456,
+                "type": "DIFF",
+                "phid": "PHID-DIFF-testdiff",
+                "fields": {
+                    "revisionPHID": "PHID-DREV-testrevision",
+                    "authorPHID": PHAB_BOT_PHID,
+                    "dateCreated": 1700000000,
+                    "dateModified": 1700000100,
+                    "refs": [{"type": "base", "identifier": "abc123"}],
+                },
+            }
+        ]
+    }
 
     MOCK_TRANSACTIONS_WITH_COMMENTS = {
         "data": [
@@ -357,34 +364,37 @@ class TestToMdEndToEnd:
         ],
     }
 
-    def _mock_api_request(self, method, **kwargs):
-        """Mock for `phabricator.PHABRICATOR_API.request()`."""
-        responses = {
-            "transaction.search": self.MOCK_TRANSACTIONS_WITH_COMMENTS,
-            "user.search": self.MOCK_USERS,
-            "project.search": self.MOCK_MOCO_GROUP,
-        }
-        if method in responses:
-            return responses[method]
+    def _conduit(self, transactions, revisions=None):
+        """Mock for `phabricator._conduit()`, keyed by Conduit method."""
+        revisions = revisions or {"PHID-DREV-testrevision": self.MOCK_REVISION}
 
-        raise ValueError(f"Unexpected API call: {method}")
+        def conduit(method, **params):
+            if method == "differential.revision.search":
+                (phid,) = params["constraints"]["phids"]
+                return {"data": [revisions[phid]]}
+
+            responses = {
+                "differential.diff.search": self.MOCK_DIFF,
+                "differential.getrawdiff": "diff --git a/test.py b/test.py\n+test",
+                "transaction.search": transactions,
+                "user.search": self.MOCK_USERS,
+                "project.search": self.MOCK_MOCO_GROUP,
+            }
+            if method in responses:
+                return copy.deepcopy(responses[method])
+
+            raise ValueError(f"Unexpected API call: {method}")
+
+        return conduit
 
     def test_to_md_filters_untrusted_content_after_last_trusted(self):
         """Test that to_md() correctly filters untrusted content."""
-        mock_api = MagicMock()
-        mock_api.request = self._mock_api_request
-        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
-        mock_api.load_revision = MagicMock(return_value=self.MOCK_REVISION)
-        mock_api.load_raw_diff = MagicMock(
-            return_value="diff --git a/test.py b/test.py\n+hello"
-        )
-
         with patch(
-            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
-            return_value=mock_api,
+            "bugbug.tools.core.platforms.phabricator._conduit",
+            side_effect=self._conduit(self.MOCK_TRANSACTIONS_WITH_COMMENTS),
         ):
             patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
-            md_output = patch_obj.to_md()
+            md_output = asyncio.run(patch_obj.to_md())
 
         # Trusted content should be visible
         assert "Trusted comment from phab-bot" in md_output
@@ -431,31 +441,12 @@ class TestToMdEndToEnd:
             ],
         }
 
-        def mock_request(method, **kwargs):
-            responses = {
-                "transaction.search": mock_transactions,
-                "user.search": self.MOCK_USERS,
-                "project.search": self.MOCK_MOCO_GROUP,
-            }
-            if method in responses:
-                return responses[method]
-
-            raise ValueError(f"Unexpected: {method}")
-
-        mock_api = MagicMock()
-        mock_api.request = mock_request
-        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
-        mock_api.load_revision = MagicMock(return_value=self.MOCK_REVISION)
-        mock_api.load_raw_diff = MagicMock(
-            return_value="diff --git a/test.py b/test.py\n+hi"
-        )
-
         with patch(
-            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
-            return_value=mock_api,
+            "bugbug.tools.core.platforms.phabricator._conduit",
+            side_effect=self._conduit(mock_transactions),
         ):
             patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
-            md_output = patch_obj.to_md()
+            md_output = asyncio.run(patch_obj.to_md())
 
         assert "All trusted here" in md_output
         assert UNTRUSTED_CONTENT_REDACTED not in md_output
@@ -537,35 +528,18 @@ class TestToMdEndToEnd:
             ],
         }
 
-        def mock_request(method, **kwargs):
-            responses = {
-                "transaction.search": mock_transactions_untrusted_only,
-                "user.search": self.MOCK_USERS,
-                "project.search": self.MOCK_MOCO_GROUP,
-            }
-            if method in responses:
-                return responses[method]
-            raise ValueError(f"Unexpected API call: {method}")
-
-        def mock_load_revision(rev_phid=None, rev_id=None):
-            if rev_phid == "PHID-DREV-parent":
-                return mock_parent_revision
-            return mock_revision_with_stack
-
-        mock_api = MagicMock()
-        mock_api.request = mock_request
-        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
-        mock_api.load_revision = mock_load_revision
-        mock_api.load_raw_diff = MagicMock(
-            return_value="diff --git a/test.py b/test.py\n+test"
-        )
-
         with patch(
-            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
-            return_value=mock_api,
+            "bugbug.tools.core.platforms.phabricator._conduit",
+            side_effect=self._conduit(
+                mock_transactions_untrusted_only,
+                {
+                    "PHID-DREV-testrevision": mock_revision_with_stack,
+                    "PHID-DREV-parent": mock_parent_revision,
+                },
+            ),
         ):
             patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
-            md_output = patch_obj.to_md()
+            md_output = asyncio.run(patch_obj.to_md())
 
         # Verify stack section exists
         assert "## Stack Information" in md_output
@@ -673,35 +647,18 @@ class TestToMdEndToEnd:
             ],
         }
 
-        def mock_request(method, **kwargs):
-            responses = {
-                "transaction.search": mock_transactions_with_trusted,
-                "user.search": self.MOCK_USERS,
-                "project.search": self.MOCK_MOCO_GROUP,
-            }
-            if method in responses:
-                return responses[method]
-            raise ValueError(f"Unexpected API call: {method}")
-
-        def mock_load_revision(rev_phid=None, rev_id=None):
-            if rev_phid == "PHID-DREV-parent":
-                return mock_parent_revision
-            return mock_revision_with_stack
-
-        mock_api = MagicMock()
-        mock_api.request = mock_request
-        mock_api.search_diffs = MagicMock(return_value=self.MOCK_DIFF)
-        mock_api.load_revision = mock_load_revision
-        mock_api.load_raw_diff = MagicMock(
-            return_value="diff --git a/test.py b/test.py\n+test"
-        )
-
         with patch(
-            "bugbug.tools.core.platforms.phabricator.get_phabricator_client",
-            return_value=mock_api,
+            "bugbug.tools.core.platforms.phabricator._conduit",
+            side_effect=self._conduit(
+                mock_transactions_with_trusted,
+                {
+                    "PHID-DREV-testrevision": mock_revision_with_stack,
+                    "PHID-DREV-parent": mock_parent_revision,
+                },
+            ),
         ):
             patch_obj = SanitizedPhabricatorPatch(diff_id=123456)
-            md_output = patch_obj.to_md()
+            md_output = asyncio.run(patch_obj.to_md())
 
         # Verify stack section exists
         assert "## Stack Information" in md_output
@@ -719,6 +676,13 @@ class TestToMdEndToEnd:
 # locally, but aren't run in CI.
 
 
+@pytest_asyncio.fixture
+async def shared_http_client():
+    """Close the shared HTTP client on the event loop of the test using it."""
+    yield
+    await close_http_client()
+
+
 @pytest.mark.skipif(
     not os.environ.get("PHABRICATOR_API_KEY"),
     reason="Requires PHABRICATOR_API_KEY for authenticated API access",
@@ -726,7 +690,7 @@ class TestToMdEndToEnd:
 @pytest.mark.withoutresponses
 def test_get_users_info_batch_empty():
     """Test that empty PHIDs set returns empty dict."""
-    result = _get_users_info_batch(set())
+    result = asyncio.run(_get_users_info_batch(set()))
     assert result == {}
 
 
@@ -735,7 +699,8 @@ def test_get_users_info_batch_empty():
     reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
-def test_phabricator_end_to_end_trusted_check():
+@pytest.mark.asyncio
+async def test_phabricator_end_to_end_trusted_check(shared_http_client):
     """End-to-end test: verify phab-bot and reviewbot are trusted, contacting the actual server.
 
     This doesn't run in CI but can be run locally.
@@ -760,7 +725,7 @@ def test_phabricator_end_to_end_trusted_check():
 
     # Get user info using our batch function with three users, one being
     # invalid
-    users_info = _get_users_info_batch({phabbot_phid, reviewbot_phid, "qweqwe"})
+    users_info = await _get_users_info_batch({phabbot_phid, reviewbot_phid, "qweqwe"})
 
     assert len(users_info) == 2, f"Expected 2 users, got {len(users_info)}"
 
@@ -781,7 +746,8 @@ def test_phabricator_end_to_end_trusted_check():
     reason="Requires PHABRICATOR_API_KEY for authenticated API access",
 )
 @pytest.mark.withoutresponses
-def test_get_users_info_batch_mixed_trust():
+@pytest.mark.asyncio
+async def test_get_users_info_batch_mixed_trust(shared_http_client):
     """Test that mixed trusted/untrusted users are correctly identified.
 
     Can only be run with a phab token, to validate changes locally.
@@ -795,7 +761,7 @@ def test_get_users_info_batch_mixed_trust():
     )
     phids_by_username = {u["fields"]["username"]: u["phid"] for u in resp["data"]}
 
-    users_info = _get_users_info_batch(set(phids_by_username.values()))
+    users_info = await _get_users_info_batch(set(phids_by_username.values()))
 
     # Verify structure
     for info in users_info.values():
@@ -873,8 +839,13 @@ def test_phabricator_metadata_redacted_without_trusted_comment():
     }
 
     with (
-        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
-        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "load", new_callable=AsyncMock),
+        patch.object(
+            SanitizedPhabricatorPatch, "_revision_metadata", mock_revision, create=True
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "_diff_metadata", mock_diff, create=True
+        ),
         patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
         patch(
             "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
@@ -883,7 +854,7 @@ def test_phabricator_metadata_redacted_without_trusted_comment():
         patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
-        markdown = patch_obj.to_md()
+        markdown = asyncio.run(patch_obj.to_md())
 
     # Title should be redacted
     assert "[Unvalidated revision title redacted for security]" in markdown
@@ -959,8 +930,13 @@ def test_phabricator_metadata_shown_with_trusted_comment():
     }
 
     with (
-        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
-        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "load", new_callable=AsyncMock),
+        patch.object(
+            SanitizedPhabricatorPatch, "_revision_metadata", mock_revision, create=True
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "_diff_metadata", mock_diff, create=True
+        ),
         patch.object(
             SanitizedPhabricatorPatch, "get_comments", return_value=[mock_comment]
         ),
@@ -975,7 +951,7 @@ def test_phabricator_metadata_shown_with_trusted_comment():
         ),
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
-        markdown = patch_obj.to_md()
+        markdown = asyncio.run(patch_obj.to_md())
 
     # Title should be shown
     assert "This is the revision title" in markdown
@@ -1033,8 +1009,13 @@ def test_phabricator_metadata_shown_with_trusted_author_no_comments():
     }
 
     with (
-        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
-        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "load", new_callable=AsyncMock),
+        patch.object(
+            SanitizedPhabricatorPatch, "_revision_metadata", mock_revision, create=True
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "_diff_metadata", mock_diff, create=True
+        ),
         patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
         patch(
             "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
@@ -1043,7 +1024,7 @@ def test_phabricator_metadata_shown_with_trusted_author_no_comments():
         patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
-        markdown = patch_obj.to_md()
+        markdown = asyncio.run(patch_obj.to_md())
 
     assert "This is the revision title" in markdown
     assert "[Unvalidated revision title redacted for security]" not in markdown
@@ -1110,8 +1091,13 @@ def test_phabricator_metadata_shown_trusted_author_untrusted_comment_redacted():
     }
 
     with (
-        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
-        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "load", new_callable=AsyncMock),
+        patch.object(
+            SanitizedPhabricatorPatch, "_revision_metadata", mock_revision, create=True
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "_diff_metadata", mock_diff, create=True
+        ),
         patch.object(
             SanitizedPhabricatorPatch,
             "get_comments",
@@ -1124,7 +1110,7 @@ def test_phabricator_metadata_shown_trusted_author_untrusted_comment_redacted():
         patch.object(SanitizedPhabricatorPatch, "raw_diff", "diff content"),
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
-        markdown = patch_obj.to_md()
+        markdown = asyncio.run(patch_obj.to_md())
 
     assert "This is the revision title" in markdown
     assert "[Unvalidated revision title redacted for security]" not in markdown
@@ -1174,8 +1160,13 @@ def test_phabricator_stack_titles_redacted():
     }
 
     with (
-        patch.object(SanitizedPhabricatorPatch, "_revision_metadata", mock_revision),
-        patch.object(SanitizedPhabricatorPatch, "_diff_metadata", mock_diff),
+        patch.object(SanitizedPhabricatorPatch, "load", new_callable=AsyncMock),
+        patch.object(
+            SanitizedPhabricatorPatch, "_revision_metadata", mock_revision, create=True
+        ),
+        patch.object(
+            SanitizedPhabricatorPatch, "_diff_metadata", mock_diff, create=True
+        ),
         patch.object(SanitizedPhabricatorPatch, "get_comments", return_value=[]),
         patch(
             "bugbug.tools.core.platforms.phabricator._get_users_info_batch",
@@ -1183,6 +1174,7 @@ def test_phabricator_stack_titles_redacted():
         ),
     ):
         patch_obj = SanitizedPhabricatorPatch(diff_id=54321)
+        asyncio.run(patch_obj._load_comments())
 
         # Verify patch_title property is redacted
         assert patch_obj.patch_title == REDACTED_TITLE

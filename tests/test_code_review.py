@@ -27,19 +27,23 @@ from bugbug.tools.code_review.langchain_tools import (
 )
 from bugbug.tools.code_review.prompts import SYSTEM_PROMPT_TEMPLATE
 from bugbug.tools.code_review.review_context import (
+    ChangedFile,
     _merge_rules,
+    collect_actions,
     external_content_manifest,
     format_external_content,
     github_repo_allowed,
     load_external_content_for_diff,
-    parse_diff_files,
+    parse_changed_files,
     parse_review_context_toml,
     rule_matches,
 )
 from bugbug.tools.code_review.review_context_schema import (
+    AllFilesPredicate,
     AnyFilePredicate,
     BugzillaPredicate,
     FilePredicate,
+    NotPredicate,
     ReviewContextValidationError,
     Rule,
 )
@@ -245,6 +249,9 @@ def test_patch_stack_bails_on_nonlinear_graph():
         def __init__(self):
             pass
 
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {"phid": "PHID-D"}
@@ -258,16 +265,8 @@ def test_patch_stack_bails_on_nonlinear_graph():
                 "PHID-D": ["PHID-B", "PHID-C"],  # diamond
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    try:
-        _ = fake.patch_stack
-        raise AssertionError("expected ValueError")
-    except ValueError as e:
-        assert "not linear" in str(e)
+    with pytest.raises(ValueError, match="not linear"):
+        asyncio.run(FakePatch().get_stack_patches())
 
 
 def test_patch_stack_linear_despite_unrelated_diamond():
@@ -278,6 +277,9 @@ def test_patch_stack_linear_despite_unrelated_diamond():
     # the fixed code must return the 3-entry linear chain without any error.
     class FakePatch(PhabricatorPatch):
         def __init__(self, revision_phid=None):
+            pass
+
+        async def load(self):
             pass
 
         @property
@@ -294,12 +296,7 @@ def test_patch_stack_linear_despite_unrelated_diamond():
                 "PHID-E": ["PHID-C"],
             }
 
-        @property
-        def patch_set(self):
-            return PatchSet.from_string("")
-
-    fake = FakePatch()
-    stack = fake.patch_stack
+    stack = asyncio.run(FakePatch().get_stack_patches())
     assert len(stack) == 3  # A, C, E
 
 
@@ -449,6 +446,7 @@ async def test_load_skill_fetch_failure(caplog):
     client.get = AsyncMock(side_effect=httpx.ConnectError("boom"))
     with (
         patch.object(data_types, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
         caplog.at_level(logging.ERROR, logger=langchain_tools.logger.name),
     ):
         result = await tool.ainvoke({"name": "mozilla-style"})
@@ -549,6 +547,9 @@ def make_phabricator_stack(
         stack_graph = {phid: phids[i - 1 : i] for i, phid in enumerate(phids)}
 
     class FakeStackPatch(phab_platform.PhabricatorPatch):
+        async def load(self):
+            pass
+
         @property
         def _revision_metadata(self):
             return {
@@ -571,8 +572,7 @@ def make_phabricator_stack(
         def raw_diff(self):
             return by_phid[self._revision_phid][1]
 
-        @property
-        def _changesets(self):
+        async def _get_changesets(self):
             return [
                 {
                     "id": f"{self._revision_phid}:{pf.path}",
@@ -620,7 +620,7 @@ def make_phabricator_stack(
             return httpx.Response(200, json=body, request=request)
         return httpx.Response(200, text=body, request=request)
 
-    def conduit(method, ids):
+    async def conduit(method, ids):
         requests.append((method, ids))
         local_commits = {"local-node": {"firstPublicParent": first_public_parent}}
         return {
@@ -635,11 +635,7 @@ def make_phabricator_stack(
     monkeypatch.setattr(
         phab_platform, "get_http_client", lambda: SimpleNamespace(get=get)
     )
-    monkeypatch.setattr(
-        phab_platform,
-        "get_phabricator_client",
-        lambda: SimpleNamespace(request=conduit),
-    )
+    monkeypatch.setattr(phab_platform, "_conduit", conduit)
     return FakeStackPatch(revision_phid=phids[-1]), requests
 
 
@@ -867,13 +863,17 @@ def test_expand_context_does_not_read_latest_when_base_lookup_fails(monkeypatch)
 
 
 def test_expand_context_reports_github_error_without_reading_latest(monkeypatch):
-    patch, _ = make_phabricator_stack(
+    patch, requests = make_phabricator_stack(
         monkeypatch,
         [(CENTRAL, A_DIFF, {}), (LOCAL_PARENT, B_DIFF, {})],
         repo_files={(CENTRAL, "c.txt"): 503},
     )
+    monkeypatch.setattr(
+        phab_platform.PhabricatorPatch._get_github_file.retry, "sleep", AsyncMock()
+    )
     result, searchfox = run_expand_context(monkeypatch, patch, "c.txt")
     assert result.startswith("Warning: could not retrieve c.txt")
+    assert requests.count(f"{GITHUB}/{CENTRAL}/c.txt") == 4
     searchfox.get_file_at_revision.assert_not_awaited()
     searchfox.get_file.assert_not_awaited()
 
@@ -1100,9 +1100,437 @@ diff --git a/dom/webidl/Foo.webidl b/dom/webidl/Foo.webidl
 """
 
 
-def test_parse_diff_files():
-    files = parse_diff_files(_DIFF_MEDIA)
-    assert files == {"dom/media/Foo.cpp"}
+def _changed(*paths: str) -> dict[str, ChangedFile]:
+    return {path: ChangedFile(path=path) for path in paths}
+
+
+def test_parse_changed_files_paths():
+    files = parse_changed_files(_DIFF_MEDIA)
+    assert set(files) == {"dom/media/Foo.cpp"}
+
+
+_CONTENT_DIFF = """\
+--- a/dom/media/Foo.cpp
++++ b/dom/media/Foo.cpp
+@@ -1,3 +1,3 @@
+ int x;
+-old_call();
++new_call();
+ int y;
+"""
+
+
+def test_parse_changed_files_splits_sides():
+    file = parse_changed_files(_CONTENT_DIFF)["dom/media/Foo.cpp"]
+    assert file.old_lines == ("int x;", "old_call();", "int y;")
+    assert file.new_lines == ("int x;", "new_call();", "int y;")
+
+
+def test_parse_changed_files_merges_entries_for_same_path():
+    # A symlink replaced by a regular file: git emits a deletion then an
+    # addition for the same path.
+    diff = """\
+--- a/dom/media/link.cpp
++++ /dev/null
+@@ -1,1 +0,0 @@
+-old_call();
+--- /dev/null
++++ b/dom/media/link.cpp
+@@ -0,0 +1,1 @@
++new_call();
+"""
+    assert parse_changed_files(diff) == {
+        "dom/media/link.cpp": ChangedFile(
+            path="dom/media/link.cpp",
+            old_lines=("old_call();",),
+            new_lines=("new_call();",),
+        )
+    }
+
+
+def test_parse_changed_files_added_file_has_no_old_lines():
+    diff = """\
+--- /dev/null
++++ b/dom/media/New.cpp
+@@ -0,0 +1,2 @@
++first();
++second();
+"""
+    file = parse_changed_files(diff)["dom/media/New.cpp"]
+    assert file.old_lines == ()
+    assert file.new_lines == ("first();", "second();")
+
+
+def test_parse_changed_files_includes_removed_file_with_old_lines_only():
+    diff = """\
+--- a/dom/media/Gone.cpp
++++ /dev/null
+@@ -1,1 +0,0 @@
+-old_call();
+"""
+    assert parse_changed_files(diff) == {
+        "dom/media/Gone.cpp": ChangedFile(
+            path="dom/media/Gone.cpp", old_lines=("old_call();",)
+        )
+    }
+
+
+def test_parse_changed_files_rename_uses_new_path_and_both_sides():
+    diff = """\
+--- a/dom/media/Old.cpp
++++ b/dom/media/New.cpp
+@@ -1,1 +1,1 @@
+-old_call();
++new_call();
+"""
+    files = parse_changed_files(diff)
+    assert set(files) == {"dom/media/New.cpp"}
+    assert files["dom/media/New.cpp"].old_lines == ("old_call();",)
+    assert files["dom/media/New.cpp"].new_lines == ("new_call();",)
+
+
+def test_parse_changed_files_ignores_no_newline_marker():
+    diff = """\
+--- a/dom/media/Foo.cpp
++++ b/dom/media/Foo.cpp
+@@ -1,1 +1,1 @@
+-old_call();
+\\ No newline at end of file
++new_call();
+"""
+    file = parse_changed_files(diff)["dom/media/Foo.cpp"]
+    assert file.old_lines == ("old_call();",)
+    assert file.new_lines == ("new_call();",)
+
+
+def test_parse_changed_files_strips_crlf_from_content_lines():
+    diff = "--- a/f.cpp\n+++ b/f.cpp\n@@ -1,1 +1,1 @@\n-old\r\n+new\r\n"
+    file = parse_changed_files(diff)["f.cpp"]
+    assert file.old_lines == ("old",)
+    assert file.new_lines == ("new",)
+
+
+def test_parse_changed_files_unparseable_diff_keeps_paths_without_lines(caplog):
+    diff = """\
+--- a/dom/media/Foo.cpp
++++ b/dom/media/Foo.cpp
+@@ -1,3 +1,3 @@
+-old_call();
+"""
+    with caplog.at_level(logging.WARNING):
+        files = parse_changed_files(diff)
+    assert files == {"dom/media/Foo.cpp": ChangedFile(path="dom/media/Foo.cpp")}
+    assert "Could not parse diff" in caplog.text
+
+
+def _content_file(path="dom/media/Foo.cpp"):
+    return ChangedFile(
+        path=path,
+        old_lines=("int x;", "old_call();"),
+        new_lines=("int x;", "new_call();"),
+    )
+
+
+def _content_rule(predicate):
+    return Rule(name="test", when=AnyFilePredicate(predicate), load=[])
+
+
+@pytest.mark.parametrize(
+    "side, expected",
+    [("old", True), ("new", False), ("any", True)],
+)
+def test_diff_regex_matches_removed_line_by_side(side, expected):
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side=side)
+    assert (
+        rule_matches(_content_rule(predicate), {"dom/media/Foo.cpp": _content_file()})
+        is expected
+    )
+
+
+@pytest.mark.parametrize(
+    "side, expected",
+    [("old", False), ("new", True), ("any", True)],
+)
+def test_diff_regex_matches_added_line_by_side(side, expected):
+    predicate = FilePredicate(diff_regex=re.compile(r"new_call"), side=side)
+    assert (
+        rule_matches(_content_rule(predicate), {"dom/media/Foo.cpp": _content_file()})
+        is expected
+    )
+
+
+@pytest.mark.parametrize("side", ["old", "new", "any"])
+def test_diff_regex_matches_context_line_on_every_side(side):
+    predicate = FilePredicate(diff_regex=re.compile(r"^int x;$"), side=side)
+    assert rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+@pytest.mark.parametrize("side", ["old", "new", "any"])
+def test_diff_regex_no_match_on_any_side(side):
+    predicate = FilePredicate(diff_regex=re.compile(r"absent"), side=side)
+    assert not rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_anchors_apply_per_line():
+    predicate = FilePredicate(diff_regex=re.compile(r"^old_call\(\);$"), side="old")
+    assert rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_does_not_match_across_lines():
+    predicate = FilePredicate(diff_regex=re.compile(r"int x;\s*old_call"), side="any")
+    assert not rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_requires_path_globs_to_match_too():
+    predicate = FilePredicate(
+        include=["dom/canvas/**"], diff_regex=re.compile(r"old_call"), side="old"
+    )
+    assert not rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_respects_exclude():
+    predicate = FilePredicate(
+        exclude=["dom/media/**"], diff_regex=re.compile(r"old_call"), side="old"
+    )
+    assert not rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_respects_ext():
+    predicate = FilePredicate(
+        ext=[".js"], diff_regex=re.compile(r"old_call"), side="old"
+    )
+    assert not rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+
+
+def test_diff_regex_alone_matches_any_path():
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    assert rule_matches(
+        _content_rule(predicate), {"other/Bar.rs": _content_file("other/Bar.rs")}
+    )
+
+
+def test_diff_regex_any_file_matches_when_one_file_matches():
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    changed = {
+        "dom/media/A.cpp": ChangedFile(path="dom/media/A.cpp", old_lines=("nothing",)),
+        "dom/media/B.cpp": _content_file("dom/media/B.cpp"),
+    }
+    assert rule_matches(_content_rule(predicate), changed)
+
+
+def test_diff_regex_all_files_requires_every_file_to_match():
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    rule = Rule(name="test", when=AllFilesPredicate(predicate), load=[])
+    one_missing = {
+        "dom/media/A.cpp": ChangedFile(path="dom/media/A.cpp", old_lines=("nothing",)),
+        "dom/media/B.cpp": _content_file("dom/media/B.cpp"),
+    }
+    both_match = {
+        "dom/media/A.cpp": _content_file("dom/media/A.cpp"),
+        "dom/media/B.cpp": _content_file("dom/media/B.cpp"),
+    }
+    assert not rule_matches(rule, one_missing)
+    assert rule_matches(rule, both_match)
+    assert not rule_matches(rule, {})
+
+
+def test_diff_regex_under_not_predicate():
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    rule = Rule(name="test", when=NotPredicate(AnyFilePredicate(predicate)), load=[])
+    assert not rule_matches(rule, {"dom/media/Foo.cpp": _content_file()})
+    assert rule_matches(
+        rule, {"dom/media/Foo.cpp": ChangedFile(path="dom/media/Foo.cpp")}
+    )
+
+
+def test_diff_regex_matches_removed_file_on_old_side_only():
+    diff = """\
+--- a/dom/media/Gone.cpp
++++ /dev/null
+@@ -1,1 +0,0 @@
+-old_call();
+"""
+    changed = parse_changed_files(diff)
+    old = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    new = FilePredicate(diff_regex=re.compile(r"old_call"), side="new")
+    assert rule_matches(_content_rule(old), changed)
+    assert not rule_matches(_content_rule(new), changed)
+
+
+def test_diff_regex_side_defaults_to_any():
+    config = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "Rule"
+when = { any_file = { diff_regex = "old_call" } }
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    )
+    predicate = config.rules[0].when.predicate
+    assert predicate.side == "any"
+    assert rule_matches(
+        _content_rule(predicate), {"dom/media/Foo.cpp": _content_file()}
+    )
+    assert rule_matches(
+        _content_rule(predicate),
+        {
+            "dom/media/Foo.cpp": ChangedFile(
+                path="dom/media/Foo.cpp", new_lines=("old_call();",)
+            )
+        },
+    )
+
+
+def test_diff_regex_old_side_ignores_added_file():
+    diff = """\
+--- /dev/null
++++ b/dom/media/New.cpp
+@@ -0,0 +1,1 @@
++old_call();
+"""
+    predicate = FilePredicate(diff_regex=re.compile(r"old_call"), side="old")
+    assert not rule_matches(_content_rule(predicate), parse_changed_files(diff))
+
+
+def test_collect_actions_matches_diff_regex_on_old_side():
+    config = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "Removed call"
+when = { any_file = { ext = [".cpp"], diff_regex = "old_call", side = "old" } }
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    )
+    actions = collect_actions(_CONTENT_DIFF, config)
+    assert [a.matched_rules for a in actions] == [["Removed call"]]
+    assert collect_actions(_CONTENT_DIFF.replace("old_call", "other"), config) == []
+
+
+@pytest.mark.parametrize(
+    "when, message",
+    [
+        (
+            '{ any_file = { ext = [".cpp"], side = "old" } }',
+            "side: requires diff_regex",
+        ),
+        (
+            '{ any_file = { diff_regex = "x", side = "both" } }',
+            "expected one of old, new, any",
+        ),
+        ('{ any_file = { diff_regex = 3, side = "old" } }', "expected string"),
+    ],
+)
+def test_parse_diff_regex_rejects_invalid(when, message):
+    toml = f"""
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = {when}
+load = [{{ type = "file", path = "skills/guide.md" }}]
+"""
+    with pytest.raises(ReviewContextValidationError, match=message):
+        parse_review_context_toml(toml)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        "(",  # unbalanced group: re.error
+        "[a-",  # unterminated set: re.error
+        "*a",  # nothing to repeat: re.error
+        "(?P=missing)",  # unknown group reference: re.error
+        "(?<=a+)b",  # variable-width lookbehind: re.error
+        "a{99999999999}",  # repeat count too large: OverflowError
+        "(" * 5000 + "a" + ")" * 5000,  # nesting too deep: RecursionError
+    ],
+)
+def test_parse_diff_regex_rejects_every_invalid_pattern(pattern):
+    toml = f"""
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = {{ any_file = {{ diff_regex = "{pattern}", side = "old" }} }}
+load = [{{ type = "file", path = "skills/guide.md" }}]
+"""
+    with pytest.raises(ReviewContextValidationError, match="invalid regex"):
+        parse_review_context_toml(toml)
+
+
+@pytest.mark.parametrize("pattern", ["(", "a{99999999999}", "(" * 5000 + ")" * 5000])
+def test_validator_cli_rejects_invalid_diff_regex(tmp_path, capsys, pattern):
+    review_context_path = tmp_path / "review-context.toml"
+    review_context_path.write_text(
+        f"""
+version = 1
+
+[[rules]]
+name = "Bad rule"
+when = {{ any_file = {{ diff_regex = "{pattern}", side = "old" }} }}
+load = [{{ type = "file", path = "skills/guide.md" }}]
+"""
+    )
+
+    assert validate_review_context_main([str(review_context_path)]) == 1
+
+    captured = capsys.readouterr()
+    assert "invalid regex" in captured.err
+
+
+def test_parse_diff_regex_accepts_side_with_path_fields():
+    config = parse_review_context_toml(
+        """
+version = 1
+
+[[rules]]
+name = "Rule"
+when = { any_file = { include = ["dom/**"], diff_regex = "old_call", side = "any" } }
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    )
+    predicate = config.rules[0].when.predicate
+    assert predicate.include == ["dom/**"]
+    assert predicate.diff_regex.pattern == "old_call"
+    assert predicate.side == "any"
+
+
+def test_parse_diff_regex_through_definitions_ref():
+    config = parse_review_context_toml(
+        """
+version = 1
+
+[definitions.files.calls]
+diff_regex = "old_call"
+side = "old"
+
+[[rules]]
+name = "Rule"
+when = { any_file = { ref = "files.calls" } }
+load = [{ type = "file", path = "skills/guide.md" }]
+"""
+    )
+    predicate = config.rules[0].when.predicate
+    assert predicate.diff_regex.pattern == "old_call"
+    assert predicate.side == "old"
 
 
 def test_github_repo_allowed_policy():
@@ -1119,9 +1547,9 @@ def test_rule_matches_extension_and_path():
         when=AnyFilePredicate(FilePredicate(include=["dom/media/**"], ext=[".cpp"])),
         load=[],
     )
-    assert rule_matches(rule, {"dom/media/Foo.cpp"})
-    assert not rule_matches(rule, {"dom/canvas/Foo.cpp"})
-    assert not rule_matches(rule, {"dom/media/Foo.js"})
+    assert rule_matches(rule, _changed("dom/media/Foo.cpp"))
+    assert not rule_matches(rule, _changed("dom/canvas/Foo.cpp"))
+    assert not rule_matches(rule, _changed("dom/media/Foo.js"))
 
 
 def test_rule_matches_extension_only():
@@ -1130,8 +1558,8 @@ def test_rule_matches_extension_only():
         when=AnyFilePredicate(FilePredicate(ext=[".webidl"])),
         load=[],
     )
-    assert rule_matches(rule, {"dom/webidl/Foo.webidl"})
-    assert not rule_matches(rule, {"dom/media/Foo.cpp"})
+    assert rule_matches(rule, _changed("dom/webidl/Foo.webidl"))
+    assert not rule_matches(rule, _changed("dom/media/Foo.cpp"))
 
 
 def test_parse_review_context_toml_rejects_missing_when():
@@ -1232,7 +1660,7 @@ def test_rule_bugzilla_component_fails_closed_without_component():
         when=BugzillaPredicate(component=["Core::DOM: Web Audio"]),
         load=[],
     )
-    assert not rule_matches(rule, {"dom/media/Foo.cpp"}, bug_component=None)
+    assert not rule_matches(rule, _changed("dom/media/Foo.cpp"), bug_component=None)
 
 
 def test_rule_bugzilla_component_matches():
@@ -1242,10 +1670,10 @@ def test_rule_bugzilla_component_matches():
         load=[],
     )
     assert rule_matches(
-        rule, {"dom/media/Foo.cpp"}, bug_component="Core::DOM: Web Audio"
+        rule, _changed("dom/media/Foo.cpp"), bug_component="Core::DOM: Web Audio"
     )
     assert not rule_matches(
-        rule, {"dom/media/Foo.cpp"}, bug_component="Core::Networking"
+        rule, _changed("dom/media/Foo.cpp"), bug_component="Core::Networking"
     )
 
 
@@ -1296,7 +1724,6 @@ async def test_load_external_content_for_diff_file_load():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, review_context_branch="release"
@@ -1338,7 +1765,6 @@ async def test_load_external_content_for_diff_no_match():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(diff, review_context_repo)
 
@@ -1353,7 +1779,7 @@ async def test_load_external_content_for_diff_rules_fetch_failure():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
+        patch.object(data_types._fetch_url.retry, "sleep", AsyncMock()),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, "mozilla-firefox/firefox"
@@ -1392,7 +1818,6 @@ load = [{ type = "file", path = "skills/guide.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(_DIFF_MEDIA, review_context_repo)
 
@@ -1428,7 +1853,6 @@ load = [{ type = "file", path = "skills/high.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1462,7 +1886,6 @@ load = [{ type = "file", repo = "whatwg/html", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1496,7 +1919,6 @@ load = [{ type = "file", repo = "mozilla/cubeb", path = "review.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1600,7 +2022,6 @@ async def test_content_override_used_instead_of_fetch():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -1626,7 +2047,6 @@ async def test_external_content_manifest_and_prompt_body():
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA, review_context_repo, content_overrides=overrides
@@ -1692,7 +2112,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             diff_js,
@@ -1729,7 +2148,6 @@ load = [{ type = "file", path = ".claude/skills/dom-media-v2.md" }]
 
     with (
         patch.object(data_types, "get_http_client", return_value=client),
-        patch.object(review_context, "get_http_client", return_value=client),
     ):
         results = await load_external_content_for_diff(
             _DIFF_MEDIA,
@@ -1822,6 +2240,7 @@ def test_run_appends_scope_suggestion_last():
 
     patch = make_patch("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
     patch.raw_diff = "diff"
+    patch.load = AsyncMock()
 
     tool.count_tokens = MagicMock(return_value=10)
     tool._agent_model = "model-x"

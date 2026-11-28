@@ -151,7 +151,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox",
         "Sidebar",
-        "#p10y-bots",
+        "#core-x-frontend-bots",
         trees=("browser/components/sidebar/",),
         owns=("browser/components/sidebar/",),
         notes=(
@@ -707,7 +707,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "QR",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -766,7 +766,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Experimentation and Telemetry",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -840,7 +840,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Logins",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -914,7 +914,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Onboarding",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -979,7 +979,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Privacy",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",
@@ -1053,7 +1053,7 @@ TRIAGE_SCOPE = (
     ScopedComponent(
         "Firefox for Android",
         "Settings",
-        "#android-activation-and-trust",
+        "#android-activation-and-trust-triage",
         trees=(
             "mobile/android/fenix/",
             "mobile/android/android-components/",

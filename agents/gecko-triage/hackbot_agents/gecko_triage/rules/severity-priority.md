@@ -7,6 +7,10 @@ comment, and only when the current value is `--`. A value a developer set is nev
 overwritten; disagree in the comment instead. The agent never sets S1: when the standard
 says S1, record S2 and say in the run's summary why a person should consider S1.
 
+When the user prompt says that the component's owners set severity or priority
+themselves, do not set that field, and do not mention this in the comment. A field the
+user prompt does not name is set as usual.
+
 ## Severity
 
 The definitions are Mozilla's, quoted from the [BMO user guide][bmo-severity]. The

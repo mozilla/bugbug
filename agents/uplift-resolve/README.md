@@ -18,8 +18,9 @@ Set per run (see `UpliftInputs` in hackbot-api for the full schema):
   `diff_id` is optional and defaults to the revision's latest.
 - `BUG_ID` — optional Bugzilla bug for context.
 
-`BUGBUG_MCP_URL` and `BROKER_URL` are deploy-time constants: the bugbug MCP
-server, and the sidecar holding the Conduit key the agent fetches diffs through.
+`BROKER_URL` is a deploy-time constant: the sidecar holding the Bugzilla and
+Phabricator keys, which serves their read-only MCP tools and the Conduit proxy the
+agent fetches diffs through.
 
 ## Output
 

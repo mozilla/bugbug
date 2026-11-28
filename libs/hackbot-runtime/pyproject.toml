@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.26.0",
     "pydantic-settings>=2.1.0",
     "google-auth>=2.0.0",
+    "google-cloud-storage>=2.16.0",
     "slack-sdk>=3.27.0",
     "agent-tools",
     "phabricator-client",
@@ -17,7 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 claude-sdk = ["claude-agent-sdk>=0.1.30", "agent-tools[claude-sdk]"]
-codex-sdk = ["openai-codex>=0.163.0"]
+codex-sdk = ["openai-codex>=0.163.0", "agent-tools[mcp-server]"]
+mcp-server = ["agent-tools[mcp-server]"]
 # Pinned exactly: mozphab.git/mozphab.diff are internal implementation
 # classes of a CLI tool, not a published library API — a minor/patch bump
 # could change their behavior without notice.

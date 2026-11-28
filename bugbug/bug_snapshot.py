@@ -108,18 +108,20 @@ def target_milestone(target_milestone):
     return mapping.get(target_milestone, target_milestone)
 
 
-def null_str(val):
-    if val == "":
-        return None
-
-    return val
-
-
 def null_int(val):
     if val == "":
         return None
 
     return int(val)
+
+
+def timestamp(val):
+    # Bugzilla returns timestamps in history as "YYYY-MM-DD HH:MM:SS" (UTC),
+    # while bug fields use ISO 8601 with a "Z" suffix.
+    if val == "":
+        return None
+
+    return dateutil.parser.parse(val).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 FIELD_TYPES = {
@@ -139,7 +141,8 @@ FIELD_TYPES = {
     "platform": platform,
     "product": product,
     "target_milestone": target_milestone,
-    "cf_due_date": null_str,
+    "cf_due_date": timestamp,
+    "cf_last_resolved": timestamp,
 }
 
 
@@ -542,7 +545,15 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
     )
 
 
-def rollback(bug, when=None, do_assert=False):
+def rollback(bug, when=None, do_assert=False, before=None):
+    """Roll back a bug to a previous state.
+
+    By default, the bug is rolled back to its state at creation. If `when` is
+    given, the bug is rolled back to the first change for which `when` returns
+    True. If `before` (a timezone-aware datetime) is given, the bug is rolled back
+    to its state right before that moment.
+    """
+
     def assert_or_log(msg):
         msg = f"{msg}, in bug {bug['id']}"
         if do_assert:
@@ -569,7 +580,9 @@ def rollback(bug, when=None, do_assert=False):
     last_product = bug["product"]
 
     change_to_return = None
-    if when is not None:
+    if before is not None:
+        rollback_date = before
+    elif when is not None:
         for history in bug["history"]:
             for change in history["changes"]:
                 if when(change):
@@ -592,6 +605,9 @@ def rollback(bug, when=None, do_assert=False):
         # TODO: This code might be removed when https://bugzilla.mozilla.org/show_bug.cgi?id=1513952 is fixed.
 
         if ret:
+            break
+
+        if before is not None and dateutil.parser.parse(history["when"]) < before:
             break
 
         for change in history["changes"]:
@@ -813,12 +829,14 @@ def rollback(bug, when=None, do_assert=False):
                         assert_or_log(
                             f"Exception while transforming {change['removed']} from {bug[field]} (field {field})"
                         )
+                        continue
                     try:
                         new_value = FIELD_TYPES[field](change["added"])
                     except Exception:
                         assert_or_log(
                             f"Exception while transforming {change['added']} from {bug[field]} (field {field})"
                         )
+                        continue
                 else:
                     old_value = change["removed"]
                     new_value = change["added"]
@@ -860,18 +878,14 @@ def rollback(bug, when=None, do_assert=False):
             },
         )
 
-    bug["comments"] = [
-        c
-        for c in bug["comments"]
-        if dateutil.parser.parse(c["creation_time"]) - relativedelta(seconds=3)
-        <= rollback_date
-    ]
-    bug["attachments"] = [
-        a
-        for a in bug["attachments"]
-        if dateutil.parser.parse(a["creation_time"]) - relativedelta(seconds=3)
-        <= rollback_date
-    ]
+    def is_before_rollback(obj):
+        creation_time = dateutil.parser.parse(obj["creation_time"])
+        if before is not None:
+            return creation_time < before
+        return creation_time - relativedelta(seconds=3) <= rollback_date
+
+    bug["comments"] = [c for c in bug["comments"] if is_before_rollback(c)]
+    bug["attachments"] = [a for a in bug["attachments"] if is_before_rollback(a)]
 
     return bug
 

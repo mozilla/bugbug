@@ -93,6 +93,25 @@ def test_cache_purges_after_ttl():
         assert "key_a" not in cache
 
 
+def test_cache_purges_items_accessed_once():
+    mockdatetime = MockDatetime(datetime(2019, 4, 1, 10))
+    cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+
+    with patch("datetime.datetime", mockdatetime):
+        # The item is not stored, as it was not accessed within the TTL before.
+        cache.get("key_a")
+        cache.get("key_b", force_store=True)
+
+        mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
+        cache.purge_expired_entries()
+        assert "key_a" not in cache
+        assert "key_b" not in cache
+
+        # The item is loaded again, and not stored as its last access expired.
+        cache.get("key_a")
+        assert "key_a" not in cache
+
+
 def test_cache_ttl_refreshes_after_get():
     mockdatetime = MockDatetime(datetime(2019, 4, 1, 10))
     cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")

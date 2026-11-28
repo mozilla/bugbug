@@ -209,9 +209,22 @@ def test_uplift_env_serialization():
     )
     assert env["BUG_ID"] == "1846789", "`bug_id` should map to its env var."
     assert json.loads(env["SOURCES"]) == [
-        {"kind": "git", "commit": "a" * 40},
+        {"kind": "git", "commit": "a" * 40, "revision_id": None},
         {"kind": "phabricator", "revision_id": 12345, "diff_id": 500},
     ], "`sources` should be JSON-encoded in order, since it travels as one env var."
+
+
+def test_uplift_git_source_revision_id_reaches_the_agent():
+    env = model_to_env(
+        UpliftInputs(
+            target_branch="beta",
+            sources=[{"kind": "git", "commit": "a" * 40, "revision_id": 4342}],
+        )
+    )
+
+    assert json.loads(env["SOURCES"]) == [
+        {"kind": "git", "commit": "a" * 40, "revision_id": 4342}
+    ], "A git source's revision ID should pass through to the agent."
 
 
 @pytest.mark.parametrize(

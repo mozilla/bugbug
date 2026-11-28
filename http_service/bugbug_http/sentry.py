@@ -8,6 +8,7 @@ import logging
 
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 
 from bugbug import get_bugbug_version
 
@@ -23,6 +24,10 @@ def setup_sentry(dsn, integrations=None):
     )
     sentry_sdk.init(
         dsn=dsn,
-        integrations=[logging_integration] + integrations,
+        integrations=[logging_integration, RedisIntegration()] + integrations,
+        # Sentry would otherwise enable the integrations of all the supported libraries installed,
+        # importing them: the AI ones (langchain, openai, anthropic...) the service doesn't use add
+        # ~250 MB to each process.
+        auto_enabling_integrations=False,
         release=get_bugbug_version(),
     )

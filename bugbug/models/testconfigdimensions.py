@@ -336,10 +336,9 @@ class TestConfigSelectPooledModel(DimensionSelector, Model):
         Model.__init__(self, lemmatization)
         self.training_dbs = [test_scheduling.PUSH_DATA_CONFIG_GROUP_DB]
         self.history = DimensionHistory()
-        self.known_configs: set[str] = set()
 
     def train(self, importance_cutoff=0.15, limit=None):
-        regressions, self.known_configs, _ = load_regressions(with_patches=False)
+        regressions, _ = load_regressions(with_patches=False)
         split = split_push_index(regressions)
 
         self.history = DimensionHistory()
@@ -387,7 +386,6 @@ class _DimensionClassifierModel(DimensionSelector, Model):
         self.entire_dataset_training = True
 
         self.history = DimensionHistory()
-        self.known_configs: set[str] = set()
         self._data: tuple | None = None
         self.row_weights: list[float] = []
         self.row_push_index: list[int] = []
@@ -419,7 +417,7 @@ class _DimensionClassifierModel(DimensionSelector, Model):
 
     def _load(self):
         if self._data is None:
-            regressions, self.known_configs, patches = load_regressions()
+            regressions, patches = load_regressions()
             self._data = (regressions, patches, split_push_index(regressions))
         return self._data
 
@@ -489,7 +487,7 @@ class _DimensionClassifierModel(DimensionSelector, Model):
         train_len = sum(1 for index in self.row_push_index if index < split)
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
-    def get_sample_weights(self, y):
+    def get_sample_weights(self, X, y):
         return np.array(self.row_weights[: len(y)])
 
     def _predict_proba(self, features: Sequence[dict[str, float]]) -> np.ndarray:
@@ -596,7 +594,7 @@ class TestConfigSelectClassModel(_DimensionClassifierModel):
             y = np.concatenate([y, missing])
         super().fit_classifier(X, y)
 
-    def get_sample_weights(self, y):
+    def get_sample_weights(self, X, y):
         placeholders = getattr(self, "_placeholders", 0)
         weights = np.array(self.row_weights[: len(y) - placeholders])
         return np.concatenate([weights, np.full(placeholders, 1e-6)])

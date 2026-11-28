@@ -226,12 +226,41 @@ class NoTeam(_Strict):
     products: tuple[Text, ...] = Field(min_length=1)
 
 
+def _key(product: str, component: str) -> str:
+    return f"{product.strip()} :: {component.strip()}".casefold()
+
+
+def _component_key(value: str) -> str:
+    product, sep, component = value.partition("::")
+    if not sep or not product.strip() or not component.strip():
+        raise ValueError(f"{value!r} is not a 'Product :: Component' name")
+    return _key(product, component)
+
+
+ComponentKey = Annotated[StrictStr, AfterValidator(_component_key)]
+
+
+class LeftToOwner(_Strict):
+    # For each field, the components, as "Product :: Component", whose owners set it
+    # themselves.
+    severity: frozenset[ComponentKey] = frozenset()
+    priority: frozenset[ComponentKey] = frozenset()
+
+    def fields(self, product: object, component: object) -> tuple[str, ...]:
+        """The fields that the owners of ``product`` :: ``component`` set themselves."""
+        if not isinstance(product, str) or not isinstance(component, str):
+            return ()
+        key = _key(product, component)
+        return tuple(f for f in ("severity", "priority") if key in getattr(self, f))
+
+
 class Terms(_Strict):
     keywords: Keywords
     fields: Fields
     history: History
     whiteboard: Whiteboard
     no_team: NoTeam
+    left_to_owner: LeftToOwner = LeftToOwner()
     meta_summary: Annotated[
         re.Pattern[str], BeforeValidator(lambda v: re.compile(v, re.IGNORECASE))
     ]

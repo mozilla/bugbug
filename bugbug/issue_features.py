@@ -8,8 +8,6 @@ import sys
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import issue_snapshot
-
 
 class CommentCount(object):
     name = "# of comments"
@@ -23,8 +21,6 @@ class IssueExtractor(BaseEstimator, TransformerMixin):
         self,
         feature_extractors,
         cleanup_functions,
-        rollback=False,
-        rollback_when=None,
     ):
         assert len(set(type(fe) for fe in feature_extractors)) == len(
             feature_extractors
@@ -35,8 +31,6 @@ class IssueExtractor(BaseEstimator, TransformerMixin):
             cleanup_functions
         ), "Duplicate Cleanup Functions"
         self.cleanup_functions = cleanup_functions
-        self.rollback = rollback
-        self.rollback_when = rollback_when
 
     def fit(self, x, y=None):
         for feature in self.feature_extractors:
@@ -49,9 +43,6 @@ class IssueExtractor(BaseEstimator, TransformerMixin):
         results = []
 
         for issue in issues():
-            if self.rollback:
-                issue = issue_snapshot.rollback(issue, self.rollback_when)
-
             data = {}
 
             for feature_extractor in self.feature_extractors:

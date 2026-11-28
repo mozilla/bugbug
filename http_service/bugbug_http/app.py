@@ -8,6 +8,7 @@ import gzip
 import itertools
 import logging
 import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -31,18 +32,22 @@ from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import bugzilla, get_bugbug_version, utils
-from bugbug.model import CommentModel
-from bugbug.models import get_model_class
-from bugbug_http.models import (
-    MODELS_NAMES,
-    PUSH_CLASSIFIERS,
+from bugbug_http.jobs import (
     classify_broken_site_report,
     classify_bug,
     classify_comment,
+    classify_commits,
     classify_issue,
+    get_bug_commits,
     get_config_specific_groups,
     schedule_tests,
     schedule_tests_from_patch,
+)
+from bugbug_http.model_names import (
+    COMMENT_MODELS,
+    COMMIT_MODELS,
+    MODELS_NAMES,
+    PUSH_CLASSIFIERS,
 )
 from bugbug_http.sentry import setup_sentry
 
@@ -83,10 +88,19 @@ redis_conn = Redis(
     ssl_cert_reqs=None,
 )
 
+# A full hg commit hash.
+COMMIT_HASH_RE = re.compile(r"[0-9a-f]{40}")
+
 # Kill jobs which don't finish within 12 minutes.
 JOB_TIMEOUT = 12 * 60
 # Kill Bugzilla jobs which don't finish within 5 minutes.
 BUGZILLA_JOB_TIMEOUT = 5 * 60
+# The maximum number of commits which can be classified in a single request.
+MAX_COMMITS = 100
+# The maximum number of bugs whose commits can be classified in a single request.
+MAX_BUGS = 20
+# The number of commits classified by a single job.
+COMMITS_PER_JOB = 25
 # Remove jobs from the queue if they haven't started within 7 minutes.
 QUEUE_TIMEOUT = 7 * 60
 # Store the information that a job failed for 3 minutes.
@@ -128,6 +142,29 @@ class PerformanceRegressionPrediction(Schema):
     extra_data = fields.Dict()
 
 
+class CommitPrediction(Schema):
+    node = fields.String()
+    bug_id = fields.Integer(allow_none=True)
+    prob = fields.List(fields.Float(), allow_none=True)
+    index = fields.Integer(allow_none=True)
+    predicted_class = fields.Integer(data_key="class", allow_none=True)
+    risk_band = fields.String(allow_none=True)
+    ignored_reason = fields.String(allow_none=True)
+    extra_data = fields.Dict()
+
+
+class BugCommitPrediction(Schema):
+    risk_band = fields.String(allow_none=True)
+    ignored_reason = fields.String(allow_none=True)
+
+
+class BugCommitsPrediction(Schema):
+    commits = fields.Dict(
+        keys=fields.String(), values=fields.Nested(BugCommitPrediction)
+    )
+    risk_band = fields.String(allow_none=True)
+
+
 class NotAvailableYet(Schema):
     ready = fields.Boolean(metadata={"enum": [False]})
 
@@ -143,6 +180,10 @@ class PushModelName(Schema):
             "example": "perfregressionpredictor",
         }
     )
+
+
+class CommitModelName(Schema):
+    model_name = fields.String(metadata={"enum": COMMIT_MODELS, "example": "regressor"})
 
 
 class UnauthorizedError(Schema):
@@ -167,9 +208,13 @@ spec.components.schema(
     PerformanceRegressionPrediction.__name__,
     schema=PerformanceRegressionPrediction,
 )
+spec.components.schema(CommitPrediction.__name__, schema=CommitPrediction)
+spec.components.schema(BugCommitPrediction.__name__, schema=BugCommitPrediction)
+spec.components.schema(BugCommitsPrediction.__name__, schema=BugCommitsPrediction)
 spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
 spec.components.schema(PushModelName.__name__, schema=PushModelName)
+spec.components.schema(CommitModelName.__name__, schema=CommitModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
 spec.components.schema(BranchName.__name__, schema=BranchName)
 spec.components.schema(Schedules.__name__, schema=Schedules)
@@ -181,17 +226,31 @@ spec.components.security_scheme("api_key", api_key_scheme)
 
 @dataclass(init=False, frozen=True)
 class JobInfo:
-    func: Callable[..., str]
+    """A job, running one of the functions of bugbug_http.models in the RQ workers.
+
+    The function is given by its name (see bugbug_http.jobs), as the web
+    processes don't import bugbug_http.models (it loads the ML libraries), or
+    as the function itself (in bugbug_http.models).
+    """
+
+    func_name: str
     args: Sequence[Any] = field(default_factory=list)
 
-    def __init__(self, func, *args):
+    def __init__(self, func: str | Callable[..., str], *args):
         # Custom __init__ is needed to support *args, and object.__setattr__ is
         # needed for 'frozen=True'.
-        object.__setattr__(self, "func", func)
+        object.__setattr__(
+            self, "func_name", func if isinstance(func, str) else func.__name__
+        )
         object.__setattr__(self, "args", args)
 
     def __str__(self):
-        return f"{self.func.__name__}:{'_'.join(map(str, self.args))}"
+        return f"{self.func_name}:{'_'.join(map(str, self.args))}"
+
+    @property
+    def func_path(self) -> str:
+        """The path of the job function, which the RQ workers import."""
+        return f"bugbug_http.models.{self.func_name}"
 
     @property
     def mapping_key(self):
@@ -237,7 +296,7 @@ def schedule_job(
     job_id = init_job(job, job_id)
 
     q.enqueue(
-        job.func,
+        job.func_path,
         *job.args,
         job_id=job_id,
         job_timeout=timeout,
@@ -251,7 +310,7 @@ def prepare_queue_job(
 ) -> Queue:
     job_id = init_job(job, job_id)
     return Queue.prepare_data(
-        job.func,
+        job.func_path,
         args=job.args,
         job_id=job_id,
         timeout=timeout,
@@ -416,9 +475,7 @@ def get_comments_last_change_time(comment_ids: Sequence[int]) -> dict[int, str]:
 
 
 def is_comment_model(model_name: str) -> bool:
-    return model_name in MODELS_NAMES and issubclass(
-        get_model_class(model_name), CommentModel
-    )
+    return model_name in COMMENT_MODELS
 
 
 def get_github_issues_update_time(
@@ -454,8 +511,7 @@ def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
     LOGGER.debug("Cleaning results for %s", job)
 
-    redis_conn.delete(job.result_key)
-    redis_conn.delete(job.change_time_key)
+    redis_conn.delete(job.result_key, job.change_time_key)
 
 
 def get_result(job: JobInfo) -> Any | None:
@@ -488,7 +544,9 @@ def compress_response(data: dict, status_code: int):
     :rtype: Response
     """
 
-    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=9)
+    # Level 6 is about four times faster than level 9, for responses only a few
+    # percent larger.
+    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=6)
 
     response = Response(status=status_code)
     response.set_data(gzip_buffer)
@@ -656,6 +714,446 @@ def model_prediction_push(model_name: str, branch: str, rev: str):
         data = {"ready": False}
 
     return compress_response(data, status_code)
+
+
+def get_commit_predictions(
+    model_name: str, branch: str, revs: Sequence[str]
+) -> tuple[dict[str, Any], int]:
+    """Get the results of the classification of commits, queuing the missing ones.
+
+    Returns the result for each revision ({"ready": False} for the ones being
+    classified), and 200 if all of them are available or 202 otherwise.
+    """
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    status_code = 200
+    data: dict[str, Any] = {}
+    missing_revs = []
+    for rev in dict.fromkeys(revs):
+        job = JobInfo(classify_commits, model_name, branch, rev)
+        data[rev] = get_result(job)
+        if not data[rev]:
+            if not is_pending(job):
+                missing_revs.append(rev)
+            status_code = 202
+            data[rev] = {"ready": False}
+
+    queue_jobs: Queue = []
+    for batch in itertools.batched(missing_revs, COMMITS_PER_JOB, strict=False):
+        job_id = get_job_id()
+        # Set the mapping before queuing to avoid some race conditions.
+        redis_conn.mset(
+            {
+                JobInfo(classify_commits, model_name, branch, rev).mapping_key: job_id
+                for rev in batch
+            }
+        )
+        queue_jobs.append(
+            prepare_queue_job(
+                JobInfo(classify_commits, model_name, branch, list(batch)),
+                job_id=job_id,
+            )
+        )
+    if queue_jobs:
+        q.enqueue_many(queue_jobs)
+
+    return data, status_code
+
+
+# The risk bands of the regressor model, from the lowest to the highest (see
+# bugbug.models.regressor.RISK_BAND_SHARES, not imported as it loads the ML
+# libraries).
+RISK_BANDS = ("l", "a", "h", "v")
+
+
+def get_bug_commit_predictions(
+    model_name: str, bug_ids: Sequence[int]
+) -> tuple[dict[str, Any], int]:
+    """Get the results of the classification of the commits of bugs, queuing the missing ones.
+
+    The autoland commits of each bug are looked up first (see
+    bugbug_http.models.get_bug_commits), then classified like with
+    get_commit_predictions. Returns the result for each bug ({"ready": False} while
+    its commits are being looked up or classified), and 200 if all of them are
+    available or 202 otherwise.
+    """
+    status_code = 200
+    data: dict[str, Any] = {}
+    bug_results: dict[int, dict[str, list[str]]] = {}
+    missing_bugs = []
+    for bug_id in dict.fromkeys(bug_ids):
+        job = JobInfo(get_bug_commits, bug_id)
+        result = get_result(job)
+        if result is None:
+            if not is_pending(job):
+                missing_bugs.append(bug_id)
+            status_code = 202
+            data[str(bug_id)] = {"ready": False}
+        else:
+            bug_results[bug_id] = result
+
+    if missing_bugs:
+        job_id = get_job_id()
+        # Set the mapping before queuing to avoid some race conditions.
+        redis_conn.mset(
+            {
+                JobInfo(get_bug_commits, bug_id).mapping_key: job_id
+                for bug_id in missing_bugs
+            }
+        )
+        schedule_job(JobInfo(get_bug_commits, missing_bugs), job_id=job_id)
+
+    commit_data, _ = get_commit_predictions(
+        model_name,
+        "integration/autoland",
+        [node for result in bug_results.values() for node in result["commits"]],
+    )
+
+    for bug_id, result in bug_results.items():
+        nodes = result["commits"]
+        if any(commit_data[node].get("ready") is False for node in nodes):
+            status_code = 202
+            data[str(bug_id)] = {"ready": False}
+            continue
+
+        # The commits can be backed out after they were classified.
+        backedout = set(result["backedout"])
+        commits = {
+            node: (
+                {"available": False}
+                if commit_data[node].get("available") is False
+                else {
+                    "risk_band": commit_data[node]["risk_band"],
+                    "ignored_reason": (
+                        "backedout"
+                        if node in backedout
+                        and commit_data[node]["ignored_reason"] is None
+                        else commit_data[node]["ignored_reason"]
+                    ),
+                }
+            )
+            for node in nodes
+        }
+        # Commits which were not scored, or were backed out, don't count.
+        risk_bands = [
+            commit["risk_band"]
+            for commit in commits.values()
+            if commit.get("risk_band") is not None and commit["ignored_reason"] is None
+        ]
+        data[str(bug_id)] = {
+            "commits": commits,
+            "risk_band": max(risk_bands, key=RISK_BANDS.index, default=None),
+        }
+
+    return data, status_code
+
+
+@application.route("/<model_name>/predict/commit/<path:branch>/<rev>")
+@cross_origin()
+def model_prediction_commit(model_name: str, branch: str, rev: str):
+    """
+    ---
+    get:
+      description: >
+        Classify a commit using the given model, answer either 200 if the commit
+        is processed or 202 if the commit is being processed.
+        <br/><br/>
+        The answer is {"available": False} when the commit can't be found on
+        the branch (or is a merge commit). Backouts and commits ignored by the
+        model (e.g. reformatting commits) are not scored, and have their
+        ignored_reason set. Backed-out commits are scored, and have their
+        ignored_reason set to "backedout".
+      summary: Classify a single commit
+      parameters:
+      - name: model_name
+        in: path
+        schema: CommitModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        required: true
+        schema:
+          type: str
+          example: 8ba995b74e18334ab3707f27e9eb8f4e37ba3d29
+      responses:
+        200:
+          description: A single commit prediction
+          content:
+            application/json:
+              schema: CommitPrediction
+        202:
+          description: A temporary answer for the commit being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        400:
+          description: The revision is not a full commit hash
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in COMMIT_MODELS:
+        return (
+            jsonify(
+                {"error": f"Model {model_name} doesn't support commit predictions"}
+            ),
+            404,
+        )
+
+    if not COMMIT_HASH_RE.fullmatch(rev):
+        return jsonify({"error": f"{rev} is not a full commit hash"}), 400
+
+    LOGGER.info(
+        "Received %s commit prediction request for %s @ %s", model_name, branch, rev
+    )
+
+    data, status_code = get_commit_predictions(model_name, branch, [rev])
+    return compress_response(data[rev], status_code)
+
+
+@application.route("/<model_name>/predict/commits/<path:branch>", methods=["POST"])
+@cross_origin()
+def model_prediction_commits(model_name: str, branch: str):
+    """
+    ---
+    post:
+      description: >
+        Post a batch of commit hashes to classify, answer either 200 if all
+        commits are processed or 202 if at least one commit is not processed.
+        <br/><br/>
+        Send the full hashes of commits on the given branch like this:<br/>
+        ```
+        {"commits": ["8ba995b74e18334ab3707f27e9eb8f4e37ba3d29", "1f2e3d4c5b6a79880f1e2d3c4b5a69788f9e0d1c"]}
+        ```<br/><br/>
+
+        and call back the same endpoint with the same commits until all of the
+        results are available. The answer for each commit is the same as the
+        single commit prediction endpoint, or {"ready": False} while it is
+        being processed:<br/>
+        ```
+        {"commits": {"8ba995b74e18334ab3707f27e9eb8f4e37ba3d29": {"ready": False}, "1f2e3d4c5b6a79880f1e2d3c4b5a69788f9e0d1c": {"node": "1f2e3d4c5b6a79880f1e2d3c4b5a69788f9e0d1c", "prob": [0.9, 0.1], ...}}}
+        ```
+      summary: Classify a batch of commits
+      parameters:
+      - name: model_name
+        in: path
+        schema: CommitModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      requestBody:
+        description: The list of commits to classify
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                commits:
+                  type: array
+                  items:
+                    type: string
+            examples:
+              commits:
+                summary: An example of payload
+                value:
+                  commits:
+                    ["8ba995b74e18334ab3707f27e9eb8f4e37ba3d29", "1f2e3d4c5b6a79880f1e2d3c4b5a69788f9e0d1c"]
+      responses:
+        200:
+          description: The result for each commit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commits:
+                    type: object
+                    additionalProperties: CommitPrediction
+        202:
+          description: A temporary answer for commits being processed
+        400:
+          description: The request is not valid
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in COMMIT_MODELS:
+        return (
+            jsonify(
+                {"error": f"Model {model_name} doesn't support commit predictions"}
+            ),
+            404,
+        )
+
+    try:
+        body = orjson.loads(request.data)
+    except orjson.JSONDecodeError:
+        return jsonify({"error": "The body is not valid JSON"}), 400
+
+    schema = {
+        "commits": {
+            "type": "list",
+            "required": True,
+            "minlength": 1,
+            "maxlength": MAX_COMMITS,
+            "schema": {"type": "string", "regex": COMMIT_HASH_RE.pattern},
+        }
+    }
+    validator = Validator()
+    if not isinstance(body, dict) or not validator.validate(body, schema):
+        return jsonify({"errors": validator.errors}), 400
+
+    LOGGER.info(
+        "Received %s prediction request for %d commits @ %s",
+        model_name,
+        len(body["commits"]),
+        branch,
+    )
+
+    data, status_code = get_commit_predictions(model_name, branch, body["commits"])
+    return compress_response({"commits": data}, status_code)
+
+
+@application.route("/<model_name>/predict/bugs/<path:branch>", methods=["POST"])
+@cross_origin()
+def model_prediction_bugs(model_name: str, branch: str):
+    """
+    ---
+    post:
+      description: >
+        Post a batch of bug IDs to classify the commits of each bug pushed to
+        autoland (the only supported branch), answer either 200 if all bugs
+        are processed or 202 if at least one bug is not processed.
+        <br/><br/>
+        The commits of a bug are the ones whose description refers to it.
+        Send the bug IDs like this:<br/>
+        ```
+        {"bugs": [123456, 789012]}
+        ```<br/><br/>
+
+        and call back the same endpoint with the same bugs until all of the
+        results are available. The answer for each bug is {"ready": False}
+        while it is being processed, or the risk band and ignored_reason of
+        each of its commits (see the single commit prediction endpoint), and the
+        highest risk band of its commits which were scored and not backed out
+        (null if there is none):<br/>
+        ```
+        {"bugs": {"123456": {"ready": False}, "789012": {"commits": {"8ba995b74e18334ab3707f27e9eb8f4e37ba3d29": {"risk_band": "h", "ignored_reason": null}}, "risk_band": "h"}}}
+        ```
+        <br/><br/>
+        The commits of a bug are looked up again after 15 minutes, to find the
+        ones which landed since.
+      summary: Classify the commits of a batch of bugs
+      parameters:
+      - name: model_name
+        in: path
+        schema: CommitModelName
+      - name: branch
+        in: path
+        required: true
+        schema:
+          BranchName
+      requestBody:
+        description: The list of bugs whose commits to classify
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bugs:
+                  type: array
+                  items:
+                    type: integer
+            examples:
+              bugs:
+                summary: An example of payload
+                value:
+                  bugs:
+                    [123456, 789012]
+      responses:
+        200:
+          description: The result for each bug
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bugs:
+                    type: object
+                    additionalProperties:
+                      $ref: "#/components/schemas/BugCommitsPrediction"
+        202:
+          description: A temporary answer for bugs being processed
+        400:
+          description: The request is not valid
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    if not request.headers.get(API_TOKEN):
+        return jsonify(UnauthorizedError().dump({})), 401
+
+    if model_name not in COMMIT_MODELS:
+        return (
+            jsonify(
+                {"error": f"Model {model_name} doesn't support commit predictions"}
+            ),
+            404,
+        )
+
+    if branch not in ("autoland", "integration/autoland"):
+        return (
+            jsonify({"error": f"The commits of bugs can't be found on {branch}"}),
+            404,
+        )
+
+    try:
+        body = orjson.loads(request.data)
+    except orjson.JSONDecodeError:
+        return jsonify({"error": "The body is not valid JSON"}), 400
+
+    schema = {
+        "bugs": {
+            "type": "list",
+            "required": True,
+            "minlength": 1,
+            "maxlength": MAX_BUGS,
+            "schema": {"type": "integer", "min": 1},
+        }
+    }
+    validator = Validator()
+    if not isinstance(body, dict) or not validator.validate(body, schema):
+        return jsonify({"errors": validator.errors}), 400
+
+    LOGGER.info(
+        "Received %s prediction request for the commits of %d bugs @ %s",
+        model_name,
+        len(body["bugs"]),
+        branch,
+    )
+
+    data, status_code = get_bug_commit_predictions(model_name, body["bugs"])
+    return compress_response({"bugs": data}, status_code)
 
 
 @application.route(
@@ -1058,17 +1556,17 @@ def batch_prediction_broken_site_report(model_name):
             schema:
               type: object
               properties:
-              reports:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    uuid:
-                      type: string
-                    title:
-                      type: string
-                    body:
-                      type: string
+                reports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uuid:
+                        type: string
+                      title:
+                        type: string
+                      body:
+                        type: string
             examples:
               cat:
                 summary: An example of payload
@@ -1351,8 +1849,7 @@ def patch_schedules(base_rev, patch_hash):
             return jsonify({"error": "Patch contains no diff content"}), 400
 
         patch_key = f"bugbug:patch:{patch_hash}"
-        redis_conn.set(patch_key, patch)
-        redis_conn.expire(patch_key, 7 * 24 * 3600)  # 7 days expiration
+        redis_conn.set(patch_key, patch, ex=7 * 24 * 3600)  # 7 days expiration
 
         LOGGER.info("Stored patch with hash %s", patch_hash)
 

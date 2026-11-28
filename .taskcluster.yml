@@ -71,8 +71,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     uv sync --locked --package bugbug --only-group test &&
                     uv run pre-commit run -a --show-diff-on-failure"
@@ -89,8 +89,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} &&
-                      cd bugbug &&
+                    - "git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python infra/version_check.py"
                 metadata:
@@ -109,9 +109,9 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev zstd &&
-                    git clone --quiet ${repository} &&
+                    git clone --quiet ${repository} ai-dev &&
                     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-                    cd bugbug &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --group test --extra nlp --group spawn-pipeline &&
@@ -134,9 +134,9 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y zstd &&
-                    git clone --quiet ${repository} &&
+                    git clone --quiet ${repository} ai-dev &&
                     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-                    cd bugbug &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --package bugbug-http-service --group test &&
@@ -157,12 +157,12 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd libs/agent-tools &&
-                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra bugzilla --extra firefox --extra claude-sdk pytest --cov=agent_tools --cov-append tests/ &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra bugzilla --extra firefox --extra claude-sdk --extra mcp-server pytest --cov=agent_tools --cov-append tests/ &&
                     cd ../hackbot-runtime &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 --extra claude-sdk --extra codex-sdk --extra phabricator pytest --cov=hackbot_runtime --cov-append tests/ &&
                     cd ../phabricator-client &&
@@ -191,8 +191,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd services/hackbot-api &&
@@ -217,8 +217,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd agents/bug-fix &&
@@ -226,6 +226,10 @@ tasks:
                     cd ../build-repair &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
                     cd ../frontend-triage &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../gecko-triage &&
+                    uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
+                    cd ../perf-triage &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
                     cd ../test-repair &&
                     uv run --locked --with pytest==9.1.0 --with pytest-cov==7.1.0 --with pytest-asyncio==1.4.0 pytest --cov=hackbot_agents --cov-append tests/ &&
@@ -250,8 +254,8 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev &&
-                    git clone --quiet ${repository} &&
-                    cd bugbug &&
+                    git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     uv build &&
                     uv venv /tmp/test-venv &&
@@ -332,8 +336,8 @@ tasks:
                 command:
                   - "/bin/sh"
                   - "-cxe"
-                  - "git clone --quiet ${repository} /bugbug &&
-                    cd /bugbug &&
+                  - "git clone --quiet ${repository} /ai-dev &&
+                    cd /ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cd ui/changes &&
                     npm install --no-progress &&
@@ -341,7 +345,7 @@ tasks:
                 artifacts:
                   public/frontend:
                     expires: { $fromNow: "2 weeks" }
-                    path: /bugbug/ui/changes/dist
+                    path: /ai-dev/ui/changes/dist
                     type: directory
               metadata:
                 name: bugbug ui build
@@ -355,8 +359,8 @@ tasks:
                 command:
                   - "/bin/sh"
                   - "-cxe"
-                  - "git clone --quiet ${repository} /bugbug &&
-                    cd /bugbug &&
+                  - "git clone --quiet ${repository} /ai-dev &&
+                    cd /ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cd services/hackbot-ui &&
                     npm ci --no-progress &&
@@ -420,8 +424,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} /tmp/bugbug &&
-                    cd /tmp/bugbug &&
+                  - "git clone --quiet ${repository} /tmp/ai-dev &&
+                    cd /tmp/ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                     cd agents/bug-fix &&
@@ -452,8 +456,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&
@@ -489,8 +493,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&
@@ -525,8 +529,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} /tmp/bugbug &&
-                      cd /tmp/bugbug &&
+                    - "git clone --quiet ${repository} /tmp/ai-dev &&
+                      cd /tmp/ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       /usr/local/bin/python3 -m pip install --quiet --disable-pip-version-check --target /tmp/pydeps pytest==9.1.0 pytest-asyncio==1.4.0 &&
                       cd agents/bug-fix &&
@@ -632,8 +636,8 @@ tasks:
                     - "-cx"
                     - "apt-get -qq update &&
                       apt-get -qq install -y redis-server &&
-                      git clone --quiet ${repository} &&
-                      cd bugbug &&
+                      git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python -c 'import os; print(os.environ.keys())' &&
                       bash ./scripts/integration_test.sh"
@@ -663,8 +667,8 @@ tasks:
                   command:
                     - "/bin/sh"
                     - "-cxe"
-                    - "git clone --quiet ${repository} &&
-                      cd bugbug &&
+                    - "git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
                       taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"

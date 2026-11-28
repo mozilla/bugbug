@@ -4,7 +4,7 @@
 runtime before an agent's ``main()`` runs captures every query, model response,
 and tool call as a trace with no per-agent instrumentation. It authenticates
 either from ``WANDB_API_KEY`` (local/dev) or, in deployment, from the short-lived
-identity token that :mod:`hackbot_runtime.wandb_wif` writes -- so the agent
+identity token that :mod:`hackbot_runtime.wif` writes -- so the agent
 container needs no long-lived W&B credential. Tracing is opt-in: it activates
 only when one of those is present, and never fails the run if Weave can't start.
 
@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 
-from hackbot_runtime import wandb_wif
+from hackbot_runtime import wif
 
 if TYPE_CHECKING:
     from opentelemetry.context import Context
@@ -65,15 +65,13 @@ def resolve_agent_name(entrypoint: Callable) -> str:
     return Path(source).parent.name.replace("_", "-")
 
 
-def _init_weave() -> bool:
+def _init_weave(config: wif.WandbWifSettings) -> bool:
     """Initialize Weave when credentials are available; return whether enabled.
 
-    Credentials come from ``WANDB_API_KEY`` (local) or the identity token file set
-    by :mod:`wandb_wif` (deployment via federation). No-op when neither is present.
+    Credentials come from ``WANDB_API_KEY`` (local) or federation (deployment).
+    No-op when neither is configured.
     """
-    if not (
-        os.environ.get("WANDB_API_KEY") or os.environ.get(wandb_wif.TOKEN_FILE_ENV)
-    ):
+    if not (config.enabled or config.api_key):
         return False
 
     project = os.environ.get("WEAVE_PROJECT", DEFAULT_WEAVE_PROJECT)
@@ -210,16 +208,19 @@ def _trace_subagents_as(agent: str) -> Iterator[None]:
 def trace_agent(entrypoint: Callable, run_id: str) -> Iterator[None]:
     """Trace the agent run, labelled with the agent's name and tagged with the run id.
 
-    A no-op when tracing isn't configured (no W&B credentials).
+    Sets up W&B auth first. A no-op when tracing isn't configured (no W&B
+    credentials).
     """
-    if not _init_weave():
-        yield
-        return
+    config = wif.WandbWifSettings.from_env()
+    with wif.configure(config):
+        if not _init_weave(config):
+            yield
+            return
 
-    from weave.conversation import agent_name_override
+        from weave.conversation import agent_name_override
 
-    _tag_spans(run_id)
-    agent = resolve_agent_name(entrypoint)
-    log.info("Enabled Weave tracing for agent %s", agent)
-    with agent_name_override(agent), _trace_subagents_as(agent):
-        yield
+        _tag_spans(run_id)
+        agent = resolve_agent_name(entrypoint)
+        log.info("Enabled Weave tracing for agent %s", agent)
+        with agent_name_override(agent), _trace_subagents_as(agent):
+            yield

@@ -35,20 +35,23 @@ record in its `config.py` and passes them to `actions_server_for`, which builds 
 carrying only those. `bug-fix`, for instance, allows `phabricator.submit_patch` on a fresh
 triage run but swaps it for `phabricator.update_patch` on a follow-up.
 
-| Action type                 | Records the intent to…                     | Params                                                          |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
-| `bugzilla.update_bug`       | Change a bug's fields                      | `bug_id`, `changes`                                             |
-| `bugzilla.add_comment`      | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
-| `bugzilla.add_attachment`   | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
-| `bugzilla.create_bug`       | File a new bug                             | the new bug's fields, `ref`                                     |
-| `phabricator.submit_patch`  | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
-| `phabricator.update_patch`  | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
-| `phabricator.add_comment`   | Reply on a revision without changing code  | `revision_id`, `text`                                           |
-| `testrail.submit_test_plan` | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
-| `slack.post_message`        | Post a message to Slack                    | `channel`, `text`                                               |
-| `email.send`                | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
-| `feedback.report_problem`   | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
-| `agents.start_run`          | Start another agent on this run's output   | `agent`                                                         |
+| Action type                  | Records the intent to…                     | Params                                                          |
+| ---------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| `bugzilla.update_bug`        | Change a bug's fields                      | `bug_id`, `changes`                                             |
+| `bugzilla.add_comment`       | Comment on a bug                           | `bug_id`, `text`, `is_private`                                  |
+| `bugzilla.add_attachment`    | Attach a file to a bug                     | `bug_id`, + a `file` attachment                                 |
+| `bugzilla.create_bug`        | File a new bug                             | the new bug's fields, `ref`                                     |
+| `phabricator.submit_patch`   | Deliver a fix as a **new** revision        | `bug_id`, `title`, `summary`, `test_plan`, `parent_revision_id` |
+| `phabricator.update_patch`   | Add a new diff to an **existing** revision | `revision_id`, `title`, `summary`, `test_plan`                  |
+| `phabricator.add_comment`    | Reply on a revision without changing code  | `revision_id`, `text`                                           |
+| `github.add_comment`         | Comment on a pull request conversation     | `repo`, `pull_number`, `text`                                   |
+| `github.add_inline_comments` | Review a pull request with inline comments | `repo`, `pull_number`, `comments`, `summary`                    |
+| `github.submit_patch`        | Deliver a fix as a **new** pull request    | `title`, `body`                                                 |
+| `testrail.submit_test_plan`  | Submit a generated test plan to TestRail   | the validated feature + test cases                              |
+| `slack.post_message`         | Post a message to Slack                    | `channel`, `text`                                               |
+| `email.send`                 | Email a report about the run               | `to`, `subject`, `body_markdown`                                |
+| `feedback.report_problem`    | Report a problem to the Hackbot developers | `severity`, `title`, `message`                                  |
+| `agents.start_run`           | Start another agent on this run's output   | `agent`                                                         |
 
 All but `testrail.submit_test_plan` take a **`reasoning`** argument — a free-text audit trail
 stored on the action and shown in the UI beside the proposed change. Each tool returns the
@@ -78,6 +81,24 @@ prefer several narrow tools over one with mode flags.
 Neither takes a patch file. The agent's final working-tree state _is_ the diff — which is
 why the runtime builds the Phabricator payload during `publish_changes`, while the checkout
 still exists.
+
+`github.submit_patch` is the GitHub counterpart of `phabricator.submit_patch`, for an agent
+whose `[source].repo_url` is on GitHub. hackbot-api has no checkout to apply a patch in, so
+`publish_changes` also captures the run's changes, squashed into one commit as for
+Phabricator, as `changes/github_commit.json`: each changed file with its new contents. If
+that fails, the run fails. The handler creates the commit through GitHub's Git Data API, with
+the pull request's title and body as its message, on a `hackbot/<run_id>` branch of the
+repository. It then opens a draft pull request against the default branch, with the GitHub
+App's credentials (so the App must be installed on that repository, with `contents: write`
+and `pull_requests: write`). The App is the commit's author and committer, and signs it.
+Retrying reuses the branch and any pull request already open from it.
+
+The artifact is written by the agent, so it never decides where hackbot writes. The target
+is the agent's `github_repository` in `AGENT_REGISTRY`, an `owner/repo` that must match its
+`[source].repo_url`. An agent without one can't submit, and an artifact naming any other
+repository is refused before credentials are minted. A run that changes files under
+`.github/workflows/` is also refused. The branch is pushed to the repository itself, not a
+fork, so its pull request's workflows would run with that repository's secrets.
 
 ### Hooks
 
@@ -164,6 +185,18 @@ entry, instead of a burst. Other comments on that bug still apply separately. A 
 applied at its last member's index, once every earlier dependency has resolved, and any
 group with a member another pending action references is excluded (that action could run
 before the group is applied).
+
+## GitHub review grouping
+
+When general and inline comments for the same GitHub PR are pending in the same
+apply pass, they are submitted together as one review. General comment text and
+existing review summaries are joined with blank lines in action order. General
+comments without inline comments still post to the PR conversation.
+
+Only actions selected for that apply pass are grouped. Already-applied actions
+are skipped, and groups containing an action referenced by another pending
+action are excluded. Each grouped action retains its own status; general
+comments return the review URL as their `comment_url`.
 
 ## Where to look
 

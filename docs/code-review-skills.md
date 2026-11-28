@@ -213,6 +213,32 @@ when = { all_files = { ext = [".md", ".rst"] } }
 `any_file` is the normal implementation-code case. `all_files` is for
 patch-shape rules such as docs-only, tests-only, or generated-only changes.
 
+File predicates can also match the diff content of each changed file with
+`diff_regex`, a Python `re.search` pattern. It is tested against individual
+lines, without line endings, so a pattern cannot span lines and `^`/`$` anchor
+to each line. `side` says which lines are tested:
+
+- `"old"`: the file before the patch, i.e. context and removed (`-`) lines.
+- `"new"`: the file after the patch, i.e. context and added (`+`) lines.
+- `"any"`: either side (the default).
+
+`side` is only allowed with `diff_regex`. Within one predicate, all fields that
+are set must match (AND). Within a list such as `ext` or `include`, any entry
+may match (OR), and `exclude` removes a file if any entry matches. To combine
+whole predicates, use `any`, `all` or `not`. Removed files count as changed
+files; they have no new side, so `"new"` never matches them.
+
+```toml review-context
+version = 1
+
+[[rules]]
+name = "DOM: removed nsresult checks"
+when = { any_file = { ext = [".cpp", ".h"], diff_regex = "NS_ENSURE_SUCCESS\\(", side = "old" } }
+load = [
+  { type = "file", path = ".claude/skills/dom-errors/SKILL.md" },
+]
+```
+
 ### Reusable predicates
 
 Named predicate definitions let you reuse path sets or metadata groups across
@@ -348,9 +374,10 @@ a stack parent or a related patch.
 ### Testing your rules and skills
 
 Pass your work-in-progress rules and skill files directly to `patch_review`
-via the MCP. Rules are merged by name into the fetched `review-context.toml`
-(replacing a rule with the same name, or appending if new). Skill content is
-injected directly, bypassing the network fetch for matching names.
+via the MCP (only in Claude Code, see below for `codex`). Rules are merged
+by name into the fetched `review-context.toml` (replacing a rule with the
+same name, or appending if new). Skill content is injected directly, bypassing
+the network fetch for matching names.
 
 From Claude Code, trigger a review with your local files:
 
@@ -374,6 +401,59 @@ This simulates the state as if your changes had already landed — no push
 required. If a skill is missing, verify the rule conditions match the patch's
 changed files (`any_file` / `all_files` against the actual `+++ b/` paths in
 the diff).
+
+Codex doesn't implement `prompt` resources in MCP, so to check things, either
+use Claude Code, or do it manually with e.g. curl::
+
+Simple example:
+
+```
+curl --fail-with-body --silent --show-error \
+  https://mcp-dev.moz.tools/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "prompts/get",
+    "params": {
+      "name": "patch_review",
+      "arguments": {
+        "patch_url": "https://phabricator.services.mozilla.com/D123456"
+      }
+    }
+  }'
+
+```
+
+more complete example with additional rules:
+
+```
+jq -n \
+  --arg patch_url 'https://phabricator.services.mozilla.com/D295935' \
+  --arg review_context_repo 'mozilla-firefox/firefox' \
+  --rawfile extra_context_toml review-context.toml \
+  --arg content_overrides '{".claude/skills/dom-audio/SKILL.md": "skill content here"}' \
+  '{
+    jsonrpc: "2.0",
+    id: 1,
+    method: "prompts/get",
+    params: {
+      name: "patch_review",
+      arguments: {
+        patch_url: $patch_url,
+        review_context_repo: $review_context_repo,
+        extra_context_toml: $extra_context_toml,
+        content_overrides: $content_overrides
+      }
+    }
+  }' |
+curl --fail-with-body --silent --show-error \
+  https://mcp-dev.moz.tools/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data-binary @-
+```
 
 ### Gotchas
 
