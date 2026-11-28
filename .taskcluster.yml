@@ -71,8 +71,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     uv sync --locked --package bugbug --only-group test &&
                     uv run pre-commit run -a --show-diff-on-failure"
@@ -89,8 +89,8 @@ tasks:
                   command:
                     - "/bin/bash"
                     - "-cx"
-                    - "git clone --quiet ${repository} &&
-                      cd bugbug &&
+                    - "git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python infra/version_check.py"
                 metadata:
@@ -109,9 +109,9 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev zstd &&
-                    git clone --quiet ${repository} &&
+                    git clone --quiet ${repository} ai-dev &&
                     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-                    cd bugbug &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --group test --extra nlp --group spawn-pipeline &&
@@ -134,9 +134,9 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y zstd &&
-                    git clone --quiet ${repository} &&
+                    git clone --quiet ${repository} ai-dev &&
                     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-                    cd bugbug &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     uv sync --locked --package bugbug --package bugbug-http-service --group test &&
@@ -157,8 +157,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd libs/agent-tools &&
@@ -191,8 +191,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd services/hackbot-api &&
@@ -217,8 +217,8 @@ tasks:
                 command:
                   - "/bin/bash"
                   - "-cx"
-                  - "git clone --quiet ${repository} &&
-                    cd bugbug &&
+                  - "git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     export COVERAGE_FILE=$(pwd)/.coverage &&
                     cd agents/bug-fix &&
@@ -254,8 +254,8 @@ tasks:
                   - "-cx"
                   - "apt-get -qq update &&
                     apt-get -qq install -y libhdf5-dev &&
-                    git clone --quiet ${repository} &&
-                    cd bugbug &&
+                    git clone --quiet ${repository} ai-dev &&
+                    cd ai-dev &&
                     git -c advice.detachedHead=false checkout ${head_rev} &&
                     uv build &&
                     uv venv /tmp/test-venv &&
@@ -636,8 +636,8 @@ tasks:
                     - "-cx"
                     - "apt-get -qq update &&
                       apt-get -qq install -y redis-server &&
-                      git clone --quiet ${repository} &&
-                      cd bugbug &&
+                      git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python -c 'import os; print(os.environ.keys())' &&
                       bash ./scripts/integration_test.sh"
@@ -667,8 +667,8 @@ tasks:
                   command:
                     - "/bin/sh"
                     - "-cxe"
-                    - "git clone --quiet ${repository} &&
-                      cd bugbug &&
+                    - "git clone --quiet ${repository} ai-dev &&
+                      cd ai-dev &&
                       git -c advice.detachedHead=false checkout ${head_rev} &&
                       python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
                       taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"

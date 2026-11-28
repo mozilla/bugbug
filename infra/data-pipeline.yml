@@ -2003,8 +2003,8 @@ tasks:
           - "-cx"
           - "apt-get -qq update &&
             apt-get -qq install -y redis-server &&
-            git clone --quiet ${repository} &&
-            cd bugbug &&
+            git clone --quiet ${repository} ai-dev &&
+            cd ai-dev &&
             git -c advice.detachedHead=false checkout ${version} &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
@@ -2035,8 +2035,8 @@ tasks:
         command:
           - "/bin/sh"
           - "-cxe"
-          - "git clone --quiet ${repository} &&
-            cd bugbug &&
+          - "git clone --quiet ${repository} ai-dev &&
+            cd ai-dev &&
             git -c advice.detachedHead=false checkout ${version} &&
             python infra/set_hook_version.py ${version} infra/taskcluster-hook-check-models-start.json &&
             taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-bugbug bugbug-checks"
@@ -2066,8 +2066,8 @@ tasks:
         command:
           - "/bin/sh"
           - "-cxe"
-          - "git clone --quiet ${repository} &&
-            cd bugbug &&
+          - "git clone --quiet ${repository} ai-dev &&
+            cd ai-dev &&
             git -c advice.detachedHead=false checkout ${version} &&
             python infra/set_hook_version.py ${version} infra/taskcluster-hook-classify-patch.json &&
             taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-bugbug bugbug-classify-patch"
@@ -2099,8 +2099,8 @@ tasks:
         command:
           - "/bin/sh"
           - "-cxe"
-          - "git clone --quiet ${repository} &&
-            cd bugbug &&
+          - "git clone --quiet ${repository} ai-dev &&
+            cd ai-dev &&
             git -c advice.detachedHead=false checkout ${version} &&
             python infra/set_hook_version.py ${version} infra/taskcluster-hook-landings-risk-report.json &&
             taskboot --target . build-hook infra/taskcluster-hook-landings-risk-report.json project-bugbug bugbug-landings-risk-report"
