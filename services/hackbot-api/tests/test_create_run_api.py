@@ -15,7 +15,8 @@ from types import SimpleNamespace
 import pytest
 from app import gcs, jobs
 from app.auth import require_api_key
-from app.schemas import RunStatus
+from app.database.models import Account
+from app.schemas import IdentityProvider, RunStatus
 
 
 @pytest.fixture(autouse=True)
@@ -56,6 +57,73 @@ def test_create_run_records_requested_via_from_caller(client, db):
     )
     _create(client)
     assert db.added.requested_via == "listener@example.iam.gserviceaccount.com"
+
+
+def test_create_run_records_the_account_and_source(client, db):
+    _create(
+        client,
+        {
+            "Hackbot-Source": "bugzilla",
+            "Hackbot-Requester-Identity-Provider": "bugzilla",
+            "Hackbot-Requester-Id": "560562",
+            "Hackbot-Requester-Username": "jos%C3%A9",
+        },
+    )
+
+    assert db.account == {
+        "identity_provider": "bugzilla",
+        "external_id": "560562",
+        "username": "josé",
+    }
+    assert db.added.account_id == db.account_id
+    assert db.added.source == "bugzilla"
+
+
+def test_create_run_reuses_a_returning_persons_account_without_writing_it(client, db):
+    db.existing_account = Account(
+        id=5,
+        identity_provider=IdentityProvider.bugzilla,
+        external_id="560562",
+        username="alice@example.com",
+    )
+
+    _create(
+        client,
+        {
+            "Hackbot-Source": "bugzilla",
+            "Hackbot-Requester-Identity-Provider": "bugzilla",
+            "Hackbot-Requester-Id": "560562",
+            "Hackbot-Requester-Username": "alice@example.com",
+        },
+    )
+
+    assert db.account is None
+    assert db.added.account_id == 5
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Hackbot-Requester-Identity-Provider": "bugzilla"},
+        {"Hackbot-Requester-Id": "560562"},
+    ],
+)
+def test_create_run_rejects_an_identity_sent_in_part(client, db, headers):
+    resp = client.post(
+        "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers=headers
+    )
+    assert resp.status_code == 422
+    assert db.added is None
+
+
+@pytest.mark.parametrize(
+    "header", ["Hackbot-Source", "Hackbot-Requester-Identity-Provider"]
+)
+def test_create_run_rejects_an_unknown_source_or_identity_provider(client, header):
+    resp = client.post(
+        "/agents/bug-fix/runs", json={"bug_id": 1889001}, headers={header: "pulse"}
+    )
+    assert resp.status_code == 422
 
 
 @pytest.mark.parametrize("headers", [{}, {"X-On-Behalf-Of": "   "}])

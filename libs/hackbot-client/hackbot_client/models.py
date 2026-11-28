@@ -18,6 +18,38 @@ class RunStatus(str, Enum):
     timed_out = "timed_out"
 
 
+class Source(str, Enum):
+    """Where a run was triggered from."""
+
+    ui = "ui"
+    bugzilla = "bugzilla"
+    phabricator = "phabricator"
+    github = "github"
+    slack = "slack"
+
+
+class IdentityProvider(str, Enum):
+    """The service an account's identity belongs to."""
+
+    google = "google"
+    bugzilla = "bugzilla"
+    phabricator = "phabricator"
+    github = "github"
+    slack = "slack"
+
+
+class Identity(BaseModel):
+    """A person on an identity provider, such as a Bugzilla or GitHub user.
+
+    `user_id` is their stable ID there. `username` is their readable name,
+    which they can change.
+    """
+
+    identity_provider: IdentityProvider
+    user_id: str
+    username: str | None = None
+
+
 class RunRef(BaseModel):
     run_id: UUID
     agent: str

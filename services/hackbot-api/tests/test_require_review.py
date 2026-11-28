@@ -25,7 +25,13 @@ async def _create(monkeypatch, payload: dict, agent: str = "bug-fix"):
 
     db = FakeSession()
     await create_run(
-        agent, payload, requested_via=None, on_behalf_of=None, dedupe_key=None, db=db
+        agent,
+        payload,
+        requested_via=None,
+        account_id=None,
+        on_behalf_of=None,
+        dedupe_key=None,
+        db=db,
     )
     return db.added, triggered
 

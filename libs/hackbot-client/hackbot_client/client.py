@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -11,7 +12,12 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import service_account
 from pydantic import ValidationError
 
-from hackbot_client.models import ApplyActionsResponse, TriggeredRun
+from hackbot_client.models import (
+    ApplyActionsResponse,
+    Identity,
+    Source,
+    TriggeredRun,
+)
 
 
 class HackbotAPIError(Exception):
@@ -90,8 +96,13 @@ class HackbotClient:
         *,
         on_behalf_of: str | None = None,
         dedupe_key: str | None = None,
+        source: Source | None = None,
+        identity: Identity | None = None,
     ) -> TriggeredRun:
         """Create an agent run and return the API's typed run reference.
+
+        `source` is where the run was triggered from, and `identity` is the
+        person who triggered it.
 
         `dedupe_key` keys the work the run does, and a key belongs to one run
         for good: repeated triggers carrying it are no-ops, answered with the
@@ -100,6 +111,17 @@ class HackbotClient:
         headers = await self._get_headers()
         if on_behalf_of is not None:
             headers["X-On-Behalf-Of"] = on_behalf_of
+
+        if source is not None:
+            headers["Hackbot-Source"] = source.value
+        if identity is not None:
+            headers["Hackbot-Requester-Identity-Provider"] = (
+                identity.identity_provider.value
+            )
+            headers["Hackbot-Requester-Id"] = identity.user_id
+            if identity.username is not None:
+                # Headers are ASCII-only, so the name is percent-encoded.
+                headers["Hackbot-Requester-Username"] = quote(identity.username)
 
         params = {} if dedupe_key is None else {"dedupe_key": dedupe_key}
 

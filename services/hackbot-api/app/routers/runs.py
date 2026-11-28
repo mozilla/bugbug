@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import gcs, jobs, pubsub
+from app.accounts import get_account_id
 from app.action_handlers.registry import PATCH_ACTION_TYPES
 from app.actions_applier import apply_all_pending
 from app.agents import AGENT_REGISTRY, AgentSpec, model_to_env
@@ -30,6 +31,7 @@ from app.schemas import (
     RunRef,
     RunStatus,
     RunSummary,
+    Source,
 )
 
 log = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ def _normalize_identity(email: str | None) -> str | None:
 
 
 UserEmail = Annotated[str | None, BeforeValidator(_normalize_identity)]
+
 
 DedupeKey = (
     Annotated[
@@ -105,11 +108,19 @@ async def create_run(
     payload: dict,
     db: Annotated[AsyncSession, Depends(get_db)],
     requested_via: Annotated[str | None, Depends(require_api_key)],
+    account_id: Annotated[int | None, Depends(get_account_id)],
     on_behalf_of: Annotated[
         UserEmail,
         Header(
             alias="X-On-Behalf-Of",
             description="Email of the user this run is requested for.",
+        ),
+    ] = None,
+    source: Annotated[
+        Source | None,
+        Header(
+            alias="Hackbot-Source",
+            description="Where the run was triggered from, e.g. `bugzilla`.",
         ),
     ] = None,
     dedupe_key: Annotated[
@@ -155,6 +166,8 @@ async def create_run(
             inputs=inputs.model_dump(mode="json"),
             requested_by=on_behalf_of,
             requested_via=requested_via,
+            source=source,
+            account_id=account_id,
             dedupe_key=dedupe_key,
             results_prefix=results_prefix,
             artifacts=[],
