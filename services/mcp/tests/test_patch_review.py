@@ -13,7 +13,9 @@ def review_dependencies(mocker):
     mocker.patch("bugbug_mcp.server.PhabricatorPatch", return_value=patch)
     tool = Mock(target_software="Firefox")
     tool.patch_summarizer.run.return_value = "summary"
-    tool.generate_initial_prompt.side_effect = lambda patch, summary, context: context
+    tool.generate_initial_prompt = AsyncMock(
+        side_effect=lambda patch, summary, context: context
+    )
     mocker.patch("bugbug_mcp.server.get_code_review_tool", return_value=tool)
     loader = mocker.patch(
         "bugbug.tools.code_review.review_context.load_external_context_for_review",

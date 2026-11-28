@@ -120,11 +120,21 @@ Here are examples of good code review comments to guide your style and approach:
 </examples>
 
 
+{patch_stack}
 Here is the patch you need to review:
 
 <patch>
 {patch}
 </patch>
+"""
+
+
+TEMPLATE_PATCH_STACK = """Here is the stack of patches this patch belongs to:
+
+<patch_stack>
+{stack_context}
+</patch_stack>
+
 """
 
 

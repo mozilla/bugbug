@@ -50,6 +50,7 @@ from bugbug.tools.code_review.review_context_schema import (
 from bugbug.tools.code_review.review_context_schema import (
     main as validate_review_context_main,
 )
+from bugbug.tools.code_review.stack import PatchStack, StackEntry
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
     find_comment_scope,
@@ -75,7 +76,14 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures/phabricator")
 
 def make_patch(raw_diff):
     patch_set = PatchSet.from_string(raw_diff)
-    return SimpleNamespace(patch_set=patch_set, patch_stack=[patch_set])
+    return SimpleNamespace(
+        patch_id="1",
+        patch_set=patch_set,
+        patch_stack=[patch_set],
+        get_stack_ancestors=AsyncMock(return_value=[]),
+        get_stack_descendants=AsyncMock(return_value=[]),
+        load_stack_file_changes=lambda ancestors: {},
+    )
 
 
 def make_patch_stack(*raw_diffs):
@@ -298,6 +306,88 @@ def test_patch_stack_linear_despite_unrelated_diamond():
 
     stack = asyncio.run(FakePatch().get_stack_patches())
     assert len(stack) == 3  # A, C, E
+
+
+def make_graph_revision(phid, stack_graph=None):
+    number = int(phid.removeprefix("PHID-"))
+    return {
+        "phid": phid,
+        "id": number,
+        "fields": {"title": f"Revision {number}", "stackGraph": stack_graph or {}},
+    }
+
+
+def make_graph_patch_class(stack_graph):
+    """Build a `PhabricatorPatch` subclass whose revisions come from `stack_graph`."""
+
+    class FakeGraphPatch(phab_platform.PhabricatorPatch):
+        async def load(self):
+            self._revision_metadata = make_graph_revision(
+                self._revision_phid, stack_graph
+            )
+
+    return FakeGraphPatch
+
+
+def fake_revision_search(monkeypatch):
+    """Answer `differential.revision.search`, recording the PHIDs of each call."""
+    searches = []
+
+    async def conduit(method, **params):
+        assert method == "differential.revision.search", f"Unexpected `{method}`."
+        phids = params["constraints"]["phids"]
+        searches.append(phids)
+        return {"data": [make_graph_revision(phid) for phid in phids]}
+
+    monkeypatch.setattr(phab_platform, "_conduit", conduit)
+    return searches
+
+
+def test_stack_ancestors_and_descendants(monkeypatch):
+    # 1 <- 2 <- 3 <- 4, and 5 also builds on 3.
+    stack_graph = {
+        "PHID-1": [],
+        "PHID-2": ["PHID-1"],
+        "PHID-3": ["PHID-2"],
+        "PHID-4": ["PHID-3"],
+        "PHID-5": ["PHID-3"],
+    }
+    searches = fake_revision_search(monkeypatch)
+    middle = make_graph_patch_class(stack_graph)(revision_phid="PHID-2")
+    asyncio.run(middle.load())
+
+    ancestors = asyncio.run(middle.get_stack_ancestors())
+    descendants = asyncio.run(middle.get_stack_descendants())
+
+    assert [ancestor.display_id for ancestor in ancestors] == ["D1"], (
+        "`get_stack_ancestors` should list the revisions below this one, oldest first."
+    )
+    assert [descendant.display_id for descendant in descendants] == [
+        "D3",
+        "D4",
+        "D5",
+    ], "`get_stack_descendants` should list every dependent revision, nearest first."
+    assert descendants[0].patch_title == "Revision 3", (
+        "Descendants should have their titles loaded."
+    )
+    assert searches == [["PHID-3", "PHID-4", "PHID-5"]], (
+        "The descendants should load with one revision search."
+    )
+
+
+def test_stack_of_single_revision_is_empty(monkeypatch):
+    searches = fake_revision_search(monkeypatch)
+    single = make_graph_patch_class({})(revision_phid="PHID-7")
+    asyncio.run(single.load())
+
+    assert asyncio.run(single.get_stack_ancestors()) == [], (
+        "A lone revision should have no ancestors."
+    )
+    assert asyncio.run(single.get_stack_descendants()) == [], (
+        "A lone revision should have no descendants."
+    )
+    assert searches == [], "A lone revision should make no Conduit calls."
+    assert single.display_id == "D7", "`display_id` should be the `D` revision ID."
 
 
 # ---------------------------------------------------------------------------
@@ -2331,8 +2421,12 @@ def _make_review_tool(review_context_repo=None):
 def _make_review_patch(github_repo_ref_return=None):
     patch_set = PatchSet.from_string("--- a/f.txt\n+++ b/f.txt\n@@ -0,0 +1,1 @@\n+a\n")
     return SimpleNamespace(
+        patch_id="1",
         raw_diff="diff",
         patch_set=patch_set,
+        get_stack_ancestors=AsyncMock(return_value=[]),
+        get_stack_descendants=AsyncMock(return_value=[]),
+        load_stack_file_changes=lambda ancestors: {},
         github_repo_ref=AsyncMock(return_value=github_repo_ref_return),
     )
 
@@ -2426,6 +2520,31 @@ def test_generate_review_comments_reports_missing_structured_response():
         asyncio.run(tool.generate_review_comments(fake_patch, "summary"))
 
 
+def test_initial_prompt_describes_patch_stack():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch()
+    stack = PatchStack(ancestors=[StackEntry("D1", "Add `matcher`")])
+
+    prompt = asyncio.run(
+        tool.generate_initial_prompt(fake_patch, "summary", stack=stack)
+    )
+
+    assert "<patch_stack>" in prompt, "A stacked patch should get a stack section."
+    assert "- D1: Add `matcher`" in prompt, "The stack section should list ancestors."
+    assert prompt.index("</patch_stack>") < prompt.index("<patch>"), (
+        "The stack should be described before the patch under review."
+    )
+
+
+def test_initial_prompt_omits_stack_for_lone_patch():
+    tool = _make_review_tool(review_context_repo=None)
+    fake_patch = _make_review_patch()
+
+    prompt = asyncio.run(tool.generate_initial_prompt(fake_patch, "summary"))
+
+    assert "patch_stack" not in prompt, "A lone patch should get no stack section."
+
+
 @pytest.mark.parametrize(
     "before_patch,expected", [(True, "1| deleted"), (False, "1| kept")]
 )
@@ -2506,3 +2625,12 @@ def test_expand_context_handles_renamed_file_views(
     else:
         assert result == expected
         assert len(requests) == 1
+
+
+def test_searchfox_tools_say_they_do_not_see_the_stack():
+    for searchfox_tool in langchain_tools.SEARCHFOX_TOOLS:
+        if searchfox_tool is langchain_tools.expand_context:
+            continue
+        assert "without this patch or its stack" in searchfox_tool.description, (
+            f"`{searchfox_tool.name}` should say that Searchfox does not see the stack."
+        )

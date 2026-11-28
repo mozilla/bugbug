@@ -42,10 +42,16 @@ from bugbug.tools.code_review.prompts import (
     SYSTEM_PROMPT_TEMPLATE,
     TEMPLATE_COMMENT_EXAMPLE,
     TEMPLATE_PATCH_FROM_HUNK,
+    TEMPLATE_PATCH_STACK,
 )
 from bugbug.tools.code_review.protocols import (
     PatchSummarizer,
     SuggestionFilterer,
+)
+from bugbug.tools.code_review.stack import (
+    PatchStack,
+    format_stack_context,
+    load_patch_stack,
 )
 from bugbug.tools.code_review.utils import (
     convert_generated_comments_to_inline,
@@ -209,22 +215,34 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    def generate_initial_prompt(
-        self, patch: Patch, patch_summary: str, external_context: str = ""
+    async def generate_initial_prompt(
+        self,
+        patch: Patch,
+        patch_summary: str,
+        external_context: str = "",
+        stack: Optional[PatchStack] = None,
     ) -> str:
         created_before = patch.date_created if self.is_experiment_env else None
+        if stack is None:
+            stack = await load_patch_stack(patch)
+        stack_context = format_stack_context(stack)
 
         return FIRST_MESSAGE_TEMPLATE.format(
             current_date=current_date_for_prompt(),
             patch=format_patch_set(patch.patch_set),
             patch_summarization=patch_summary,
             external_context=external_context,
+            patch_stack=(
+                TEMPLATE_PATCH_STACK.format(stack_context=stack_context)
+                if stack_context
+                else ""
+            ),
             comment_examples=self._get_comment_examples(patch, created_before),
             approved_examples=self._get_generated_examples(patch, created_before),
         )
 
     async def generate_review_comments(
-        self, patch: Patch, patch_summary: str
+        self, patch: Patch, patch_summary: str, stack: Optional[PatchStack] = None
     ) -> tuple[AgentResponse, list[dict]]:
         from bugbug.tools.code_review.review_context import (
             resolve_external_context_for_review,
@@ -242,7 +260,9 @@ class CodeReviewTool(GenerativeModelTool):
 
         messages = [
             HumanMessage(
-                self.generate_initial_prompt(patch, patch_summary, external_context)
+                await self.generate_initial_prompt(
+                    patch, patch_summary, external_context, stack
+                )
             )
         ]
         for attempt in range(2):
@@ -301,9 +321,10 @@ class CodeReviewTool(GenerativeModelTool):
             raise LargeDiffError("The diff is too large")
 
         patch_summary = self.patch_summarizer.run(patch)
+        stack = await load_patch_stack(patch)
 
         agent_response, external_content_manifest = await self.generate_review_comments(
-            patch, patch_summary
+            patch, patch_summary, stack
         )
         unfiltered_suggestions = agent_response.comments
         if not unfiltered_suggestions:
