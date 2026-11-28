@@ -173,7 +173,6 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
         log.error(msg)
         payload = _error_payload(ctx, msg)
         exit_code = 1
-    payload["agent_version"] = ctx.config.agent_version
 
     try:
         _publish_log(ctx)
@@ -182,8 +181,17 @@ def _finish(ctx: HackbotContext, outcome: object) -> int:
 
     try:
         ctx.publish_changes()
-    except Exception:
+    except Exception as exc:
         log.exception("Failed to publish source changes")
+        if exit_code == 0:
+            payload = _error_payload(
+                ctx,
+                f"Failed to publish source changes: {type(exc).__name__}: {exc}",
+                traceback_str=traceback.format_exc(),
+            )
+            exit_code = 1
+
+    payload["agent_version"] = ctx.config.agent_version
 
     # Upload when a signed policy is configured, else write into the local
     # artifacts dir (so local/compose/direct runs leave it on the host).
