@@ -76,7 +76,8 @@ async def submit_patch(
         str | None,
         Field(
             description=(
-                "Revision test plan. If you recorded a Try push, link it here."
+                "Revision test plan. If you recorded a Try push, link it as "
+                "{{actions.<action_id>.url}}."
             )
         ),
     ] = None,
